@@ -1,7 +1,7 @@
-FROM nginx:latest
+FROM debian:buster-slim
 
 RUN apt-get update && \
-    apt-get install openssl && \
+    apt-get -yyf install nginx-full openssl gettext-base && \
     rm -rf /var/lib/apt/lists/*
 
 RUN openssl req -x509 -newkey rsa:2048 -keyout /etc/nginx/webdav.key -nodes \
@@ -12,6 +12,14 @@ RUN echo "webdav:$(echo -n webdav | openssl passwd -apr1 -stdin)" \
 
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
 COPY nginx.sh /opt/nginx.sh
+
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
+    ln -sf /dev/stderr /var/log/nginx/error.log
+
+EXPOSE 80
+EXPOSE 443
+
+STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/bin/sh", "/opt/nginx.sh"]
 CMD ["nginx", "-g", "daemon off;"]

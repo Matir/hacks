@@ -1,6 +1,7 @@
-version: '3'
+version: '3.2'
 services:
   webdav:
+    build: .
     image: matir/webdav
     restart: always
     ports:
@@ -8,6 +9,6 @@ services:
     env_file:
       - ./webdav.env
     volumes:
-			- type: bind
-				source: ~/Shared
-				target: /srv/dav
+      - type: bind
+        source: ~/Shared
+        target: /srv/dav
