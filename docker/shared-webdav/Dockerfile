@@ -4,6 +4,8 @@ RUN apt-get update && \
     apt-get -yyf install nginx-full openssl gettext-base && \
     rm -rf /var/lib/apt/lists/*
 
+RUN openssl dhparam -out /etc/nginx/dhparam.pem 3072
+
 RUN openssl req -x509 -newkey rsa:2048 -keyout /etc/nginx/webdav.key -nodes \
     -out /etc/nginx/webdav.crt -days 3650 -subj '/CN=localhost'
 
