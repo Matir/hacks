@@ -1,0 +1,13 @@
+version: '3'
+services:
+  webdav:
+    image: matir/webdav
+    restart: always
+    ports:
+      - "9443:443"
+    env_file:
+      - ./webdav.env
+    volumes:
+			- type: bind
+				source: ~/Shared
+				target: /srv/dav
