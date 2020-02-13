@@ -18,7 +18,7 @@ OUTNAME="$REBUILD_DIR/preseed-$ISONAME"
 APT_PROXY=""
 TASKS=""
 PACKAGES=""
-while getopts "Co:P:t:p:" options; do
+while getopts ":Co:P:t:p:" options; do
   case "${options}" in
     C)
       DISABLE_FDE=1
@@ -40,12 +40,23 @@ while getopts "Co:P:t:p:" options; do
       TASKS="${TASKS},${OPTARG}"
       echo "Adding task ${OPTARG}"
       ;;
+    \?)
+      echo "Usage: ${0} [-C] [-o output.iso] [-P apt_proxy] [-p packages] [-t tasks] [template_preseed.cfg]"
+      echo ""
+      echo -e "\t-C: Do not use LUKS by default."
+      echo -e "\t-o: Write output ISO to this file."
+      echo -e "\t-P: Use this host as APT proxy."
+      echo -e "\t-p: Additional packages"
+      echo -e "\t-t: Additional tasks for tasksel."
+      exit 2
+      ;;
     *)
       echo "Invalid flag ${options}"
       exit 1
       ;;
   esac
 done
+shift $((OPTIND - 1))
 
 PRESEED_SRC="${1:-preseed.cfg}"
 
