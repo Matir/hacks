@@ -9,6 +9,7 @@ ISOURL="https://cdimage.debian.org/cdimage/unofficial/non-free/cd-including-firm
 ISONAME="$(basename $ISOURL)"
 REBUILD_DIR="$(mktemp --tmpdir -d debiso.XXXXXXXX)"
 ISOFILES="${REBUILD_DIR}/isofiles"
+PRESEED_SRC="${1:-preseed.cfg}"
 
 REQUIRED_TOOLS="7z cpio gunzip gzip xorriso md5sum"
 
@@ -25,6 +26,11 @@ if ! test -f /usr/lib/ISOLINUX/isohdpfx.bin ; then
   exit 1
 fi
 
+if ! test -f "${PRESEED_SRC}" ; then
+  echo "Missing preseed file!"
+  exit 1
+fi
+
 # Check if we need to download
 if test -f "${ISONAME}" ; then
   ISOPATH="${ISONAME}"
@@ -35,6 +41,9 @@ else
   # TODO: verify debian sig!
 fi
 
+# copy the preseed
+cp "${PRESEED_SRC}" "${REBUILD_DIR}/preseed.cfg"
+
 # Extract the ISO
 mkdir -p "${ISOFILES}"
 7z x -o"${ISOFILES}" "${ISOPATH}"
@@ -43,7 +52,8 @@ mkdir -p "${ISOFILES}"
 find "${ISOFILES}" -name 'initrd.gz' -print 2>/dev/null | while read -r INITRD ; do
   echo "Updating ${INITRD}"
   gunzip "${INITRD}"
-  echo preseed.cfg | cpio -H newc -o -A -F "${INITRD%.*}"
+  ( cd "${REBUILD_DIR}"
+    echo preseed.cfg | cpio -H newc -o -A -F "${INITRD%.*}" )
   gzip "${INITRD%.*}"
 done
 
