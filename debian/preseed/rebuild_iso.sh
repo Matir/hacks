@@ -9,9 +9,45 @@ ISOURL="https://cdimage.debian.org/cdimage/unofficial/non-free/cd-including-firm
 ISONAME="$(basename $ISOURL)"
 REBUILD_DIR="$(mktemp --tmpdir -d debiso.XXXXXXXX)"
 ISOFILES="${REBUILD_DIR}/isofiles"
-PRESEED_SRC="${1:-preseed.cfg}"
 
 REQUIRED_TOOLS="7z cpio gunzip gzip xorriso md5sum"
+
+# Flags and defaults
+DISABLE_FDE=0
+OUTNAME="$REBUILD_DIR/preseed-$ISONAME"
+APT_PROXY=""
+TASKS=""
+PACKAGES=""
+while getopts "Co:P:t:p:" options; do
+  case "${options}" in
+    C)
+      DISABLE_FDE=1
+      echo "Disabling LUKS in ISO."
+      ;;
+    o)
+      OUTNAME="${OPTARG}"
+      echo "Writing output to ${OUTNAME}"
+      ;;
+    P)
+      APT_PROXY="${OPTARG}"
+      echo "Using APT proxy ${APT_PROXY}"
+      ;;
+    p)
+      PACKAGES="${PACKAGES} ${OPTARG}"
+      echo "Adding package ${OPTARG}"
+      ;;
+    t)
+      TASKS="${TASKS},${OPTARG}"
+      echo "Adding task ${OPTARG}"
+      ;;
+    *)
+      echo "Invalid flag ${options}"
+      exit 1
+      ;;
+  esac
+done
+
+PRESEED_SRC="${1:-preseed.cfg}"
 
 # Check tools
 for tool in ${REQUIRED_TOOLS} ; do  # intentionally split words
@@ -42,7 +78,32 @@ else
 fi
 
 # copy the preseed
-cp "${PRESEED_SRC}" "${REBUILD_DIR}/preseed.cfg"
+PRESEED_REAL="${REBUILD_DIR}/preseed.cfg"
+cp "${PRESEED_SRC}" "${PRESEED_REAL}"
+
+# Make modifications
+if [ "${DISABLE_FDE}" -eq "1" ] ; then
+  sed -i 's/^d-i partman-auto\/method string crypto/d-i partman-auto\/method string lvm/' \
+    "${PRESEED_REAL}"
+fi
+if [ "${APT_PROXY}" != "" ] ; then
+  sed -i "/^d-i mirror\\/http\\/proxy / s/$/ ${APT_PROXY}/" \
+    "${PRESEED_REAL}"
+fi
+if [ "${TASKS}" != "" ] ; then
+  sed -i "/^tasksel tasksel\\/first multiselect/ s/\\s*$/${TASKS}/" \
+    "${PRESEED_REAL}"
+fi
+if [ "${PACKAGES}" != "" ] ; then
+  sed -i "/^d-i pkgsel\\/include string/ s/$/ ${PACKAGES}/" \
+    "${PRESEED_REAL}"
+fi
+
+# Validate the generated file
+if ! debconf-set-selections -c "${PRESEED_REAL}" ; then
+  echo "Syntax check failed!!"
+  exit 1
+fi
 
 # Extract the ISO
 mkdir -p "${ISOFILES}"
@@ -60,16 +121,17 @@ done
 # Regenerate md5sums
 ( cd "${ISOFILES}"
   chmod +w md5sum.txt
-  md5sum $(find -follow -type f) > md5sum.txt
+  # shellcheck disable=SC2046
+  md5sum $(find . -follow -type f) > md5sum.txt
   chmod -w md5sum.txt )
 
 # Generate new ISO
 ( cd "${REBUILD_DIR}"
-  xorriso -as mkisofs -o "preseed-${ISONAME}" \
+  xorriso -as mkisofs -o "${OUTNAME}" \
         -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
         -c isolinux/boot.cat -b isolinux/isolinux.bin -no-emul-boot \
         -boot-load-size 4 -boot-info-table isofiles )
 
 # Done!
-echo "Produced ${REBUILD_DIR}/preseed-${ISONAME}!"
+echo "Produced ${OUTNAME}!"
 exit 0
