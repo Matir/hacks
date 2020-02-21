@@ -91,7 +91,7 @@ fi
 # copy the preseed
 PRESEED_REAL="${REBUILD_DIR}/preseed.cfg"
 cp "${PRESEED_SRC}" "${PRESEED_REAL}"
-cp "preseed_early.sh" "${REBUILD_DIR}"
+cp "partman_early.sh" "${REBUILD_DIR}"
 
 # Make modifications
 if [ "${DISABLE_FDE}" -eq "1" ] ; then
@@ -127,7 +127,7 @@ find "${ISOFILES}" -name 'initrd.gz' -print 2>/dev/null | while read -r INITRD ;
   echo "Updating ${INITRD}"
   gunzip "${INITRD}"
   ( cd "${REBUILD_DIR}"
-    printf 'preseed.cfg\npreseed_early.sh\n' | cpio -H newc -o -A -F "${INITRD%.*}" )
+    printf 'preseed.cfg\npartman_early.sh\n' | cpio -H newc -o -A -F "${INITRD%.*}" )
   gzip "${INITRD%.*}"
 done
 
