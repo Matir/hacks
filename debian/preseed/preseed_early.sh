@@ -9,13 +9,15 @@ set_partman_disk () {
     logger -t "preseed_early" "Locating largest disk"
     DISK=""
     DISK_SZ=0
-    logger -t "preseed_early" "Seen devices $(/bin/list-devices disk | tr '\n' ' ')"
-    /bin/list-devices disk | while read try_disk ; do
+    /bin/list-devices disk > /tmp/list_devices_disk
+    logger -t "preseed_early" "Seen devices $(tr '\n' ' ' < /tmp/list_devices_disk)"
+    while read -r try_disk ; do
       if [ $(blockdev --getsize ${try_disk}) -gt ${DISK_SZ} ] ; then
+        logger -t "preseed_early" "Device ${DISK} is $(blockdev --getsize ${try_disk}) > ${DISK_SZ}"
         DISK=${try_disk}
         DISK_SZ=$(blockdev --getsize ${try_disk})
       fi
-    done
+    done < /tmp/list_devices_disk
     if [ -n "$DISK" ] ; then
       logger -t "preseed_early" "Setting partman-auto/disk to ${DISK}"
       db_set partman-auto/disk "${DISK}"
