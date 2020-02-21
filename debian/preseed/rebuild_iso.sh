@@ -10,7 +10,7 @@ ISONAME="$(basename $ISOURL)"
 REBUILD_DIR="$(mktemp --tmpdir -d debiso.XXXXXXXX)"
 ISOFILES="${REBUILD_DIR}/isofiles"
 
-REQUIRED_TOOLS="7z cpio gunzip gzip xorriso md5sum"
+REQUIRED_TOOLS="cpio gunzip gzip xorriso md5sum"
 
 # Flags and defaults
 DISABLE_FDE=0
@@ -118,7 +118,8 @@ fi
 
 # Extract the ISO
 mkdir -p "${ISOFILES}"
-7z x -o"${ISOFILES}" "${ISOPATH}"
+xorriso -osirrox on -indev "${ISOPATH}" -extract / "${ISOFILES}"
+chmod -R u+w "${ISOFILES}"
 
 # Modify all the initrds
 find "${ISOFILES}" -name 'initrd.gz' -print 2>/dev/null | while read -r INITRD ; do
@@ -138,10 +139,13 @@ done
 
 # Generate new ISO
 ( cd "${REBUILD_DIR}"
-  xorriso -as mkisofs -o "${OUTNAME}" \
+  xorriso -as mkisofs -r -o "${OUTNAME}" \
         -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
         -c isolinux/boot.cat -b isolinux/isolinux.bin -no-emul-boot \
-        -boot-load-size 4 -boot-info-table isofiles )
+        -boot-load-size 4 -boot-info-table \
+        -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot \
+        -isohybrid-gpt-basdat \
+        isofiles )
 
 # Done!
 echo "Produced ${OUTNAME}!"
