@@ -126,7 +126,7 @@ find "${ISOFILES}" -name 'initrd.gz' -print 2>/dev/null | while read -r INITRD ;
   echo "Updating ${INITRD}"
   gunzip "${INITRD}"
   ( cd "${REBUILD_DIR}"
-    echo preseed.cfg | cpio -H newc -o -A -F "${INITRD%.*}" )
+    printf 'preseed.cfg\npreseed_early.sh\n' | cpio -H newc -o -A -F "${INITRD%.*}" )
   gzip "${INITRD%.*}"
 done
 
