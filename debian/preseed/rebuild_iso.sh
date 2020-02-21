@@ -91,6 +91,7 @@ fi
 # copy the preseed
 PRESEED_REAL="${REBUILD_DIR}/preseed.cfg"
 cp "${PRESEED_SRC}" "${PRESEED_REAL}"
+cp "preseed_early.sh" "${REBUILD_DIR}"
 
 # Make modifications
 if [ "${DISABLE_FDE}" -eq "1" ] ; then
