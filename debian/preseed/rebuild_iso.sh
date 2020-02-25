@@ -5,12 +5,13 @@
 
 set -ue
 
-ISOURL="https://cdimage.debian.org/cdimage/unofficial/non-free/cd-including-firmware/weekly-builds/amd64/iso-cd/firmware-testing-amd64-netinst.iso"
+DEFAULT_ISO="https://cdimage.debian.org/cdimage/unofficial/non-free/cd-including-firmware/weekly-builds/amd64/iso-cd/firmware-testing-amd64-netinst.iso"
+: "${ISOURL:=${DEFAULT_ISO}}"
 ISONAME="$(basename $ISOURL)"
 REBUILD_DIR="$(mktemp --tmpdir -d debiso.XXXXXXXX)"
 ISOFILES="${REBUILD_DIR}/isofiles"
 
-REQUIRED_TOOLS="cpio gunzip gzip xorriso md5sum"
+REQUIRED_TOOLS="cpio gunzip gzip xorriso md5sum gpgv sha256sum wget"
 
 # Flags and defaults
 DISABLE_FDE=0
@@ -85,7 +86,16 @@ else
   echo "Downloading ${ISONAME}"
   ISOPATH="${REBUILD_DIR}/${ISONAME}"
   wget -q -O "${ISOPATH}" "${ISOURL}"
-  # TODO: verify debian sig!
+  wget -q -O "${REBUILD_DIR}/SHA256SUMS" "$(dirname ${ISOURL})/SHA256SUMS"
+  wget -q -O "${REBUILD_DIR}/SHA256SUMS.sign" "$(dirname ${ISOURL})/SHA256SUMS.sign"
+  gpgv -q --keyring "$(pwd)/debian.keyring" "${REBUILD_DIR}/SHA256SUMS.sign" "${REBUILD_DIR}/SHA256SUMS" || {
+    echo "GPG Verification failed!!"
+    exit 1
+  }
+  ( cd "${REBUILD_DIR}" ; sha256sum -c --ignore-missing --quiet "SHA256SUMS" ) || {
+    echo "SHA256 verification failed!!"
+    exit 1
+  }
 fi
 
 # copy the preseed
