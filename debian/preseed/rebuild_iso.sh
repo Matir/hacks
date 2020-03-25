@@ -5,12 +5,13 @@
 
 set -ue
 
-ISOURL="https://cdimage.debian.org/cdimage/unofficial/non-free/cd-including-firmware/weekly-builds/amd64/iso-cd/firmware-testing-amd64-netinst.iso"
+DEFAULT_ISO="https://cdimage.debian.org/cdimage/unofficial/non-free/cd-including-firmware/weekly-builds/amd64/iso-cd/firmware-testing-amd64-netinst.iso"
+: "${ISOURL:=${DEFAULT_ISO}}"
 ISONAME="$(basename $ISOURL)"
 REBUILD_DIR="$(mktemp --tmpdir -d debiso.XXXXXXXX)"
 ISOFILES="${REBUILD_DIR}/isofiles"
 
-REQUIRED_TOOLS="7z cpio gunzip gzip xorriso md5sum"
+REQUIRED_TOOLS="cpio gunzip gzip xorriso md5sum gpgv sha256sum wget"
 
 # Flags and defaults
 DISABLE_FDE=0
@@ -85,12 +86,22 @@ else
   echo "Downloading ${ISONAME}"
   ISOPATH="${REBUILD_DIR}/${ISONAME}"
   wget -q -O "${ISOPATH}" "${ISOURL}"
-  # TODO: verify debian sig!
+  wget -q -O "${REBUILD_DIR}/SHA256SUMS" "$(dirname ${ISOURL})/SHA256SUMS"
+  wget -q -O "${REBUILD_DIR}/SHA256SUMS.sign" "$(dirname ${ISOURL})/SHA256SUMS.sign"
+  gpgv -q --keyring "$(pwd)/debian.keyring" "${REBUILD_DIR}/SHA256SUMS.sign" "${REBUILD_DIR}/SHA256SUMS" || {
+    echo "GPG Verification failed!!"
+    exit 1
+  }
+  ( cd "${REBUILD_DIR}" ; sha256sum -c --ignore-missing --quiet "SHA256SUMS" ) || {
+    echo "SHA256 verification failed!!"
+    exit 1
+  }
 fi
 
 # copy the preseed
 PRESEED_REAL="${REBUILD_DIR}/preseed.cfg"
 cp "${PRESEED_SRC}" "${PRESEED_REAL}"
+cp "partman_early.sh" "${REBUILD_DIR}"
 
 # Make modifications
 if [ "${DISABLE_FDE}" -eq "1" ] ; then
@@ -118,14 +129,15 @@ fi
 
 # Extract the ISO
 mkdir -p "${ISOFILES}"
-7z x -o"${ISOFILES}" "${ISOPATH}"
+xorriso -osirrox on -indev "${ISOPATH}" -extract / "${ISOFILES}"
+chmod -R u+w "${ISOFILES}"
 
 # Modify all the initrds
 find "${ISOFILES}" -name 'initrd.gz' -print 2>/dev/null | while read -r INITRD ; do
   echo "Updating ${INITRD}"
   gunzip "${INITRD}"
   ( cd "${REBUILD_DIR}"
-    echo preseed.cfg | cpio -H newc -o -A -F "${INITRD%.*}" )
+    printf 'preseed.cfg\npartman_early.sh\n' | cpio -H newc -o -A -F "${INITRD%.*}" )
   gzip "${INITRD%.*}"
 done
 
@@ -138,10 +150,13 @@ done
 
 # Generate new ISO
 ( cd "${REBUILD_DIR}"
-  xorriso -as mkisofs -o "${OUTNAME}" \
+  xorriso -as mkisofs -r -o "${OUTNAME}" \
         -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
         -c isolinux/boot.cat -b isolinux/isolinux.bin -no-emul-boot \
-        -boot-load-size 4 -boot-info-table isofiles )
+        -boot-load-size 4 -boot-info-table \
+        -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot \
+        -isohybrid-gpt-basdat \
+        isofiles )
 
 # Done!
 echo "Produced ${OUTNAME}!"

@@ -1,0 +1,9 @@
+CreateDesktopShortcut: No
+CreateQuickLaunchShortcut: No
+InstallDir: /opt/010editor
+InstallMode: Console
+InstallType: Typical
+LaunchApplication: No
+ProgramFolderName: 010 Editor
+SelectedComponents: Default Component
+ViewReadme: No
