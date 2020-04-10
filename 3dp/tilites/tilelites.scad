@@ -1,3 +1,5 @@
+mode=0;
+
 tolerance=.25;
 
 module hexagon(r){
@@ -114,8 +116,13 @@ module front_plate(diameter, clip_height=8, thickness=2) {
     }
 }
 
-tile(10, 90, plate_size=80);
-
-// Just for display
-translate([0, 0, 20]) color("green")
+if (mode == 0) {
+    tile(10, 90, plate_size=80);
+    // Just for display
+    translate([0, 0, 20]) color("green")
+        front_plate(80);
+} else if (mode == 1) {
+    tile(10, 90, plate_size=80);
+} else if (mode == 2) {
     front_plate(80);
+}
