@@ -12,9 +12,9 @@ module hexagon(r){
 }
  
 // Repeat something on each side
-module hexagon_each(r) {
+module hexagon_each(r, offset=30) {
     for (a = [0:60:359]) {
-        rotate([0, 0, a+30]) {
+        rotate([0, 0, a+offset]) {
             translate([0, r, 0]) {
                 children();
             }
@@ -23,9 +23,9 @@ module hexagon_each(r) {
 }
 
 // Repeat something in 3 positions
-module tri_each(r) {
+module tri_each(r, offset=30) {
     for (a = [0:120:359]) {
-        rotate([0, 0, a]) {
+        rotate([0, 0, a+offset]) {
             translate([0, r, 0]) {
                 children();
             }
@@ -45,7 +45,7 @@ module dovetail(width1=8, width2=10, length=8, height=10) {
     }
 }
 
-module tile(height, diameter, lens_height=1) {
+module tile(height, diameter, lens_height=1, plate_size=80) {
    union() {
        difference() {
          // Main body
@@ -60,6 +60,10 @@ module tile(height, diameter, lens_height=1) {
                 cube([8,6,6], center=true);
              translate([diameter/6, -3, 0])
                 dovetail(width1=8+tolerance, width2=6+tolerance, length=6, height=6);
+         }
+         translate([0, 0, height/2])
+         tri_each(plate_size/2*.9) {
+            cube([plate_size*.2+tolerance*2, 3+tolerance*2, height], center=true);
          }
        }
        // tabs that stick out
@@ -80,7 +84,7 @@ module tile(height, diameter, lens_height=1) {
    }
 }
 
-module front_plate(diameter, clip_height=5, thickness=2) {
+module front_plate(diameter, clip_height=8, thickness=2) {
     union() {
         linear_extrude(height=thickness) {
             union() {
@@ -92,16 +96,25 @@ module front_plate(diameter, clip_height=5, thickness=2) {
                     hexagon(diameter/2*.45);
                     hexagon(diameter/2*.25);
                 }
-                rotate([0, 0, 30])
                 tri_each(diameter*.35) {
-                    square([diameter*.1, diameter/4], center=true);
+                    square([diameter*.08, diameter/4], center=true);
                 }
             }
+        }
+        clip_size=3;
+        translate([0, 0, -thickness])
+        tri_each(diameter/2*.9) {
+            translate([(diameter*.2-clip_size)/2, 0, 0])
+                cube([clip_size, clip_size, clip_height*2/3], center=true);
+            translate([-(diameter*.2-clip_size)/2, 0, 0])
+                cube([clip_size, clip_size, clip_height*2/3], center=true);
+            translate([0, 0, -clip_height/2])
+                cube([diameter*.2, clip_size, clip_height/3], center=true);
         }
     }
 }
 
-tile(10, 90);
+tile(10, 90, plate_size=80);
 
 // Just for display
 translate([0, 0, 20]) color("green")
