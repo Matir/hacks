@@ -1,6 +1,6 @@
-mode=0;
+mode=3;
 
-tolerance=.25;
+tolerance=.175;
 
 module hexagon(r){
     polygon(points=[
@@ -48,31 +48,37 @@ module dovetail(width1=8, width2=10, length=8, height=10) {
 }
 
 module tile(height, diameter, lens_height=1, plate_size=80) {
+   tab_height = 4;
    union() {
        difference() {
          // Main body
          linear_extrude(height=height) {
              hexagon(diameter/2);
          }
-         linear_extrude(height=height-lens_height) {
+         linear_extrude(height=height-lens_height*2) {
              hexagon(diameter/2-5);
          }
+         linear_extrude(height=height-lens_height) {
+             hexagon(diameter/2-10);
+         }
          hexagon_each(diameter/2) {
+             // Cable holes
              translate([0, -3, 3])
-                cube([8,6,6], center=true);
-             translate([diameter/6, -3, 0])
+                cube([8, 6, 8], center=true);
+             // Tab holes
+             translate([diameter/6, -3, tab_height])
                 dovetail(width1=8+tolerance, width2=6+tolerance, length=6, height=6);
          }
          translate([0, 0, height/2])
-         tri_each(plate_size/2*.9) {
+         tri_each(plate_size/2*.95) {
             cube([plate_size*.2+tolerance*2, 3+tolerance*2, height], center=true);
          }
        }
        // tabs that stick out
        hexagon_each(diameter/2) {
-           translate([-diameter/6, 3, 0])
+           translate([-diameter/6, 3, tab_height])
              difference() {
-                 dovetail(width1=6-tolerance, width2=8-tolerance, length=6, height=6);
+                 dovetail(width1=6, width2=8, length=6, height=6-tolerance*2);
                  translate([0, 0, 3])
                      cube([1.5, 6, 6], center=true);
                  translate([4, 2.5, 3])
@@ -105,7 +111,7 @@ module front_plate(diameter, clip_height=8, thickness=2) {
         }
         clip_size=3;
         translate([0, 0, -thickness])
-        tri_each(diameter/2*.9) {
+        tri_each(diameter/2*.95) {
             translate([(diameter*.2-clip_size)/2, 0, 0])
                 cube([clip_size, clip_size, clip_height*2/3], center=true);
             translate([-(diameter*.2-clip_size)/2, 0, 0])
@@ -117,12 +123,18 @@ module front_plate(diameter, clip_height=8, thickness=2) {
 }
 
 if (mode == 0) {
-    tile(10, 90, plate_size=80);
+    tile(15, 90, plate_size=80);
     // Just for display
-    translate([0, 0, 20]) color("green")
+    translate([0, 0, 30]) color("green")
         front_plate(80);
 } else if (mode == 1) {
-    tile(10, 90, plate_size=80);
+    tile(15, 90, plate_size=80);
 } else if (mode == 2) {
     front_plate(80);
+} else if (mode == 3) {
+    intersection(){
+        tile(15, 90, plate_size=80);
+        translate([45,0,10])
+        cube([20,60,20], center=true);
+    }
 }
