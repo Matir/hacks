@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	Workers       = 4
-	KeysPerWorker = 10
+	Workers       = 5
+	KeysPerWorker = 10000
 )
 
 func main() {
