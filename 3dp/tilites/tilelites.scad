@@ -1,4 +1,4 @@
-mode=3;
+mode=1;
 
 tolerance=.175;
 
