@@ -1,4 +1,4 @@
-mode=3;
+mode=1;
 
 tolerance=.2;
 
@@ -64,7 +64,7 @@ module tile(height, diameter, lens_height=1, plate_size=80) {
          hexagon_each(diameter/2) {
              // Cable holes
              translate([0, -3, 3])
-                cube([8, 6, 8], center=true);
+                cube([10, 6, 10], center=true);
              // Tab holes
              translate([diameter/6, -3, tab_height])
                 dovetail(width1=8+tolerance, width2=6+tolerance, length=6, height=6);
@@ -78,15 +78,17 @@ module tile(height, diameter, lens_height=1, plate_size=80) {
        hexagon_each(diameter/2) {
            translate([-diameter/6, 3, tab_height])
              difference() {
-                 dovetail(width1=6, width2=8, length=6, height=6-tolerance*2.5);
+                 dovetail(width1=6-tolerance, width2=8-tolerance, length=6, height=6-tolerance*2.5);
+                 // Cut in center
                  translate([0, 0, 3])
-                     cube([1.5, 6, 6], center=true);
+                     cube([2, 6, 6], center=true);
+                 // Tapering at front
                  translate([4, 2.5, 3])
                  rotate([0, 0, 30])
-                     cube([2, 6, 6], center=true);
+                     cube([2.8, 6, 6], center=true);
                  translate([-4, 2.5, 3])
                  rotate([0, 0, -30])
-                     cube([2, 6, 6], center=true);
+                     cube([2.8, 6, 6], center=true);
              }
        }
    }
