@@ -738,17 +738,6 @@ F 3 "~" H 9700 3150 50  0001 C CNN
 	1    9700 3150
 	0    1    1    0   
 $EndComp
-$Comp
-L Device:R_Small R9
-U 1 1 5EA44222
-P 9700 3950
-F 0 "R9" V 9504 3950 50  0000 C CNN
-F 1 "330" V 9595 3950 50  0000 C CNN
-F 2 "Resistor_SMD:R_0603_1608Metric" H 9700 3950 50  0001 C CNN
-F 3 "~" H 9700 3950 50  0001 C CNN
-	1    9700 3950
-	0    1    1    0   
-$EndComp
 NoConn ~ 8450 3350
 NoConn ~ 8450 3450
 NoConn ~ 8450 3550
@@ -825,17 +814,6 @@ F 3 "~" H 10200 3150 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L Connector:Screw_Terminal_01x03 J6
-U 1 1 5EA613A5
-P 10200 3950
-F 0 "J6" H 10280 3992 50  0000 L CNN
-F 1 "Screw_Terminal_01x03" H 10280 3901 50  0000 L CNN
-F 2 "TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-3-5.0-H_1x03_P5.00mm_Horizontal" H 10200 3950 50  0001 C CNN
-F 3 "~" H 10200 3950 50  0001 C CNN
-	1    10200 3950
-	1    0    0    -1  
-$EndComp
-$Comp
 L power:VCC #PWR026
 U 1 1 5EA6E45F
 P 9900 1450
@@ -844,17 +822,6 @@ F 1 "VCC" H 9917 1623 50  0000 C CNN
 F 2 "" H 9900 1450 50  0001 C CNN
 F 3 "" H 9900 1450 50  0001 C CNN
 	1    9900 1450
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:VCC #PWR029
-U 1 1 5EA6EA66
-P 9900 3750
-F 0 "#PWR029" H 9900 3600 50  0001 C CNN
-F 1 "VCC" H 9917 3923 50  0000 C CNN
-F 2 "" H 9900 3750 50  0001 C CNN
-F 3 "" H 9900 3750 50  0001 C CNN
-	1    9900 3750
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -892,17 +859,11 @@ Wire Wire Line
 Wire Wire Line
 	9900 3050 9900 2950
 Wire Wire Line
-	10000 3850 9900 3850
-Wire Wire Line
-	9900 3850 9900 3750
-Wire Wire Line
 	10000 3150 9800 3150
 Wire Wire Line
 	10000 2400 9800 2400
 Wire Wire Line
 	10000 1650 9800 1650
-Wire Wire Line
-	10000 3950 9800 3950
 Wire Wire Line
 	9600 1650 9300 1650
 Wire Wire Line
@@ -910,31 +871,23 @@ Wire Wire Line
 Wire Wire Line
 	9600 3150 9300 3150
 Wire Wire Line
-	9600 3950 9300 3950
-Wire Wire Line
 	8450 2950 8750 2950
 Wire Wire Line
 	8450 3050 8750 3050
 Wire Wire Line
 	8750 3150 8450 3150
-Wire Wire Line
-	8450 3250 8750 3250
 Text Label 8750 2950 2    50   ~ 0
 CH1
 Text Label 8750 3050 2    50   ~ 0
 CH2
 Text Label 8750 3150 2    50   ~ 0
 CH3
-Text Label 8750 3250 2    50   ~ 0
-CH4
 Text Label 9300 1650 0    50   ~ 0
-CH3
+CH1
 Text Label 9300 2400 0    50   ~ 0
 CH2
 Text Label 9300 3150 0    50   ~ 0
-CH1
-Text Label 9300 3950 0    50   ~ 0
-CH4
+CH3
 NoConn ~ 4150 3550
 NoConn ~ 4150 3650
 NoConn ~ 4150 3750
@@ -953,8 +906,6 @@ Wire Wire Line
 	5350 3450 5800 3450
 Wire Wire Line
 	5350 3550 5800 3550
-Wire Wire Line
-	5350 3650 5800 3650
 NoConn ~ 5350 3750
 NoConn ~ 5350 3850
 NoConn ~ 5350 3950
@@ -971,16 +922,12 @@ Text Label 5800 3450 2    50   ~ 0
 IO17
 Text Label 5800 3550 2    50   ~ 0
 IO18
-Text Label 5800 3650 2    50   ~ 0
-IO19
 Text Label 6950 2950 0    50   ~ 0
 IO16
 Text Label 6950 3050 0    50   ~ 0
 IO17
 Text Label 6950 3150 0    50   ~ 0
 IO18
-Text Label 6950 3250 0    50   ~ 0
-IO19
 $Comp
 L Connector_Generic:Conn_01x03 J7
 U 1 1 5EAF4988
@@ -1050,23 +997,15 @@ F 3 "" H 9900 3250 50  0001 C CNN
 	1    9900 3250
 	1    0    0    -1  
 $EndComp
-$Comp
-L power:GND #PWR033
-U 1 1 5EB09B1C
-P 9900 4050
-F 0 "#PWR033" H 9900 3800 50  0001 C CNN
-F 1 "GND" H 9905 3877 50  0000 C CNN
-F 2 "" H 9900 4050 50  0001 C CNN
-F 3 "" H 9900 4050 50  0001 C CNN
-	1    9900 4050
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	9900 4050 10000 4050
 Wire Wire Line
 	10000 3250 9900 3250
 Wire Wire Line
 	10000 2500 9900 2500
 Wire Wire Line
 	10000 1750 9900 1750
+NoConn ~ 8450 3250
+NoConn ~ 5350 3650
+Wire Wire Line
+	6950 3250 6950 3350
+Connection ~ 6950 3350
 $EndSCHEMATC
