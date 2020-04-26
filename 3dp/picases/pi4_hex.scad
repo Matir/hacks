@@ -11,7 +11,7 @@ bottom_height = base_thick + 1.6 + 3.2 + bottom_clearance;
 lip_height = 1;
 lip_depth = wall_thick/3;
 // tolerance on edges
-tol = 0.1;
+tol = 0.15;
 // clip positions
 clips = [3.5+7.7+14.8/2, 72];
 clip_width = 5;
@@ -29,32 +29,58 @@ module hexagon(r){
     ]);
 }
 
-module hexagon_tiles(hex_r, hex_sep, length, width, height) {
+module hexagon_tiles(hex_r, hex_sep, length, width, height, only=undef) {
+  module a_hex() {
+    linear_extrude(height=height) {
+      hexagon(hex_r);
+    }
+  }
 	tile_spacing = 2*hex_r + 2*hex_sep*2/sqrt(3);
 	tile_row_spacing = 2*hex_r + hex_sep;
 	num_cols = floor(length/tile_spacing);
+	echo("Cols:", num_cols);
 	num_rows = floor(width/tile_row_spacing);
+	echo("Rows:", num_rows);
+	extra_col = 1 - (round(length/tile_spacing) - num_cols);
 	translate([0, -(hex_r*sqrt(3)/2), 0])
 	for (i = [1:num_rows]) {
     row_offset = (tile_spacing / 2) * (i % 2);
 	  translate([row_offset, i*tile_row_spacing, 0]) {
-      for (k = [1-(i%2):num_cols-(i%2)]) {
-        translate([k*tile_spacing, 0, 0]) {
-          linear_extrude(height=height) {
-            hexagon(hex_r);
+	    num_row_cols = num_cols - ((i%2) * extra_col);
+	    echo("Row cols: ", num_row_cols);
+      for (k = [1-(i%2):num_row_cols]) {
+        dist = k*tile_spacing;
+        if (only == undef) {
+          translate([dist, 0, 0]) {
+            a_hex();
+          }
+        } else {
+          for (pt = only) {
+            if (pt[0] == i && pt[1] == k) {
+              translate([dist, 0, 0]) {
+                a_hex();
+              }
+            }
           }
         }
-      }
+      } // end column loop
 	  }
-	}
+	} // end row loop
 }
 
-module pi_hex_tiles() {
-  hexagon_tiles(4.2, 0.75, pi4_length, pi4_width, wall_thick*2);
+module pi_hex_tiles(exclude=undef) {
+  tile_size = 3.6;
+  tile_spacing = 0.7;
+  difference() {
+    hexagon_tiles(tile_size, tile_spacing, pi4_length-2*wall_thick, pi4_width, wall_thick*2);
+    if (exclude != undef) {
+      hexagon_tiles(tile_size, tile_spacing, pi4_length-2*wall_thick, pi4_width, wall_thick*2, only=exclude);
+    }
+  }
 }
 
 module pi4_inplace() {
-  translate([wall_thick+2*tol, wall_thick+2*tol, base_thick+bottom_clearance])
+  translate([wall_thick+2*tol, wall_thick+tol, base_thick+bottom_clearance])
     pi4(tol=tol);
 }
 
@@ -81,23 +107,34 @@ module port_fix() {
   }
 }
 
+mounting_points = [[3.5, 3.5],
+                   [3.5, 3.5+49],
+                   [3.5+58, 3.5],
+                   [3.5+58, 3.5+49]];
+
 // Feet under pi
 module pi_feet() {
   module single_foot() {
-    cylinder(d=4, h=bottom_clearance, $fn=20);
-    translate([0, 0, bottom_clearance])
-      cylinder(d=2, h=2, $fn=20);
+    difference() {
+      cylinder(d=4, h=bottom_clearance, $fn=20);
+      cylinder(d=2, h=bottom_clearance, $fn=12);
+    }
   }
   translate([wall_thick+tol, wall_thick+tol, base_thick]) {
-    translate([3.5, 3.5, 0])
-      single_foot();
-    translate([3.5, 3.5+49, 0])
-      single_foot();
-    translate([3.5+58, 3.5, 0])
-      single_foot();
-    translate([3.5+58, 3.5+49, 0])
-      single_foot();
+    for (pt = mounting_points) {
+      translate([pt[0], pt[1], 0])
+        single_foot();
+    }
   }
+}
+
+// Holes in top
+module top_screw_holes() {
+  translate([wall_thick+tol, wall_thick+tol, case_height-wall_thick])
+    for (pt = mounting_points) {
+      translate([pt[0], pt[1], 0])
+        cylinder(d=2, h=2*wall_thick, $fn=12);
+    }
 }
 
 module sd_slot() {
@@ -145,21 +182,34 @@ module clip_male() {
 module top_ribs() {
   #translate([wall_thick, wall_thick, bottom_height]) {
     // Between USB ports
-    translate([pi4_length-1, 17.5, 0])
+    translate([pi4_length-3, 17.5, 0])
       difference() {
-        cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
-        rotate([0, 8, 0])
-          translate([-3.25, 0, 0])
-          cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
+        cube([4, 1.5, case_height-bottom_height-2*wall_thick]);
+        rotate([0, 9, 0])
+          translate([-3.5, 0, 0])
+          cube([3, 1.5, case_height]);
       }
     // Between USB and ethernet
-    translate([pi4_length-1, 35.5, 0])
+    translate([pi4_length-3, 35.5, 0])
       difference() {
-        cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
-        rotate([0, 8, 0])
-          translate([-3.25, 0, 0])
-          cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
+        cube([4, 1.5, case_height-bottom_height-2*wall_thick]);
+        rotate([0, 9, 0])
+          translate([-3.5, 0, 0])
+          cube([3, 1.5, case_height]);
       }
+  }
+}
+
+// Mounts for fan
+module fan_mounts() {
+  screw_dia = 3.2;
+  translate([pi4_length/4+1, (pi4_width-32)/2+2.5, case_height-2*wall_thick]) {
+    for (i=[0, 32]) {
+      for (k=[0, 32]) {
+        translate([i, k, 0])
+          cylinder(d=screw_dia, h=5, $fn=12);
+      }
+    }
   }
 }
 
@@ -173,7 +223,7 @@ module picase_bottom() {
           pi4_inplace();
           picase_lip();
           sd_slot();
-          clip_female();
+          //clip_female();
         }
         pi_feet();
       }
@@ -194,10 +244,17 @@ module picase_top() {
           innerhollow();
           port_fix();
           pi4_inplace();
-          translate([wall_thick/2, wall_thick, case_height-wall_thick])
-            pi_hex_tiles();
+          translate([wall_thick/2+2, wall_thick, case_height-wall_thick])
+            pi_hex_tiles(exclude=[
+              // 40mm fan
+              [2,2],[6,2],[2,6],[6,6],
+              // Mounting screws
+              [1,0],[7,0],[1,6],[7,6],
+              ]);
+          fan_mounts();
+          #top_screw_holes();
         }
-        clip_male();
+        //clip_male();
         top_ribs();
       }
 }
