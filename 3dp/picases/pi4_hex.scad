@@ -2,7 +2,7 @@ include <bases/pis.scad>
 
 RENDER_MODE = 2;
 
-wall_thick = 1.5;
+wall_thick = 2;
 base_thick = wall_thick;
 bottom_clearance = 2;
 case_open_height = 28;
@@ -15,7 +15,7 @@ tol = 0.1;
 // clip positions
 clips = [3.5+7.7+14.8/2, 72];
 clip_width = 5;
-clip_height = base_thick + 3;
+clip_height = base_thick + 3.8;
 clip_depth = 1;
 
 module hexagon(r){
@@ -29,16 +29,16 @@ module hexagon(r){
     ]);
 }
 
-module hexagon_tiles(hex_r, hex_sep, width, length, height) {
+module hexagon_tiles(hex_r, hex_sep, length, width, height) {
 	tile_spacing = 2*hex_r + 2*hex_sep*2/sqrt(3);
 	tile_row_spacing = 2*hex_r + hex_sep;
-	num_cols = floor(width/tile_spacing);
-	num_rows = floor(length/tile_row_spacing);
+	num_cols = floor(length/tile_spacing);
+	num_rows = floor(width/tile_row_spacing);
 	translate([0, -(hex_r*sqrt(3)/2), 0])
 	for (i = [1:num_rows]) {
     row_offset = (tile_spacing / 2) * (i % 2);
 	  translate([row_offset, i*tile_row_spacing, 0]) {
-      for (k = [1-(i%2):num_cols]) {
+      for (k = [1-(i%2):num_cols-(i%2)]) {
         translate([k*tile_spacing, 0, 0]) {
           linear_extrude(height=height) {
             hexagon(hex_r);
@@ -50,7 +50,7 @@ module hexagon_tiles(hex_r, hex_sep, width, length, height) {
 }
 
 module pi_hex_tiles() {
-  hexagon_tiles(2.5, .5, pi4_length, pi4_width, wall_thick);
+  hexagon_tiles(4.2, 0.75, pi4_length, pi4_width, wall_thick*2);
 }
 
 module pi4_inplace() {
@@ -67,7 +67,7 @@ module picase_lip() {
   translate([wall_thick-lip_depth, wall_thick-lip_depth, bottom_height-lip_height])
   difference() {
     cube([pi4_length+2*lip_depth, pi4_width+2*lip_depth, lip_height]);
-    translate([lip_depth, lip_depth, 0])
+    translate([lip_depth+tol, lip_depth+tol, 0])
       cube([pi4_length, pi4_width, lip_height]);
   }
 }
@@ -101,12 +101,12 @@ module pi_feet() {
 }
 
 module sd_slot() {
-  translate([-4, 22, base_thick])
+  translate([-4, 22+wall_thick, base_thick])
     union() {
       cube([12+2*tol, 12+2*tol, bottom_clearance+tol]);
       // Extra depth to grab end of sd
       translate([0, 0, -base_thick-tol])
-        cube([4+wall_thick*2, 12+2*tol, base_thick+tol]);
+        cube([7+wall_thick*2, 12+2*tol, base_thick+tol]);
     }
 }
 
@@ -131,13 +131,35 @@ module clip_male() {
           rotate([45, 0, 0])
           cube([clip_width, clip_depth, clip_depth]);
       }
-      translate([clips[i], wall_thick+pi4_width+2*tol, clip_height]) {
+      translate([clips[i], wall_thick+pi4_width+3*tol, clip_height]) {
         translate([0, -clip_depth, 0])
           cube([clip_width, clip_depth, bottom_height]);
         rotate([45, 0, 0])
           cube([clip_width, clip_depth, clip_depth]);
       }
     }
+  }
+}
+
+// Reinforcing ribs
+module top_ribs() {
+  #translate([wall_thick, wall_thick, bottom_height]) {
+    // Between USB ports
+    translate([pi4_length-1, 17.5, 0])
+      difference() {
+        cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
+        rotate([0, 8, 0])
+          translate([-3.25, 0, 0])
+          cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
+      }
+    // Between USB and ethernet
+    translate([pi4_length-1, 35.5, 0])
+      difference() {
+        cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
+        rotate([0, 8, 0])
+          translate([-3.25, 0, 0])
+          cube([2, 1.5, case_height-bottom_height-2*wall_thick]);
+      }
   }
 }
 
@@ -158,7 +180,7 @@ module picase_bottom() {
 }
 
 module picase_top() {
-    color("blue", 0.25)
+    color("blue", 0.5)
       union() {
         difference() {
           union() {
@@ -176,6 +198,7 @@ module picase_top() {
             pi_hex_tiles();
         }
         clip_male();
+        top_ribs();
       }
 }
 

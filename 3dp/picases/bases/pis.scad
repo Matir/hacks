@@ -78,7 +78,7 @@ module usb_c(tol=0) {
 module micro_hdmi(tol=0) {
   color("orange") {
     translate([0, 0, 3/2+1.6])
-      cube([6.5+2*tol, 7.5+2*tol, 3+tol], center=true);
+      cube([7+2*tol, 7.5+2*tol, 3+tol], center=true);
   }
 }
 
