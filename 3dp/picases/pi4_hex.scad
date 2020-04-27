@@ -68,13 +68,13 @@ module hexagon_tiles(hex_r, hex_sep, length, width, height, only=undef) {
 	} // end row loop
 }
 
-module pi_hex_tiles(exclude=undef) {
+module pi_hex_tiles(length, width, exclude=undef) {
   tile_size = 3.6;
   tile_spacing = 0.7;
   difference() {
-    hexagon_tiles(tile_size, tile_spacing, pi4_length-2*wall_thick, pi4_width, wall_thick*2);
+    hexagon_tiles(tile_size, tile_spacing, length, width, wall_thick*2);
     if (exclude != undef) {
-      hexagon_tiles(tile_size, tile_spacing, pi4_length-2*wall_thick, pi4_width, wall_thick*2, only=exclude);
+      hexagon_tiles(tile_size, tile_spacing, length, width, wall_thick*2, only=exclude);
     }
   }
 }
@@ -90,21 +90,26 @@ module innerhollow() {
 }
 
 module picase_lip() {
-  translate([wall_thick-lip_depth, wall_thick-lip_depth, bottom_height-lip_height])
+  translate([wall_thick-lip_depth+tol, wall_thick-lip_depth+tol, bottom_height-lip_height])
   difference() {
-    cube([pi4_length+2*lip_depth, pi4_width+2*lip_depth, lip_height]);
+    cube([pi4_length+2*lip_depth+2*tol, pi4_width+2*lip_depth+2*tol, lip_height]);
     translate([lip_depth+tol, lip_depth+tol, 0])
       cube([pi4_length, pi4_width, lip_height]);
   }
 }
 
-// Expand the hdmi ports vertically just a touch
 module port_fix() {
+  // Expand the hdmi ports vertically just a touch
   translate([wall_thick+3.5+7.7+14.8+2*tol, 1.75+wall_thick+tol, base_thick+0.2+bottom_clearance]) {
     micro_hdmi(tol=tol);
     translate([13.5, 0, 0])
       micro_hdmi(tol=tol);
   }
+  // Carve out space between ports
+  translate([wall_thick+tol+pi4_length, 18, base_thick+bottom_clearance+1.6+tol])
+    cube([2*wall_thick, 6, 16]);
+  translate([wall_thick+tol+pi4_length, 36, base_thick+bottom_clearance+1.6+tol])
+    cube([2*wall_thick, 6, 13.6]);
 }
 
 mounting_points = [[3.5, 3.5],
@@ -178,28 +183,6 @@ module clip_male() {
   }
 }
 
-// Reinforcing ribs
-module top_ribs() {
-  #translate([wall_thick, wall_thick, bottom_height]) {
-    // Between USB ports
-    translate([pi4_length-3, 17.5, 0])
-      difference() {
-        cube([4, 1.5, case_height-bottom_height-2*wall_thick]);
-        rotate([0, 9, 0])
-          translate([-3.5, 0, 0])
-          cube([3, 1.5, case_height]);
-      }
-    // Between USB and ethernet
-    translate([pi4_length-3, 35.5, 0])
-      difference() {
-        cube([4, 1.5, case_height-bottom_height-2*wall_thick]);
-        rotate([0, 9, 0])
-          translate([-3.5, 0, 0])
-          cube([3, 1.5, case_height]);
-      }
-  }
-}
-
 // Mounts for fan
 module fan_mounts() {
   screw_dia = 3.2;
@@ -233,6 +216,7 @@ module picase_top() {
     color("blue", 0.5)
       union() {
         difference() {
+          // Additive block
           union() {
             translate([0, 0, bottom_height])
               cube([
@@ -245,17 +229,23 @@ module picase_top() {
           port_fix();
           pi4_inplace();
           translate([wall_thick/2+2, wall_thick, case_height-wall_thick])
-            pi_hex_tiles(exclude=[
+            pi_hex_tiles(
+              pi4_length-2*wall_thick,
+              pi4_width,
+              exclude=[
               // 40mm fan
               [2,2],[6,2],[2,6],[6,6],
               // Mounting screws
               [1,0],[7,0],[1,6],[7,6],
               ]);
           fan_mounts();
-          #top_screw_holes();
+          top_screw_holes();
+          // Hex on end wall
+          #translate([-wall_thick+tol, wall_thick, case_height-wall_thick/2])
+            rotate([0, 90, 0])
+            pi_hex_tiles(case_height-bottom_height-wall_thick*2, pi4_width);
         }
-        //clip_male();
-        top_ribs();
+        // Add some things back
       }
 }
 
