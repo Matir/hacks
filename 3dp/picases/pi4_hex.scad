@@ -1,9 +1,9 @@
 include <bases/pis.scad>
 
-RENDER_MODE = 2;
+RENDER_MODE = 1;
 
 wall_thick = 2;
-base_thick = wall_thick;
+base_thick = 3;
 bottom_clearance = 2;
 case_open_height = 28;
 case_height = case_open_height+wall_thick+base_thick;
@@ -121,11 +121,26 @@ mounting_points = [[3.5, 3.5],
 module pi_feet() {
   module single_foot() {
     difference() {
-      cylinder(d=4, h=bottom_clearance, $fn=20);
-      cylinder(d=2, h=bottom_clearance, $fn=12);
+      cylinder(d=5, h=bottom_clearance, $fn=20);
+      cylinder(d=2.5, h=bottom_clearance, $fn=12);
     }
   }
   translate([wall_thick+tol, wall_thick+tol, base_thick]) {
+    for (pt = mounting_points) {
+      translate([pt[0], pt[1], 0])
+        single_foot();
+    }
+  }
+}
+
+// Bottom screw holes
+module bottom_screw_holes() {
+  module single_foot() {
+    cylinder(d=2.5, h=base_thick+tol, $fn=12);
+    linear_extrude(height=2)
+      hexagon(r=2.5);
+  }
+  translate([wall_thick+tol, wall_thick+tol, 0]) {
     for (pt = mounting_points) {
       translate([pt[0], pt[1], 0])
         single_foot();
@@ -206,7 +221,7 @@ module picase_bottom() {
           pi4_inplace();
           picase_lip();
           sd_slot();
-          //clip_female();
+          bottom_screw_holes();
         }
         pi_feet();
       }

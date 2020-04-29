@@ -71,14 +71,14 @@ module ethernet_jack(tol=0) {
 module usb_c(tol=0) {
   color("red") {
     translate([0, 0, 3.3/2+1.6])
-      cube([9+2*tol, 8+2*tol, 3.3+tol], center=true);
+      cube([9.4+2*tol, 8+2*tol, 3.3+tol], center=true);
   }
 }
 
 module micro_hdmi(tol=0) {
   color("orange") {
     translate([0, 0, 3/2+1.6])
-      cube([7+2*tol, 7.5+2*tol, 3+tol], center=true);
+      cube([7.4+2*tol, 7.5+2*tol, 3+tol], center=true);
   }
 }
 
