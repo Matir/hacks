@@ -11,8 +11,10 @@ module hex_flask(r, h, cap_thick=10, wall=1) {
       union() {
         cylinder(r2=cap_inner_r, r1=cap_r*.8, h=thick*.2);
         translate([0, 0, thick*.2]) {
+          // Slightly thinner for fit
+          thread_d = cutout ? cap_r*2 : cap_r*2-0.3;
           cylinder(r=cap_inner_r, h=thick*.8);
-          metric_thread(cap_r*2, thick/3, thick*.8, internal=cutout, leadin=3);
+          metric_thread(thread_d, thick/3, thick*.8, internal=cutout, leadin=3);
         }
       }
       if (!cutout) {
@@ -58,5 +60,5 @@ module hex_flask_preview() {
   }
 }
 
-//hex_flask(r=25, h=80);
-hex_flask_preview();
+hex_flask(r=25, h=80);
+//hex_flask_preview();
