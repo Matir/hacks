@@ -52,7 +52,7 @@ http {
         ssl_certificate         /etc/nginx/webdav.crt;
         ssl_certificate_key     /etc/nginx/webdav.key;
         ssl_dhparam             /etc/nginx/dhparam.pem;
-        ssl_perver_server_ciphers on;
+        ssl_prefer_server_ciphers on;
         ssl_ciphers             ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
     }
 }
