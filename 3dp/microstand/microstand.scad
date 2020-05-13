@@ -1,4 +1,5 @@
 use <../library/hex.scad>
+use <../library/shapes.scad>
 
 module finger_joint(width=20, hole_dia=3, length=30, depth=20, n_fingers=3, tol=0) {
   union() {
@@ -82,5 +83,14 @@ module microscope_end(holder_dia=30, depth=14, tol=0, hole_dia=3) {
   }
 }
 
+module microscope_base(bracket_width=12, bracket_depth=14, hole_dia=3, tol=0) {
+  union() {
+    rotate([0, -90, -90])
+      finger_joint(width=bracket_width, depth=bracket_depth, length=bracket_width*1.5, hole_dia=hole_dia, tol=tol);
+  }
+}
+
 //finger_joint_bar(length=100, tol=0.15);
-microscope_end(tol=0.15);
+//microscope_end(tol=0.15);
+//microscope_base();
+truncated_pyramid();
