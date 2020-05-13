@@ -1,4 +1,6 @@
 // Module hexagon
+// R is radius across flat sides, not points
+// points are (2/sqrt(3))*r
 module hexagon(r){
     polygon(points=[
                 [r,(r*(tan(30)))],
