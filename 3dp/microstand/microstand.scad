@@ -83,14 +83,90 @@ module microscope_end(holder_dia=30, depth=14, tol=0, hole_dia=3) {
   }
 }
 
-module microscope_base(bracket_width=12, bracket_depth=14, hole_dia=3, tol=0) {
-  union() {
-    rotate([0, -90, -90])
-      finger_joint(width=bracket_width, depth=bracket_depth, length=bracket_width*1.5, hole_dia=hole_dia, tol=tol);
+module microscope_base(base_length=50, base_depth=30, base_height=10, bracket_width=12, bracket_depth=14, hole_dia=3, tol=0) {
+  translate([base_length*cos(30), 0, 0])
+  difference() {
+    union() {
+      truncated_pyramid(bottom=[base_length, base_depth], top=[base_length, base_depth-5], height=base_height);
+      translate([base_length/2-bracket_depth/2, base_depth/2-bracket_width/2, base_height])
+        rotate([0, -90, -90])
+        finger_joint(width=bracket_width, depth=bracket_depth, length=bracket_width*1.5, hole_dia=hole_dia, tol=tol);
+
+      // Wings
+      translate([-base_length/2+base_depth/2*cos(30), base_depth*sin(30)/3, 0]) {
+        rotate([0, 0, 30])
+        difference() {
+          translate([-base_length/2, -base_depth/2, 0])
+            truncated_pyramid(bottom=[base_length, base_depth], top=[base_length, base_depth-5], height=base_height);
+          translate([-base_length/2, 4, 0])
+            cube([10, 5+tol, 5]);
+          translate([-base_length/2, -9, 0])
+            cube([10, 5+tol, 5]);
+        }
+      }
+      translate([base_length*3/2-base_depth/2*cos(30), base_depth*sin(30)/3, 0]) {
+        rotate([0, 0, -30])
+        difference() {
+          translate([-base_length/2, -base_depth/2, 0])
+            truncated_pyramid(bottom=[base_length, base_depth], top=[base_length, base_depth-5], height=base_height);
+          translate([base_length/2-10, 4, 0])
+            cube([10, 5+tol, 5]);
+          translate([base_length/2-10, -9, 0])
+            cube([10, 5+tol, 5]);
+        }
+      }
+    }
+    // These cleanup the edges of the overlaps oops
+    translate([0, base_depth*2-5/2, base_height])
+      rotate([180, 0, 0])
+      truncated_pyramid(bottom=[base_length, base_depth], top=[base_length, base_depth-5], height=base_height);
+    translate([base_length*3/2-base_depth/2*cos(30), base_depth*sin(30)/3, base_height]) {
+      rotate([0, 0, -30])
+      translate([0, base_depth-5/2, 0])
+      rotate([180, 0, 0])
+      translate([-base_length/2, -base_depth/2, 0])
+      truncated_pyramid(bottom=[base_length, base_depth], top=[base_length, base_depth-5], height=base_height);
+    }
+    translate([-base_length/2+base_depth/2*cos(30), base_depth*sin(30)/3, base_height]) {
+      rotate([0, 0, 30])
+      translate([0, base_depth-5/2, 0])
+      rotate([180, 0, 0])
+      translate([-base_length/2, -base_depth/2, 0])
+      truncated_pyramid(bottom=[base_length, base_depth], top=[base_length, base_depth-5], height=base_height);
+    }
+  }
+}
+
+module microscope_leg(length=80, width=60, depth=30, height=10, tol=0) {
+  // tied to some values in microscope_base
+  difference() {
+    union() {
+      truncated_pyramid(bottom=[width, depth], top=[width, depth-5], height=height);
+      translate([width, -length*cos(60)/4, 0])
+        rotate([0, 0, -60])
+        translate([-length/2, -depth/2, 0])
+        truncated_pyramid(bottom=[length, depth], top=[length-5, depth-5], height=height);
+      // pins
+      translate([0, depth/2, 0]) {
+        translate([-8, 4, 0])
+          cube([10, 5-tol, 5]);
+        translate([-8, -9, 0])
+          cube([10, 5-tol, 5]);
+      }
+    }
+    translate([0, 2*depth-5/2, height])
+      rotate([180, 0, 0])
+      truncated_pyramid(bottom=[width, depth], top=[width, depth-5], height=height);
+    #translate([width, -length*cos(60)/4, 0])
+      rotate([0, 0, -60])
+      translate([0, depth-5/2, height])
+      rotate([180, 0, 0])
+      translate([-length/2, -depth/2, 0])
+      truncated_pyramid(bottom=[width, depth], top=[width, depth-5], height=height);
   }
 }
 
 //finger_joint_bar(length=100, tol=0.15);
 //microscope_end(tol=0.15);
-//microscope_base();
-truncated_pyramid();
+//microscope_base(tol=0.15);
+microscope_leg();
