@@ -1,7 +1,7 @@
 module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
   bottom_thick = wall;
   inner_h = boxdim[2];
-  pi_pos = [boxdim[0]-85+wall/2, boxdim[1]-7-56+wall, 2];
+  pi_pos = [boxdim[0]-85+wall, boxdim[1]-6-56+wall, 2];
 
   module corner_support(outer_d=5, inner_d=2) {
     support_h = inner_h-3;
@@ -22,10 +22,10 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
   }
 
   module pi_openings() {
-    eth_w = 16;
-    eth_h = 14;
-    usb_w = 15;
-    usb_h = 16;
+    eth_w = 17;
+    eth_h = 15;
+    usb_w = 16;
+    usb_h = 17;
     pcb_h = 2;
     translate([80, 0, bottom_thick]) {
       translate([0, 10.25-eth_w/2, pcb_h])
@@ -56,7 +56,7 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
 
   module dc_dc_holder() {
     l = 52;
-    w = 26;
+    w = 26.5;
     difference() {
       cube([l+4, w+4, 4]);
       translate([2, 2, 0])
@@ -65,8 +65,8 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
   }
 
   module dimmer_holder() {
-    l = 30;
-    w = 24;
+    l = 31;
+    w = 25;
     difference() {
       cube([l+2, w+4, 6]);
       translate([0, 2, 4])
@@ -89,9 +89,11 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
       cylinder(d=8, h=wall*3, $fn=16);
 
     // dimmer opening
-    translate([-wall, wall+6+8.5, bottom_thick+6.5+4])
+    translate([-wall, wall+6+8, bottom_thick+6.5+4])
       rotate([0, 90, 0])
       cylinder(d=8, h=wall*3, $fn=16);
+
+    // TODO: dc wires out?
   }
 
   // Corner supports
@@ -112,12 +114,14 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
     pi_stands();
 
   // DCDC
-  translate([boxdim[0]-58, wall+2, bottom_thick])
+  translate([boxdim[0]-58, wall-1, bottom_thick])
     dc_dc_holder();
 
   // dimmer
   translate([wall, 6, bottom_thick])
     dimmer_holder();
+
+  // TODO: relay
 }
 
 intersection() {
