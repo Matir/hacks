@@ -76,6 +76,27 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
     }
   }
 
+  module vents(l, h, vent_w=3, vent_s=4) {
+    spacing = vent_w + vent_s;
+    thick = wall*3;
+    translate([vent_w/2, wall/2, 0]) {
+      for (i = [0:l/spacing]) {
+        translate([i*spacing, 0, 0]) {
+          // bottom
+          rotate([90, 0, 0])
+            cylinder(d=vent_w, h=thick, center=true, $fn=12);
+          // in between
+          translate([-vent_w/2, -thick/2, 0])
+            cube([vent_w, thick, h-vent_w]);
+          // top
+          translate([0, 0, h-vent_w])
+            rotate([90, 0, 0])
+              cylinder(d=vent_w, h=thick, center=true, $fn=12);
+        }
+      }
+    }
+  }
+
   // Outer enclosure
   difference() {
     cube([boxdim[0]+2*wall, boxdim[1]+2*wall, boxdim[2]+bottom_thick]);
@@ -83,17 +104,31 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
       cube(boxdim);
     translate(pi_pos)
       pi_openings();
+
     // dc jack
-    translate([boxdim[0], 15, bottom_thick+24])
+    translate([boxdim[0], 12, bottom_thick+24])
       rotate([0, 90, 0])
       cylinder(d=8, h=wall*3, $fn=16);
 
     // dimmer opening
-    translate([-wall, wall+6+8, bottom_thick+6.5+4])
+    translate([-wall, wall+13, bottom_thick+6.5+4])
       rotate([0, 90, 0])
       cylinder(d=8, h=wall*3, $fn=16);
 
-    // TODO: dc wires out?
+    // dc wires out
+    translate([boxdim[0], 30, bottom_thick+24])
+      rotate([0, 90, 0])
+      cylinder(d=8, h=wall*3, $fn=16);
+
+    // stop button
+    translate([-wall, wall+30, bottom_thick+26])
+      rotate([0, 90, 0])
+      cylinder(d=16.2, h=wall*3, $fn=25);
+
+    // ventilation
+    for(i=[0, boxdim[1]+wall])
+      translate([7+wall, i, 10+bottom_thick])
+        vents(l=boxdim[0]-15, h=boxdim[2]-15);
   }
 
   // Corner supports
@@ -118,13 +153,14 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
     dc_dc_holder();
 
   // dimmer
-  translate([wall, 6, bottom_thick])
+  translate([wall, 5, bottom_thick])
     dimmer_holder();
 
   // TODO: relay
 }
 
-intersection() {
-  controlbox_bottom();
-  cube([100, 100, 10]);
-}
+//intersection() {
+//  controlbox_bottom();
+//  cube([100, 100, 10]);
+//}
+controlbox_bottom();
