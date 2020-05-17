@@ -159,8 +159,56 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
   // TODO: relay
 }
 
+module controlbox_top(boxdim=[96, 96], wall=2) {
+  module corner_support(d=5, h=3) {
+    translate([d/2, d/2, -wall]) {
+      cylinder(d=d, h=h, $fn=12);
+      translate([-d/2, -d/2, 0])
+        cube([d, d/2, h]);
+      translate([-d/2, -d/2, 0])
+        cube([d/2, d, h]);
+    }
+  }
+
+  difference() {
+    union() {
+      // Flat
+      cube([boxdim[0]+wall*2, boxdim[1]+wall*2, wall]);
+      // Corner supports
+      translate([wall, wall, 0])
+        corner_support();
+      translate([wall+boxdim[0], wall, 0])
+        rotate([0, 0, 90])
+        corner_support();
+      translate([wall+boxdim[0], wall+boxdim[1], 0])
+        rotate([0, 0, 180])
+        corner_support();
+      translate([wall, wall+boxdim[1], 0])
+        rotate([0, 0, 270])
+        corner_support();
+      difference() {
+        translate([wall, wall, -wall])
+          cube([boxdim[0], boxdim[1], wall]);
+        translate([wall*2, wall*2, -wall*2])
+          cube([boxdim[0]-wall*2, boxdim[1]-wall*2, wall*2]);
+      }
+    }
+    translate([wall+5/2, wall+5/2, -wall*2])
+      cylinder(d=3, h=wall*5, $fn=12);
+    translate([wall+boxdim[0]-5/2, wall+5/2, -wall*2])
+      cylinder(d=3, h=wall*5, $fn=12);
+    translate([wall+boxdim[0]-5/2, wall+boxdim[1]-5/2, -wall*2])
+      cylinder(d=3, h=wall*5, $fn=12);
+    translate([wall+5/2, wall+boxdim[1]-5/2, -wall*2])
+      cylinder(d=3, h=wall*5, $fn=12);
+  }
+}
+
 //intersection() {
 //  controlbox_bottom();
 //  cube([100, 100, 10]);
 //}
 controlbox_bottom();
+translate([0, -10, 42])
+  rotate([180, 0, 0])
+  controlbox_top();
