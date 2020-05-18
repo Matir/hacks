@@ -160,13 +160,35 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
 }
 
 module controlbox_top(boxdim=[96, 96], wall=2) {
-  module corner_support(d=5, h=3) {
-    translate([d/2, d/2, -wall]) {
+  module corner_support(d=6, h=3) {
+    translate([d/2, d/2, -h]) {
       cylinder(d=d, h=h, $fn=12);
       translate([-d/2, -d/2, 0])
         cube([d, d/2, h]);
       translate([-d/2, -d/2, 0])
         cube([d/2, d, h]);
+    }
+  }
+
+  module slats(edge=8, width=3, spacing=4) {
+    slat_len = boxdim[0]+2*wall-edge*2;
+    interval = (width+spacing)/sin(45);
+    offs = slat_len - floor(slat_len/interval)*interval;
+    echo(interval);
+    echo(offs);
+    for (i = [1:slat_len/interval]) {
+      hull() {
+        translate([edge, interval*i+edge, 0])
+          cylinder(d=width, h=wall*3, $fn=12);
+        translate([interval*i+edge, edge, 0])
+          cylinder(d=width, h=wall*3, $fn=12);
+      }
+      hull() {
+        translate([boxdim[0]-edge+2*wall, boxdim[1]-interval*i-edge+offs, 0])
+          cylinder(d=width, h=wall*3, $fn=12);
+        translate([boxdim[0]-interval*i-edge+offs, boxdim[1]-edge+2*wall, 0])
+          cylinder(d=width, h=wall*3, $fn=12);
+      }
     }
   }
 
@@ -201,6 +223,9 @@ module controlbox_top(boxdim=[96, 96], wall=2) {
       cylinder(d=3, h=wall*5, $fn=12);
     translate([wall+5/2, wall+boxdim[1]-5/2, -wall*2])
       cylinder(d=3, h=wall*5, $fn=12);
+    
+    translate([0, 0, -wall])
+      slats();
   }
 }
 
