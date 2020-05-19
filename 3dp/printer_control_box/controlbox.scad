@@ -1,4 +1,4 @@
-module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
+module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
   bottom_thick = wall;
   inner_h = boxdim[2];
   pi_pos = [boxdim[0]-85+wall, boxdim[1]-6-56+wall, 2];
@@ -48,7 +48,7 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
         translate([x, y, bottom_thick-h]) {
           cylinder(d=5, h=h, $fn=12);
           translate([0, 0, h])
-            cylinder(d=2, h=2, $fn=12);
+            cylinder(d=2, h=3, $fn=12);
         }
       }
     }
@@ -106,7 +106,7 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
       pi_openings();
 
     // dc jack
-    translate([boxdim[0], 12, bottom_thick+24])
+    translate([boxdim[0], wall+14, bottom_thick+28])
       rotate([0, 90, 0])
       cylinder(d=8, h=wall*3, $fn=16);
 
@@ -116,12 +116,12 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
       cylinder(d=8.2, h=wall*3, $fn=16);
 
     // dc wires out
-    translate([boxdim[0], 30, bottom_thick+24])
+    translate([boxdim[0], 32, bottom_thick+28])
       rotate([0, 90, 0])
       cylinder(d=8, h=wall*3, $fn=16);
 
     // stop button
-    translate([-wall, wall+32, bottom_thick+26])
+    translate([-wall, boxdim[1]-28, bottom_thick+32])
       rotate([0, 90, 0])
       cylinder(d=16.2, h=wall*3, $fn=25);
 
@@ -129,6 +129,19 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
     for(i=[0, boxdim[1]+wall])
       translate([7+wall, i, 10+bottom_thick])
         vents(l=boxdim[0]-15, h=boxdim[2]-15);
+
+    // usb opening
+    translate([-wall, boxdim[1]-23+wall, bottom_thick+18])
+      rotate([0, 90, 0])
+      hull() {
+        cylinder(d=6, h=wall*4);
+        translate([0, 10, 0])
+          cylinder(d=6, h=wall+4);
+      }
+
+    // camera cable cut
+    translate([boxdim[0], boxdim[1]+wall-38-24, bottom_thick+boxdim[2]-4])
+      cube([wall*3, 24, 6]);
   }
 
   // Corner supports
@@ -156,7 +169,24 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
   translate([wall, 5, bottom_thick])
     dimmer_holder();
 
-  // TODO: relay
+  // relay shelf
+  translate([boxdim[0]-54, 0, bottom_thick])
+    difference() {
+      cube([35, 31.5, 24]);
+      cube([35, 29.5, 20]);
+      translate([2, wall, 22])
+        cube([31, 31.5-2*wall, 2]);
+      translate([6, 29, 4])
+        cube([35-12, 6, 24]);
+    }
+
+  // reinforce rear
+  translate([boxdim[0], wall+5, boxdim[2]-4])
+    union() {
+      cube([2, boxdim[1]-10, 2]);
+      rotate([0, 45, 0])
+        cube([2*sqrt(2), boxdim[1]-10, 2*sqrt(2)]);
+    }
 }
 
 module controlbox_top(boxdim=[96, 96], wall=2) {
@@ -223,7 +253,7 @@ module controlbox_top(boxdim=[96, 96], wall=2) {
       cylinder(d=3, h=wall*5, $fn=12);
     translate([wall+5/2, wall+boxdim[1]-5/2, -wall*2])
       cylinder(d=3, h=wall*5, $fn=12);
-    
+
     translate([0, 0, -wall])
       slats();
   }
@@ -234,12 +264,17 @@ module controlbox_top(boxdim=[96, 96], wall=2) {
 //  cube([100, 100, 10]);
 //}
 
-intersection() {
-    controlbox_bottom();
-    cube([10, 100, 100]);
-}
+//intersection() {
+//    controlbox_bottom();
+//    cube([10, 100, 100]);
+//}
 
-//controlbox_bottom();
+//intersection() {
+//    controlbox_bottom();
+//    cube([100, 60, 100]);
+//}
+
+controlbox_bottom();
 //translate([0, -10, 42])
 //  rotate([180, 0, 0])
 //  controlbox_top();

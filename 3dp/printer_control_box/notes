@@ -4,9 +4,11 @@ E-STOP OD: 16mm, height clearance: 30+mm
 Openings for USB and??
 Power converter:
   26*52mm
+  18mm tall
   Solder holes, not mounting points
 LED PWM Module:
   PCB 30x24
+  21 mm tall
   knob hole 7mm
   approx 6.5mm off base
 Make camera opening go to edge so not going around ribbon cable?
@@ -15,3 +17,16 @@ Pi Ethernet opening:
   16w/14h
 Pi USB opening:
   15w/16h
+
+Cube for relay
+  23 mm tall
+  26w/31l
+
+Camera cable
+24w
+4 from top
+
+
+TODO:
+  - Camera Cable Opening
+  - Remove foot for standoffs
