@@ -111,9 +111,9 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
       cylinder(d=8, h=wall*3, $fn=16);
 
     // dimmer opening
-    translate([-wall, wall+13, bottom_thick+6.5+4])
+    translate([-wall, wall+13, bottom_thick+6.5+5])
       rotate([0, 90, 0])
-      cylinder(d=8, h=wall*3, $fn=16);
+      cylinder(d=8.2, h=wall*3, $fn=16);
 
     // dc wires out
     translate([boxdim[0], 30, bottom_thick+24])
@@ -121,7 +121,7 @@ module controlbox_bottom(boxdim=[96, 96, 40], wall=2) {
       cylinder(d=8, h=wall*3, $fn=16);
 
     // stop button
-    translate([-wall, wall+30, bottom_thick+26])
+    translate([-wall, wall+32, bottom_thick+26])
       rotate([0, 90, 0])
       cylinder(d=16.2, h=wall*3, $fn=25);
 
@@ -233,7 +233,13 @@ module controlbox_top(boxdim=[96, 96], wall=2) {
 //  controlbox_bottom();
 //  cube([100, 100, 10]);
 //}
-controlbox_bottom();
-translate([0, -10, 42])
-  rotate([180, 0, 0])
-  controlbox_top();
+
+intersection() {
+    controlbox_bottom();
+    cube([10, 100, 100]);
+}
+
+//controlbox_bottom();
+//translate([0, -10, 42])
+//  rotate([180, 0, 0])
+//  controlbox_top();
