@@ -55,8 +55,28 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
   }
 
   module dc_dc_holder() {
-    l = 52;
-    w = 26.5;
+    l = 26.2;
+    w = 26.2;
+    difference() {
+      cube([l+4, w+4, 4]);
+      translate([2, 2, 0])
+        cube([l, w, 6]);
+    }
+    // feet
+    translate([2.1, 2.1, 0]) {
+      for(pos=[[2.2, 2.2], [2.2+21.1, 2.2], [2.2+21.1, 2.2+21.1]]) {
+        translate([pos[0], pos[1], 0]) {
+          cylinder(d=3.6, h=2, $fn=12);
+          translate([0, 0, 2])
+            cylinder(d=2, h=2, $fn=12);
+        }
+      }
+    }
+  }
+
+  module relay_holder() {
+    l = 25;
+    w = 31;
     difference() {
       cube([l+4, w+4, 4]);
       translate([2, 2, 0])
@@ -162,23 +182,16 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     pi_stands();
 
   // DCDC
-  translate([boxdim[0]-58, wall-1, bottom_thick])
+  translate([boxdim[0]-34, wall-1, bottom_thick])
     dc_dc_holder();
 
   // dimmer
   translate([wall, 5, bottom_thick])
     dimmer_holder();
 
-  // relay shelf
-  translate([boxdim[0]-54, 0, bottom_thick])
-    difference() {
-      cube([35, 31.5, 24]);
-      cube([35, 29.5, 20]);
-      translate([2, wall, 22])
-        cube([31, 31.5-2*wall, 2]);
-      translate([6, 29, 4])
-        cube([35-12, 6, 24]);
-    }
+  // relay
+  translate([boxdim[0]-(34+28), wall-1, bottom_thick])
+    relay_holder();
 
   // reinforce rear
   translate([boxdim[0], wall+5, boxdim[2]-4])
