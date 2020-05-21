@@ -75,11 +75,11 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
   }
 
   module relay_holder() {
-    l = 25;
+    l = 26;
     w = 31;
     difference() {
-      cube([l+4, w+4, 4]);
-      translate([2, 2, 0])
+      cube([l+4, w+4, 14]);
+      translate([2, 2, 10])
         cube([l, w, 6]);
     }
   }
@@ -96,7 +96,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     }
   }
 
-  module vents(l, h, vent_w=3, vent_s=4) {
+  module vents(l, h, vent_w=3, vent_s=6) {
     spacing = vent_w + vent_s;
     thick = wall*3;
     translate([vent_w/2, wall/2, 0]) {
@@ -128,7 +128,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     // dc jack
     translate([boxdim[0], wall+14, bottom_thick+28])
       rotate([0, 90, 0])
-      cylinder(d=8, h=wall*3, $fn=16);
+      cylinder(d=8.5, h=wall*3, $fn=16);
 
     // dimmer opening
     translate([-wall, wall+13, bottom_thick+6.5+5])
@@ -147,8 +147,8 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
 
     // ventilation
     for(i=[0, boxdim[1]+wall])
-      translate([7+wall, i, 10+bottom_thick])
-        vents(l=boxdim[0]-15, h=boxdim[2]-15);
+      translate([7+wall, i, 16+bottom_thick])
+        vents(l=boxdim[0]-15, h=boxdim[2]-25);
 
     // usb opening
     translate([-wall, boxdim[1]-23+wall, bottom_thick+18])
@@ -182,7 +182,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     pi_stands();
 
   // DCDC
-  translate([boxdim[0]-34, wall-1, bottom_thick])
+  translate([boxdim[0]-33, wall-1, bottom_thick])
     dc_dc_holder();
 
   // dimmer
