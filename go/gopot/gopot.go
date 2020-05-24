@@ -64,6 +64,7 @@ func BuildPasswordHandler(ch chan<- Result) func(ssh.ConnMetadata, []byte) (*ssh
 
 func BuildSSHServerConfig(ch chan<- Result) *ssh.ServerConfig {
 	cfg := &ssh.ServerConfig{
+		MaxAuthTries:     3,
 		PasswordCallback: BuildPasswordHandler(ch),
 	}
 	// TODO: use on-disk keys to reduce startup time?
@@ -109,6 +110,9 @@ func ServerWorker(sock net.Listener, cfg *ssh.ServerConfig, shut <-chan bool) {
 		conn, err := sock.Accept()
 		if err != nil {
 			log.Printf("Error in accept: %s", err)
+		}
+		if err := conn.SetDeadline(time.Now().Add(time.Minute)); err != nil {
+			log.Printf("Error in SetDeadline: %s", err)
 		}
 		go func() {
 			// TODO: consider storing in DB?
