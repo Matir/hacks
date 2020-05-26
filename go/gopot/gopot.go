@@ -66,6 +66,7 @@ func BuildSSHServerConfig(ch chan<- Result) *ssh.ServerConfig {
 	cfg := &ssh.ServerConfig{
 		MaxAuthTries:     3,
 		PasswordCallback: BuildPasswordHandler(ch),
+		ServerVersion:    "SSH-2.0-OpenSSH_7.4p1",
 	}
 	// TODO: use on-disk keys to reduce startup time?
 	log.Printf("Generating new 2048-bit RSA key.")
