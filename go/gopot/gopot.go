@@ -111,6 +111,7 @@ func ServerWorker(sock net.Listener, cfg *ssh.ServerConfig, shut <-chan bool) {
 		conn, err := sock.Accept()
 		if err != nil {
 			log.Printf("Error in accept: %s", err)
+			return
 		}
 		if err := conn.SetDeadline(time.Now().Add(time.Minute)); err != nil {
 			log.Printf("Error in SetDeadline: %s", err)
