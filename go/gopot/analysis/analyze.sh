@@ -1,8 +1,11 @@
-if test -f scp.sh ; do
+#!/bin/bash
+
+if test -f scp.sh ; then
   bash scp.sh
-done
+fi
 
 rm collected.db
+echo 'Merge collected data...'
 echo 'create table results (username TEXT, password TEXT, timestamp TEXT, remote_ip TEXT, remote_port INTEGER, client TEXT, server TEXT);' \
   | sqlite3 collected.db
 for db in server*.db ; do
@@ -13,6 +16,7 @@ for db in server*.db ; do
     | sqlite3 collected.db
 done
 
+echo 'Start analysis...'
 cat <<"EOSQL" | sqlite3 collected.db
 .load ./sqlite3-inet/libsqliteipv4
 attach database 'ip2asn.db' as ipdata;
@@ -58,6 +62,7 @@ select asn_num,asn_name,count(*) as count from results group by asn_num order by
 select count(distinct remote_ip),case tn.ip when remote_ip then 1 else 0 end as is_node from results left join ipdata.tornodes as tn on results.remote_ip = tn.ip group by is_node;
 EOSQL
 
+echo 'Build graphs...'
 cat <<"EOPY" | python3
 import csv
 import matplotlib.pyplot as plt
@@ -71,5 +76,19 @@ plt.xlabel("Hour of Day (UTC)")
 plt.ylabel("Count")
 plt.xticks([0, 6, 12, 18, 24])
 plt.savefig('hours.png')
+plt.clf()
+
+rows = [i for i in csv.DictReader(open('days_of_week.csv'))]
+x = [int(r['dow_num']) for r in rows]
+y = [int(r['count']) for r in rows]
+plt.title("Attempts by Day of Week")
+plt.bar(x, y)
+plt.xlabel("Day of Week (UTC)")
+plt.ylabel("Count")
+plt.xticks(x, [r['dow'] for r in rows])
+plt.savefig('days_of_week.png')
+plt.clf()
 
 EOPY
+
+echo 'Done'
