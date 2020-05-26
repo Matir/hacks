@@ -53,7 +53,7 @@ func BuildPasswordHandler(ch chan<- Result) func(ssh.ConnMetadata, []byte) (*ssh
 		ch <- Result{
 			Username:   conn.User(),
 			Password:   string(pw),
-			Timestamp:  time.Now(),
+			Timestamp:  time.UTC(),
 			Client:     string(conn.ClientVersion()),
 			RemoteIP:   host,
 			RemotePort: portno,
