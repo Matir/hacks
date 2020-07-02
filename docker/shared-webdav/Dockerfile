@@ -18,6 +18,8 @@ COPY nginx.sh /opt/nginx.sh
 RUN ln -sf /dev/stdout /var/log/nginx/access.log && \
     ln -sf /dev/stderr /var/log/nginx/error.log
 
+RUN userdel www-data
+
 EXPOSE 80
 EXPOSE 443
 
