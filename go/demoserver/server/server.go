@@ -31,8 +31,14 @@ func NewDemoServer(listenAddr string) *DemoServer {
 		mux:     http.NewServeMux(),
 		modules: make(map[string]modules.ServerModule),
 	}
-	s.server.Handler = s.mux
+	s.server.Handler = s
 	return s
+}
+
+// Handle HTTP Requests
+func (ds *DemoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request: %s", r.URL)
+	ds.mux.ServeHTTP(w, r)
 }
 
 // Register a module under a path

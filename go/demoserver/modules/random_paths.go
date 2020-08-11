@@ -73,7 +73,7 @@ func (rpm *RandomPathsModule) Setup() {
 			for k := 0; k < 10; k++ {
 				fname := words.FileRandomChooser()
 				path := fmt.Sprintf("%s/%s/%s", top, bottom, fname)
-				log.Printf("Added %s", path)
+				//log.Printf("Added %s", path)
 				rpm.files = append(rpm.files, path)
 			}
 		}
