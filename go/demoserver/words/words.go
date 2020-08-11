@@ -15,6 +15,7 @@ func makeRandomChooser(opts []string) func() string {
 
 var (
 	DirectoryRandomChooser = makeRandomChooser(directories)
+	FileRandomChooser      = makeRandomChooser(files)
 	UsernameRandomChooser  = makeRandomChooser(usernames)
 	PasswordRandomChooser  = makeRandomChooser(passwords)
 )

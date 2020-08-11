@@ -2,25 +2,18 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/matir/hacks/go/demoserver/modules"
 	"github.com/matir/hacks/go/demoserver/words"
 )
 
 type DemoServer struct {
-	modules map[string]ServerModule
+	modules map[string]modules.ServerModule
 	server  *http.Server
 	mux     *http.ServeMux
-}
-
-type ServerModule interface {
-	http.Handler
-	fmt.Stringer
-	Prefix() string
-	RandomPrefix() bool
 }
 
 var (
@@ -36,17 +29,18 @@ func NewDemoServer(listenAddr string) *DemoServer {
 			WriteTimeout: 30 * time.Second,
 		},
 		mux:     http.NewServeMux(),
-		modules: make(map[string]ServerModule),
+		modules: make(map[string]modules.ServerModule),
 	}
 	s.server.Handler = s.mux
 	return s
 }
 
 // Register a module under a path
-func (ds *DemoServer) RegisterModule(sm ServerModule) error {
+func (ds *DemoServer) RegisterModule(sm modules.ServerModule) error {
 	prefix := sm.Prefix()
 	if sm.RandomPrefix() {
 		prefix = words.DirectoryRandomChooser()
+		prefix += "/"
 	}
 	prefix = "/" + prefix
 	if _, exists := ds.modules[prefix]; exists {
