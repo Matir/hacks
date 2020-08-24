@@ -69,6 +69,8 @@ select asn_num,asn_name,count(*) as count from results group by asn_num order by
 select asn_num,asn_name,count(*) as count from results group by asn_num order by count desc;
 .output torcounts.csv
 select count(distinct remote_ip) as count,case tn.ip when remote_ip then 1 else 0 end as is_node from results left join ipdata.tornodes as tn on results.remote_ip = tn.ip group by is_node;
+.output dates.csv
+select count(*) as count, date(timestamp) as date from results where timestamp >= '2020-06-01' group by date order by date asc;
 EOSQL
 
 echo 'Build graphs...'
@@ -147,6 +149,17 @@ plt.pie(vals, labels=labels, shadow=True,
   labeldistance=1.1, autopct='%0.01f%%', pctdistance=0.8, startangle=90,
   counterclock=False)
 plt.savefig('tor.png')
+plt.clf()
+
+rows = [i for i in csv.DictReader(open('dates.csv'))]
+x = range(len(rows))
+y = [int(r['count']) for r in rows]
+plt.title("Attempts by Day")
+plt.bar(x, y)
+plt.xlabel("Day (UTC)")
+plt.ylabel("Count")
+#plt.xticks([0, 6, 12, 18, 24])
+plt.savefig('dates.png')
 plt.clf()
 
 EOPY
