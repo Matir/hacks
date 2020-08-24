@@ -18,8 +18,10 @@ done
 
 echo 'Start analysis...'
 cat <<"EOSQL" | sqlite3 collected.db
+.echo on
 .load ./sqlite3-inet/libsqliteipv4
 attach database 'ip2asn.db' as ipdata;
+
 /* Update records */
 alter table results add column asn_num TEXT;
 alter table results add column asn_name TEXT;
@@ -33,9 +35,12 @@ create temporary table ip_lookup as select distinct results.ipn as ipn, (select
 update results set country=(select ipdata.ip2asn.country from ipdata.ip2asn join ip_lookup on ip_lookup.ip_idx = ipdata.ip2asn.iplow_n where ip_lookup.ipn=results.ipn),
   asn_num=(select ipdata.ip2asn.asn from ipdata.ip2asn join ip_lookup on ip_lookup.ip_idx = ipdata.ip2asn.iplow_n where ip_lookup.ipn=results.ipn),
   asn_name=(select ipdata.ip2asn.asnname from ipdata.ip2asn join ip_lookup on ip_lookup.ip_idx = ipdata.ip2asn.iplow_n where ip_lookup.ipn=results.ipn);
+
 /* Perform stats */
 .headers on
 .mode csv
+.output count.csv
+select count(*) as count from results;
 .output topusers.csv
 select username,count(*) as count from results group by username order by count desc limit 10;
 .output toppass.csv
@@ -56,8 +61,12 @@ select server,count(*) as count from results group by server;
 select rtrim(remote_ip, '1234567890') || '0/32' as subnet, count(distinct remote_ip) as num_ips, count(*) as count from results group by subnet order by count desc limit 10;
 .output topcountries.csv
 select country,count(*) as count from results group by country order by count desc limit 10;
+.output allcountries.csv
+select country,count(*) as count from results group by country order by count desc;
 .output topasns.csv
 select asn_num,asn_name,count(*) as count from results group by asn_num order by count desc limit 10;
+.output allasns.csv
+select asn_num,asn_name,count(*) as count from results group by asn_num order by count desc;
 .output torcounts.csv
 select count(distinct remote_ip),case tn.ip when remote_ip then 1 else 0 end as is_node from results left join ipdata.tornodes as tn on results.remote_ip = tn.ip group by is_node;
 EOSQL
@@ -66,6 +75,9 @@ echo 'Build graphs...'
 cat <<"EOPY" | python3
 import csv
 import matplotlib.pyplot as plt
+
+for l in csv.DictReader(open('count.csv')):
+  total_count = int(l['count'])
 
 rows = [i for i in csv.DictReader(open('hours.csv'))]
 x = [int(r['hour']) for r in rows]
@@ -87,6 +99,20 @@ plt.xlabel("Day of Week (UTC)")
 plt.ylabel("Count")
 plt.xticks(x, [r['dow'] for r in rows])
 plt.savefig('days_of_week.png')
+plt.clf()
+
+pairs = []
+for i, r in enumerate(csv.DictReader(open('allcountries.csv'))):
+  if i > 5:
+    break
+  if float(r['count'])/total_count < 0.01:
+    break
+  pairs.append((r['country'], int(r['count'])))
+
+pairs.append(('Other', total_count-sum([x[1] for x in pairs])))
+plt.title("Source Countries")
+plt.pie([x[1] for x in pairs], labels=[x[0] for x in pairs], shadow=True)
+plt.savefig('countries.png')
 plt.clf()
 
 EOPY
