@@ -68,7 +68,7 @@ select asn_num,asn_name,count(*) as count from results group by asn_num order by
 .output allasns.csv
 select asn_num,asn_name,count(*) as count from results group by asn_num order by count desc;
 .output torcounts.csv
-select count(distinct remote_ip),case tn.ip when remote_ip then 1 else 0 end as is_node from results left join ipdata.tornodes as tn on results.remote_ip = tn.ip group by is_node;
+select count(distinct remote_ip) as count,case tn.ip when remote_ip then 1 else 0 end as is_node from results left join ipdata.tornodes as tn on results.remote_ip = tn.ip group by is_node;
 EOSQL
 
 echo 'Build graphs...'
@@ -103,7 +103,7 @@ plt.clf()
 
 pairs = []
 for i, r in enumerate(csv.DictReader(open('allcountries.csv'))):
-  if i > 5:
+  if i > 7:
     break
   if float(r['count'])/total_count < 0.01:
     break
@@ -111,8 +111,42 @@ for i, r in enumerate(csv.DictReader(open('allcountries.csv'))):
 
 pairs.append(('Other', total_count-sum([x[1] for x in pairs])))
 plt.title("Source Countries")
-plt.pie([x[1] for x in pairs], labels=[x[0] for x in pairs], shadow=True)
+plt.pie([x[1] for x in pairs], labels=[x[0] for x in pairs], shadow=True,
+  autopct='%0.01f%%', pctdistance=0.8, startangle=90, counterclock=False)
 plt.savefig('countries.png')
+plt.clf()
+
+pairs = []
+for i, r in enumerate(csv.DictReader(open('allasns.csv'))):
+  if i > 7:
+    break
+  if float(r['count'])/total_count < 0.01:
+    break
+  name = '{} ({})'.format(r['asn_name'][:10], r['asn_num'])
+  pairs.append((name, int(r['count'])))
+
+pairs.append(('Other', total_count-sum([x[1] for x in pairs])))
+plt.title("Source Autonomous System (AS)")
+plt.pie([x[1] for x in pairs], labels=[x[0] for x in pairs], shadow=True,
+  labeldistance=1.1, autopct='%0.01f%%', pctdistance=0.8, startangle=90,
+  counterclock=False)
+plt.savefig('asns.png')
+plt.clf()
+
+vals = []
+labels = []
+for r in csv.DictReader(open('torcounts.csv')):
+  vals.append(int(r['count']))
+  if r['is_node'] == '1':
+    labels.append('Tor')
+  else:
+    labels.append('Non-Tor')
+
+plt.title("Tor Usage")
+plt.pie(vals, labels=labels, shadow=True,
+  labeldistance=1.1, autopct='%0.01f%%', pctdistance=0.8, startangle=90,
+  counterclock=False)
+plt.savefig('tor.png')
 plt.clf()
 
 EOPY
