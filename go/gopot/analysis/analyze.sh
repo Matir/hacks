@@ -18,7 +18,6 @@ done
 
 echo 'Start analysis...'
 cat <<"EOSQL" | sqlite3 collected.db
-.echo on
 .load ./sqlite3-inet/libsqliteipv4
 attach database 'ip2asn.db' as ipdata;
 
@@ -92,6 +91,14 @@ plt.xticks([0, 6, 12, 18, 24])
 plt.savefig('hours.png')
 plt.clf()
 
+with open('hours.md', 'w') as tbl:
+  print('|{:->4s}|{:->8s}|'.format('-', '-'), file=tbl)
+  print('|{: >4s}|{: >8s}|'.format('Hour', 'Count'), file=tbl)
+  print('|{:->4s}|{:->8s}|'.format('-', '-'), file=tbl)
+  for r in rows:
+    print('|  {hour:>2s}| {count:>7s}|'.format(**r), file=tbl)
+  print('|{:->4s}|{:->8s}|'.format('-', '-'), file=tbl)
+
 rows = [i for i in csv.DictReader(open('days_of_week.csv'))]
 x = [int(r['dow_num']) for r in rows]
 y = [int(r['count']) for r in rows]
@@ -102,6 +109,23 @@ plt.ylabel("Count")
 plt.xticks(x, [r['dow'] for r in rows])
 plt.savefig('days_of_week.png')
 plt.clf()
+
+with open('days_of_week.md', 'w') as tbl:
+  print('|{:->10s}|{:->8s}|'.format('-', '-'), file=tbl)
+  print('|{: >10s}|{: >8s}|'.format('Day', 'Count'), file=tbl)
+  print('|{:->10s}|{:->8s}|'.format('-', '-'), file=tbl)
+  for r in rows:
+    dow = {
+      0: 'Sunday',
+      1: 'Monday',
+      2: 'Tuesday',
+      3: 'Wednesday',
+      4: 'Thursday',
+      5: 'Friday',
+      6: 'Saturday',
+    }[int(r['dow_num'])]
+    print('| {dow:>9s}| {count:>7s}|'.format(dow=dow, count=r['count']), file=tbl)
+  print('|{:->10s}|{:->8s}|'.format('-', '-'), file=tbl)
 
 pairs = []
 for i, r in enumerate(csv.DictReader(open('allcountries.csv'))):
@@ -117,6 +141,14 @@ plt.pie([x[1] for x in pairs], labels=[x[0] for x in pairs], shadow=True,
   autopct='%0.01f%%', pctdistance=0.8, startangle=90, counterclock=False)
 plt.savefig('countries.png')
 plt.clf()
+
+with open('topcountries.md', 'w') as tbl:
+  print('|{:->10s}|{:->8s}|'.format('-', '-'), file=tbl)
+  print('|{: >10s}|{: >8s}|'.format('Country', 'Count'), file=tbl)
+  print('|{:->10s}|{:->8s}|'.format('-', '-'), file=tbl)
+  for r in csv.DictReader(open('topcountries.csv')):
+    print('| {country:>9s}| {count:>7s}|'.format(**r), file=tbl)
+  print('|{:->10s}|{:->8s}|'.format('-', '-'), file=tbl)
 
 pairs = []
 for i, r in enumerate(csv.DictReader(open('allasns.csv'))):
@@ -158,7 +190,6 @@ plt.title("Attempts by Day")
 plt.bar(x, y)
 plt.xlabel("Day (UTC)")
 plt.ylabel("Count")
-#plt.xticks([0, 6, 12, 18, 24])
 plt.savefig('dates.png')
 plt.clf()
 
