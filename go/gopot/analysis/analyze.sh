@@ -21,6 +21,12 @@ cat <<"EOSQL" | sqlite3 collected.db
 .load ./sqlite3-inet/libsqliteipv4
 attach database 'ip2asn.db' as ipdata;
 
+/* Build indexes */
+create index username_idx on results(username);
+create index password_idx on results(password);
+create index timestamp_idx on results(timestamp);
+create index remote_ip_idx on results(remote_ip);
+
 /* Update records */
 alter table results add column asn_num TEXT;
 alter table results add column asn_name TEXT;
@@ -31,9 +37,13 @@ create index ipn_idx on results(ipn);
 create temporary table ip_lookup as select distinct results.ipn as ipn, (select
   ipdata.ip2asn.iplow_n from ipdata.ip2asn where ipn >= ipdata.ip2asn.iplow_n
   order by ipdata.ip2asn.iplow_n desc limit 1) as ip_idx from results;
+create index ip_lookup_ipn_idx on ip_lookup(ipn);
 update results set country=(select ipdata.ip2asn.country from ipdata.ip2asn join ip_lookup on ip_lookup.ip_idx = ipdata.ip2asn.iplow_n where ip_lookup.ipn=results.ipn),
   asn_num=(select ipdata.ip2asn.asn from ipdata.ip2asn join ip_lookup on ip_lookup.ip_idx = ipdata.ip2asn.iplow_n where ip_lookup.ipn=results.ipn),
   asn_name=(select ipdata.ip2asn.asnname from ipdata.ip2asn join ip_lookup on ip_lookup.ip_idx = ipdata.ip2asn.iplow_n where ip_lookup.ipn=results.ipn);
+create index country_idx on results(country);
+create index asn_name_idx on results(asn_name);
+create index asn_num_idx on results(asn_num);
 
 /* Perform stats */
 .headers on
@@ -52,6 +62,8 @@ select client,count(*) as count from results group by client order by count desc
 select strftime('%w', timestamp) as dow_num, CASE strftime('%w', timestamp) WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday' WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday' WHEN '6' THEN 'Saturday' END as dow, count(*) as count from results group by dow_num order by dow_num asc;
 .output hours.csv
 select strftime('%H', timestamp) as hour, count(*) as count from results group by hour order by hour asc;
+.output allips.csv
+select remote_ip,count(*) as count from results group by remote_ip order by count desc;
 .output topips.csv
 select remote_ip,count(*) as count from results group by remote_ip order by count desc limit 10;
 .output servers.csv
@@ -65,7 +77,7 @@ select country,count(*) as count from results group by country order by count de
 .output topasns.csv
 select asn_num,asn_name,count(*) as count from results group by asn_num order by count desc limit 10;
 .output allasns.csv
-select asn_num,asn_name,count(*) as count from results group by asn_num order by count desc;
+select asn_name,country,asn_num,count(*) as count from results group by asn_num order by count desc;
 .output torcounts.csv
 select count(distinct remote_ip) as count,case tn.ip when remote_ip then 1 else 0 end as is_node from results left join ipdata.tornodes as tn on results.remote_ip = tn.ip group by is_node;
 .output dates.csv
@@ -76,6 +88,7 @@ echo 'Build graphs...'
 cat <<"EOPY" | python3
 import csv
 import matplotlib.pyplot as plt
+import numpy as np
 
 for l in csv.DictReader(open('count.csv')):
   total_count = int(l['count'])
@@ -187,10 +200,22 @@ rows = [i for i in csv.DictReader(open('dates.csv'))]
 x = range(len(rows))
 y = [int(r['count']) for r in rows]
 plt.title("Attempts by Day")
-plt.bar(x, y)
+plt.bar(x, y, width=0.5)
 plt.xlabel("Day (UTC)")
 plt.ylabel("Count")
-plt.savefig('dates.png')
+plt.savefig('dates.png', dpi=300)
+plt.clf()
+
+cnts = [int(i['count']) for i in csv.DictReader(open('allips.csv'))]
+plt.title("IPs vs Requests")
+plt.xscale('log')
+plt.xlabel('Requests')
+plt.ylabel('Number of IPs')
+nbins = 100
+bins = np.logspace(0, np.log10(max(cnts)*1.1), nbins)
+ibins = sorted(set([int(a) for a in bins]))
+plt.hist(cnts, bins=ibins, log=True)
+plt.savefig('ipcnts.png')
 plt.clf()
 
 EOPY
