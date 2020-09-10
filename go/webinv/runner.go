@@ -20,12 +20,12 @@ const (
 
 type WebWorker struct {
 	svc     *selenium.Service
-	wd      *selenium.WebDriver
+	wd      selenium.WebDriver
 	handler PageHandler
 }
 
 type PageHandler interface {
-	HandlePage(*selenium.WebDriver) error
+	HandlePage(string, selenium.WebDriver) error
 }
 
 func NewWebWorker(svc *selenium.Service, port int, handler PageHandler) (*WebWorker, error) {
@@ -34,10 +34,11 @@ func NewWebWorker(svc *selenium.Service, port int, handler PageHandler) (*WebWor
 		handler: handler,
 	}
 	caps := selenium.Capabilities{"browserName": "chrome"}
-	wd, err := selenium.NewRemote(caps, fmt.Sprintf("http://localhost:%s/wd/hub", port))
+	wd, err := selenium.NewRemote(caps, fmt.Sprintf("http://localhost:%d/wd/hub", port))
 	if err != nil {
 		return nil, err
 	}
+	ww.wd = wd
 	return ww, nil
 }
 
@@ -48,7 +49,7 @@ func (ww *WebWorker) RunPage(url string) error {
 		return err
 	}
 	if ww.handler != nil {
-		return ww.handler.HandlePage(ww.wd)
+		return ww.handler.HandlePage(url, ww.wd)
 	}
 	return nil
 }
@@ -67,4 +68,35 @@ func GetPort() int {
 	} else {
 		return v
 	}
+}
+
+func DefaultChromeDriver() (*selenium.Service, error) {
+	path := GetenvDefault(CHROMEDRIVER_PATH_VAR, CHROMEDRIVER_PATH_DEFAULT)
+	port := GetPort()
+	fp, err := os.Create("/tmp/chromedriver.log")
+	if err != nil {
+		return nil, err
+	}
+	return selenium.NewChromeDriverService(path, port, selenium.StartFrameBuffer(), selenium.Output(fp))
+}
+
+type ScriptEnumerator struct{}
+
+func (_ *ScriptEnumerator) HandlePage(url string, wd selenium.WebDriver) error {
+	if elem, err := wd.FindElements(selenium.ByTagName, "script"); err != nil {
+		return err
+	} else {
+		if len(elem) == 0 {
+			return nil
+		}
+		fmt.Printf("Scripts for %s:\n", url)
+		for _, e := range elem {
+			src, err := e.GetAttribute("src")
+			if err != nil {
+				continue
+			}
+			fmt.Printf("\t%s\n", src)
+		}
+	}
+	return nil
 }
