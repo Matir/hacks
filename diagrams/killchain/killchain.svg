@@ -16,6 +16,12 @@
    width="297mm">
   <defs
      id="defs2">
+    <rect
+       id="rect1575"
+       height="8.0740749"
+       width="65.835229"
+       y="147.72679"
+       x="25.09324" />
     <style
        type="text/css"
        id="style895">
@@ -44,6 +50,42 @@
     .fil0 {fill:#FFFFFF}
    
   </style>
+    <rect
+       x="25.09324"
+       y="147.72679"
+       width="65.835229"
+       height="8.0740749"
+       id="rect1583" />
+    <rect
+       id="rect1589"
+       height="8.0740749"
+       width="65.835229"
+       y="147.72679"
+       x="25.09324" />
+    <rect
+       x="25.09324"
+       y="147.72679"
+       width="65.835229"
+       height="8.0740749"
+       id="rect1595" />
+    <rect
+       id="rect1601"
+       height="8.0740749"
+       width="65.835229"
+       y="147.72679"
+       x="25.09324" />
+    <rect
+       x="25.09324"
+       y="147.72679"
+       width="65.835229"
+       height="8.0740749"
+       id="rect1607" />
+    <rect
+       id="rect1613"
+       height="8.0740749"
+       width="65.835229"
+       y="147.72679"
+       x="25.09324" />
   </defs>
   <sodipodi:namedview
      inkscape:window-maximized="1"
@@ -81,6 +123,7 @@
      inkscape:groupmode="layer"
      inkscape:label="Layer 1">
     <g
+       transform="translate(0,27.987198)"
        id="g917">
       <circle
          style="opacity:0.99;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.609907;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke markers fill"
@@ -99,7 +142,7 @@
       </g>
     </g>
     <g
-       transform="translate(-7.8289116,-20.418488)"
+       transform="translate(-2.4616359,7.6149597)"
        id="g985">
       <circle
          style="opacity:0.99;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.498149;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke markers fill"
@@ -114,6 +157,7 @@
          sodipodi:nodetypes="ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" />
     </g>
     <g
+       transform="translate(-0.80331821,25.435195)"
        id="g1033">
       <circle
          style="opacity:0.99;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.256644;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke markers fill"
@@ -131,6 +175,7 @@
       </g>
     </g>
     <g
+       transform="translate(-1.6282759,19.821793)"
        id="g1261">
       <circle
          style="opacity:0.99;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.222026;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke markers fill"
@@ -160,7 +205,7 @@
       </g>
     </g>
     <g
-       transform="translate(-12.207646)"
+       transform="translate(-12.74521,27.378868)"
        id="g1343">
       <circle
          style="opacity:0.99;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.498918;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke markers fill"
@@ -193,7 +238,7 @@
       </g>
     </g>
     <g
-       transform="translate(-28.785921,-15.753215)"
+       transform="translate(-33.028605,-0.40737776)"
        id="g1408">
       <circle
          style="opacity:0.99;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.189514;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke markers fill"
@@ -280,5 +325,61 @@
         </g>
       </g>
     </g>
+    <text
+       transform="translate(-16.982366,-4.3159594)"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1575);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="text1573"
+       xml:space="preserve"><tspan
+         x="34.029417"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Reconnaisance</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text1581"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1583);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       transform="translate(15.56656,-108.50617)"><tspan
+         x="34.704656"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Weaponization</tspan></tspan></text>
+    <text
+       transform="translate(47.436801,-4.9309094)"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1589);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="text1587"
+       xml:space="preserve"><tspan
+         x="45.656622"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Delivery</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text1593"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1595);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       transform="translate(79.885813,-108.40282)"><tspan
+         x="39.501955"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Exploitation</tspan></tspan></text>
+    <text
+       transform="translate(112.11435,-4.2126065)"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1601);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="text1599"
+       xml:space="preserve"><tspan
+         x="40.602663"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Installation</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       id="text1605"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1607);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       transform="translate(144.5048,-107.72069)"><tspan
+         x="26.27278"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Command &amp; Control</tspan></tspan></text>
+    <text
+       transform="translate(176.76778,-5.0170368)"
+       style="font-size:4.23333px;line-height:6.61458px;font-family:Roboto;-inkscape-font-specification:Roboto;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;white-space:pre;shape-inside:url(#rect1613);fill:#333333;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="text1611"
+       xml:space="preserve"><tspan
+         x="32.251747"
+         y="153.11186"><tspan
+           style="font-size:7.05556px;fill:#333333;fill-opacity:1;stroke:none">Action on Target</tspan></tspan></text>
   </g>
 </svg>
