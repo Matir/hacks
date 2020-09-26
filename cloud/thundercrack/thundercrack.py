@@ -5,6 +5,7 @@ import collections
 import json
 import os
 import requests
+import shlex
 import sys
 import tempfile
 
@@ -17,6 +18,9 @@ from paramiko import ecdsakey
 
 HASHCAT_RELEASES_URL = \
     "https://api.github.com/repos/hashcat/hashcat/releases/latest"
+HASHCAT_BIN_PATH = "/root/hashcat/hashcat.bin"
+PASSWD_FILE_PATH = "/root/passwd"
+WORDLIST_FILE_PATH = "/root/wordlist"
 
 STATUS_OK = 'ok'
 STATUS_ERROR = 'error'
@@ -28,7 +32,7 @@ msg_prefix = {
 
 
 def print_msg(msg, status=STATUS_OK):
-    print('{}{}', msg_prefix[status], msg)
+    print('{}{}'.format(msg_prefix[status], msg))
 
 
 def get_driver(account_name=None, json_path=None, project_id=None, zone=None):
@@ -59,7 +63,8 @@ def get_args(argv):
     parser.add_argument(
             '--service_account', default='', help='Service Account Name')
     parser.add_argument(
-            '--credentials', default='', help='Path to SA Credentials')
+            '--credentials', default='', help='Path to SA Credentials',
+            required=True)
     parser.add_argument(
             '--project', default='', help='Project ID')
     parser.add_argument(
@@ -75,6 +80,13 @@ def get_args(argv):
             '--ssh_key', default=None, help='SSH Key Path')
     parser.add_argument(
             '--disk_size', default=10, type=int, help='Disk size in GB')
+    parser.add_argument(
+            '--wordlist', default=None, help='Wordlist for wordlist modes.')
+    parser.add_argument(
+            '--hashfile', default=None, help='File for hashes.', required=True)
+    parser.add_argument(
+            'hashcat_args', nargs='*', default=[],
+            help='Extra arguments for hashcat.')
     return parser.parse_args(argv[1:])
 
 
@@ -111,7 +123,70 @@ def get_instance_name():
     return 'thundercrack-{}'.format(uid)
 
 
-def get_deploy_steps():
+class ScriptFailedError(Exception):
+    """Error when script failed."""
+
+
+class CheckedMultiStepDeployment(deployment.MultiStepDeployment):
+
+    def run(self, node, client):
+        """
+        Run each deployment that has been added.
+
+        ScriptDeployment returns are checked.
+        """
+        for s in self.steps:
+            print_msg('Running step: {!r}'.format(s))
+            node = s.run(node, client)
+            if isinstance(s, deployment.ScriptDeployment):
+                if s.exit_status != 0:
+                    print_msg('Step failed: {}'.format(s.stderr), STATUS_ERROR)
+                    raise ScriptFailedError('Failed Script: {!r}'.format(s))
+        return node
+
+
+def split_hashargs(args):
+    """Split any patterns off the end of the hashcat args."""
+    patterns = []
+    args = args[:]  # Making a copy
+    while args:
+        if args[-1].startswith('?'):
+            patterns.append(args.pop())
+        else:
+            break
+    return args, patterns[::-1]
+
+
+def build_hashcat_command(args):
+    """Build the hashcat command line."""
+    cmd = [
+            HASHCAT_BIN_PATH,
+            "-o",
+            PASSWD_FILE_PATH + ".out",
+    ]
+    hashcat_args, patterns = split_hashargs(args.hashcat_args)
+    cmd.extend(hashcat_args)
+    cmd.append(PASSWD_FILE_PATH)
+    if args.wordlist:
+        cmd.append(WORDLIST_FILE_PATH)
+    cmd.extend(patterns)
+    return shlex.join(cmd)
+
+
+def build_tmux_command(args):
+    """Build the tmux line."""
+    hashcat_cmd = build_hashcat_command(args)
+    print_msg('Hashcat command line: {}'.format(hashcat_cmd))
+    cmd = [
+            "tmux",
+            "new-session",
+            "-d",
+            hashcat_cmd + ";/bin/bash -i",
+    ]
+    return shlex.join(cmd)
+
+
+def get_deploy_steps(args):
     """Get the deployment steps."""
     hashcat_url = get_hashcat_download()
     setup_script_steps = [
@@ -128,7 +203,26 @@ def get_deploy_steps():
     ]
     setup_script = ' && '.join(setup_script_steps)
     setup_deployment = deployment.ScriptDeployment(setup_script)
-    return deployment.MultiStepDeployment([setup_deployment])
+
+    ensure_file_exists(
+            args.hashfile, "Hash file {} missing!".format(args.hashfile))
+    hash_deployment = deployment.FileDeployment(
+            args.hashfile, PASSWD_FILE_PATH)
+
+    steps = CheckedMultiStepDeployment([setup_deployment, hash_deployment])
+
+    if args.wordlist is not None:
+        ensure_file_exists(
+                args.wordlist, "Wordlist {} missing!".format(args.wordlist))
+        wordlist_deployment = deployment.FileDeployment(
+                args.wordlist, WORDLIST_FILE_PATH)
+        steps.add(wordlist_deployment)
+
+    tmux_cmd = build_tmux_command(args)
+    tmux_deployment = deployment.ScriptDeployment(tmux_cmd)
+    steps.add(tmux_deployment)
+
+    return steps
 
 
 def get_hashcat_download():
@@ -165,6 +259,7 @@ def build_vm(
     with tempfile.NamedTemporaryFile('w') as tmpf:
         ssh_key.write_private_key(tmpf)
         tmpf.flush()
+        print_msg("Starting build/deploy steps.")
         node = driver.deploy_node(
                 name=name,
                 image=image,
@@ -178,6 +273,12 @@ def build_vm(
         return node
 
 
+def ensure_file_exists(path, error='Required file missing.'):
+    if not os.path.isfile(path):
+        print_msg(error, STATUS_ERROR)
+        sys.exit(1)
+
+
 def main(argv):
     args = get_args(argv)
     driver = get_driver(
@@ -188,7 +289,7 @@ def main(argv):
     image = get_image(driver)
     size = get_size(driver, name=args.size)
     key = get_ssh_key(args.ssh_key)
-    deploy_steps = get_deploy_steps()
+    deploy_steps = get_deploy_steps(args)
     build_vm(driver, image, size, args.gpu, args.gpus, key,
              args.disk_size, deploy_steps)
 
