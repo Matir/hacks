@@ -59,7 +59,9 @@ def parse_sa(json_path):
 
 
 def get_args(argv):
-    parser = argparse.ArgumentParser(description='Hashcat on Cloud')
+    parser = argparse.ArgumentParser(
+            description='Hashcat on Cloud',
+            allow_abbrev=False)
     parser.add_argument(
             '--service_account', default='', help='Service Account Name')
     parser.add_argument(
@@ -83,11 +85,19 @@ def get_args(argv):
     parser.add_argument(
             '--wordlist', default=None, help='Wordlist for wordlist modes.')
     parser.add_argument(
-            '--hashfile', default=None, help='File for hashes.', required=True)
+            '--hashfile', default=None, help='File for hashes.')
+    parser.add_argument(
+            '--benchmark', default=False, action='store_true',
+            help='Run benchmarks instead of cracking.')
     parser.add_argument(
             'hashcat_args', nargs='*', default=[],
             help='Extra arguments for hashcat.')
-    return parser.parse_args(argv[1:])
+    args, extras = parser.parse_known_args(argv[1:])
+    args.hashcat_args = extras + args.hashcat_args
+    if not (args.benchmark or args.hashfile):
+        parser.print_usage()
+        parser.exit(2)
+    return args
 
 
 def list_available_choices(driver):
@@ -159,17 +169,24 @@ def split_hashargs(args):
 
 def build_hashcat_command(args):
     """Build the hashcat command line."""
-    cmd = [
-            HASHCAT_BIN_PATH,
-            "-o",
-            PASSWD_FILE_PATH + ".out",
-    ]
-    hashcat_args, patterns = split_hashargs(args.hashcat_args)
-    cmd.extend(hashcat_args)
-    cmd.append(PASSWD_FILE_PATH)
-    if args.wordlist:
-        cmd.append(WORDLIST_FILE_PATH)
-    cmd.extend(patterns)
+    if args.benchmark:
+        cmd = [
+                HASHCAT_BIN_PATH,
+                "-b",
+        ]
+        cmd.extend(args.hashcat_args)
+    else:
+        cmd = [
+                HASHCAT_BIN_PATH,
+                "-o",
+                PASSWD_FILE_PATH + ".out",
+        ]
+        hashcat_args, patterns = split_hashargs(args.hashcat_args)
+        cmd.extend(hashcat_args)
+        cmd.append(PASSWD_FILE_PATH)
+        if args.wordlist:
+            cmd.append(WORDLIST_FILE_PATH)
+        cmd.extend(patterns)
     return shlex.join(cmd)
 
 
@@ -193,7 +210,7 @@ def get_deploy_steps(args):
             "cd /root",
             "sed -i 's/ main/ main contrib non-free/' /etc/apt/sources.list",
             "apt-get update",
-            "apt-get -y install p7zip wget tmux linux-headers-cloud-amd64",
+            "apt-get -y install p7zip wget tmux linux-headers-$(uname -r)",
             "apt-get -t buster-backports -y install nvidia-cuda-dev "
                 "nvidia-cuda-toolkit nvidia-driver",
             "modprobe nvidia",
@@ -204,19 +221,23 @@ def get_deploy_steps(args):
     setup_script = ' && '.join(setup_script_steps)
     setup_deployment = deployment.ScriptDeployment(setup_script)
 
-    ensure_file_exists(
-            args.hashfile, "Hash file {} missing!".format(args.hashfile))
-    hash_deployment = deployment.FileDeployment(
-            args.hashfile, PASSWD_FILE_PATH)
+    steps = CheckedMultiStepDeployment([setup_deployment])
 
-    steps = CheckedMultiStepDeployment([setup_deployment, hash_deployment])
-
-    if args.wordlist is not None:
+    if not args.benchmark:
         ensure_file_exists(
-                args.wordlist, "Wordlist {} missing!".format(args.wordlist))
-        wordlist_deployment = deployment.FileDeployment(
-                args.wordlist, WORDLIST_FILE_PATH)
-        steps.add(wordlist_deployment)
+                args.hashfile, "Hash file {} missing!".format(args.hashfile))
+        hash_deployment = deployment.FileDeployment(
+                args.hashfile, PASSWD_FILE_PATH)
+
+        steps.add(hash_deployment)
+
+        if args.wordlist is not None:
+            ensure_file_exists(
+                    args.wordlist,
+                    "Wordlist {} missing!".format(args.wordlist))
+            wordlist_deployment = deployment.FileDeployment(
+                    args.wordlist, WORDLIST_FILE_PATH)
+            steps.add(wordlist_deployment)
 
     tmux_cmd = build_tmux_command(args)
     tmux_deployment = deployment.ScriptDeployment(tmux_cmd)
@@ -244,6 +265,7 @@ def build_vm(
         kwargs['ex_accelerator_count'] = gpus
         kwargs['ex_on_host_maintenance'] = 'TERMINATE'
     name = get_instance_name()
+    print_msg('New instance will be named: {}'.format(name))
     pubkey = '{} {}'.format(ssh_key.get_name(), ssh_key.get_base64())
     metadata = {
         'items': [
@@ -274,13 +296,18 @@ def build_vm(
 
 
 def ensure_file_exists(path, error='Required file missing.'):
-    if not os.path.isfile(path):
+    try:
+        if not os.path.isfile(path):
+            print_msg(error, STATUS_ERROR)
+            sys.exit(1)
+    except TypeError:
         print_msg(error, STATUS_ERROR)
-        sys.exit(1)
+        sys.exit(2)
 
 
 def main(argv):
     args = get_args(argv)
+    print_msg("Getting driver and setting up...")
     driver = get_driver(
             account_name=args.service_account,
             json_path=args.credentials,
@@ -289,7 +316,9 @@ def main(argv):
     image = get_image(driver)
     size = get_size(driver, name=args.size)
     key = get_ssh_key(args.ssh_key)
+    print_msg("Setting up deploy steps...")
     deploy_steps = get_deploy_steps(args)
+    print_msg("Starting build...")
     build_vm(driver, image, size, args.gpu, args.gpus, key,
              args.disk_size, deploy_steps)
 

@@ -1,0 +1,124 @@
+hashcat (v6.1.1) starting in benchmark mode...
+
+Benchmarking uses hand-optimized kernel code by default.
+You can use it in your cracking session by setting the -O option.
+Note: Using optimized kernel code limits the maximum supported password length.
+To disable the optimized kernel code in benchmark mode, use the -w option.
+
+nvmlDeviceGetFanSpeed(): Not Supported
+
+CUDA API (CUDA 10.2)
+====================
+* Device #1: Tesla P4, 7498/7611 MB, 20MCU
+
+OpenCL API (OpenCL 1.2 CUDA 10.2.185) - Platform #1 [NVIDIA Corporation]
+========================================================================
+* Device #2: Tesla P4, skipped
+
+Benchmark relevant options:
+===========================
+* --optimized-kernel-enable
+
+Hashmode: 0 - MD5
+
+Speed.#1.........: 16626.3 MH/s (80.44ms) @ Accel:64 Loops:1024 Thr:1024 Vec:8
+
+Hashmode: 100 - SHA1
+
+Speed.#1.........:  5555.4 MH/s (60.14ms) @ Accel:16 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 1400 - SHA2-256
+
+Speed.#1.........:  2017.9 MH/s (82.83ms) @ Accel:8 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 1700 - SHA2-512
+
+Speed.#1.........:   672.5 MH/s (62.09ms) @ Accel:8 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 22000 - WPA-PBKDF2-PMKID+EAPOL (Iterations: 4095)
+
+Speed.#1.........:   292.9 kH/s (69.57ms) @ Accel:16 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 1000 - NTLM
+
+Speed.#1.........: 29863.8 MH/s (44.69ms) @ Accel:64 Loops:1024 Thr:1024 Vec:8
+
+Hashmode: 3000 - LM
+
+Speed.#1.........: 13147.0 MH/s (50.46ms) @ Accel:512 Loops:1024 Thr:64 Vec:1
+
+Hashmode: 5500 - NetNTLMv1 / NetNTLMv1+ESS
+
+Speed.#1.........: 16097.6 MH/s (83.14ms) @ Accel:64 Loops:1024 Thr:1024 Vec:2
+
+Hashmode: 5600 - NetNTLMv2
+
+Speed.#1.........:  1126.9 MH/s (74.19ms) @ Accel:16 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 1500 - descrypt, DES (Unix), Traditional DES
+
+Speed.#1.........:   515.3 MH/s (80.77ms) @ Accel:32 Loops:1024 Thr:64 Vec:1
+
+Hashmode: 500 - md5crypt, MD5 (Unix), Cisco-IOS $1$ (MD5) (Iterations: 1000)
+
+Speed.#1.........:  6275.8 kH/s (49.23ms) @ Accel:16 Loops:1000 Thr:1024 Vec:1
+
+Hashmode: 3200 - bcrypt $2*$, Blowfish (Unix) (Iterations: 32)
+
+Speed.#1.........:    13432 H/s (34.33ms) @ Accel:2 Loops:32 Thr:12 Vec:1
+
+Hashmode: 1800 - sha512crypt $6$, SHA512 (Unix) (Iterations: 5000)
+
+Speed.#1.........:    91648 H/s (88.44ms) @ Accel:8 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 7500 - Kerberos 5, etype 23, AS-REQ Pre-Auth
+
+Speed.#1.........:   186.7 MH/s (55.86ms) @ Accel:128 Loops:64 Thr:64 Vec:1
+
+Hashmode: 13100 - Kerberos 5, etype 23, TGS-REP
+
+Speed.#1.........:   185.3 MH/s (56.33ms) @ Accel:128 Loops:64 Thr:64 Vec:1
+
+Hashmode: 15300 - DPAPI masterkey file v1 (Iterations: 23999)
+
+Speed.#1.........:    50194 H/s (69.14ms) @ Accel:8 Loops:512 Thr:1024 Vec:1
+
+Hashmode: 15900 - DPAPI masterkey file v2 (Iterations: 12899)
+
+Speed.#1.........:    22133 H/s (72.30ms) @ Accel:4 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 7100 - macOS v10.8+ (PBKDF2-SHA512) (Iterations: 1023)
+
+Speed.#1.........:   272.5 kH/s (71.77ms) @ Accel:32 Loops:31 Thr:1024 Vec:1
+
+Hashmode: 11600 - 7-Zip (Iterations: 16384)
+
+Speed.#1.........:   217.0 kH/s (86.85ms) @ Accel:4 Loops:4096 Thr:1024 Vec:1
+
+Hashmode: 12500 - RAR3-hp (Iterations: 262144)
+
+Speed.#1.........:    20335 H/s (62.84ms) @ Accel:1 Loops:16384 Thr:1024 Vec:1
+
+Hashmode: 13000 - RAR5 (Iterations: 32799)
+
+Speed.#1.........:    24457 H/s (52.18ms) @ Accel:8 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 6211 - TrueCrypt RIPEMD160 + XTS 512 bit (Iterations: 1999)
+
+Speed.#1.........:   177.3 kH/s (53.84ms) @ Accel:16 Loops:64 Thr:1024 Vec:1
+
+Hashmode: 13400 - KeePass 1 (AES/Twofish) and KeePass 2 (AES) (Iterations: 24569)
+
+Speed.#1.........:    18968 H/s (179.91ms) @ Accel:4 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 6800 - LastPass + LastPass sniffed (Iterations: 499)
+
+Speed.#1.........:  1513.7 kH/s (34.03ms) @ Accel:8 Loops:249 Thr:1024 Vec:1
+
+Hashmode: 11300 - Bitcoin/Litecoin wallet.dat (Iterations: 200459)
+
+Speed.#1.........:     3079 H/s (67.81ms) @ Accel:4 Loops:512 Thr:1024 Vec:1
+
+Started: Sun Sep 27 00:25:28 2020
+Stopped: Sun Sep 27 00:29:58 2020
+root@thundercrack-234c5588e89b:~#
