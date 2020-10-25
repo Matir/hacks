@@ -9,6 +9,7 @@ import (
 	"github.com/andybalholm/cascadia"
 	"io"
 	"os"
+	"sync"
 )
 
 
@@ -16,6 +17,7 @@ const (
 	SHOW_PATTERN = "https://www.imdb.com/title/%s/"
 	SEASON_PATTERN = "https://www.imdb.com/title/%s/episodes?season=%d"
 	CREDITS_PATTERN = "https://www.imdb.com/title/%s/fullcredits"
+	JSON_FILENAME = "sorkin.json"
 )
 
 var (
@@ -283,6 +285,14 @@ var Shows = []*Show{
 		Name: "Sports Night",
 		ID:   "tt0165961",
 	},
+	&Show{
+		Name: "Studio 60 on the Sunset Strip",
+		ID: "tt0485842",
+	},
+	&Show{
+		Name: "The Newsroom",
+		ID: "tt1870479",
+	},
 }
 
 func DumpShows(w io.Writer, shows []*Show) error {
@@ -304,6 +314,26 @@ func demo() {
 		}
 	}
 	DumpShows(os.Stdout, Shows)
+	if fp, err := os.Create(JSON_FILENAME); err != nil {
+		fmt.Printf("Error saving output: %s\n", err)
+	} else {
+		defer fp.Close()
+		DumpShows(fp, Shows)
+	}
+}
+
+func SaveShows() {
+	wg := sync.WaitGroup{}
+	wg.Add(len(Shows))
+	for _, s := range Shows {
+		go func(s *Show) {
+			if err := s.LoadSeasons(); err != nil {
+				fmt.Printf("Error loading seasons: %s\n", err)
+			}
+			wg.Done()
+		}(s)
+	}
+	wg.Wait()
 	if fp, err := os.Create("sorkin.json"); err != nil {
 		fmt.Printf("Error saving output: %s\n", err)
 	} else {
@@ -312,8 +342,73 @@ func demo() {
 	}
 }
 
+func AnalyzeShows() {
+	var shows []*Show
+	if fp, err := os.Open(JSON_FILENAME); err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening: %s\n", err)
+		os.Exit(1)
+	} else {
+		defer fp.Close()
+		dec := json.NewDecoder(fp)
+		if err := dec.Decode(&shows); err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding: %s\n", err)
+			os.Exit(1)
+		}
+	}
+	appearances := make(map[string][]string)
+	for _, show := range shows {
+		for _, season := range show.Seasons {
+			for _, ep := range season.Episodes {
+				for _, actor := range ep.Cast {
+					addAppearance(show, actor, appearances)
+				}
+			}
+		}
+	}
+	for name, apps := range appearances {
+		if len(apps) > 1 {
+			fmt.Println(name)
+			for _, a := range apps {
+				fmt.Printf("    %s\n", a)
+			}
+		}
+	}
+}
+
+func addAppearance(show *Show, actor *CastMember, apps map[string][]string) {
+	if _, ok := apps[actor.Actor]; !ok {
+		apps[actor.Actor] = make([]string, 0)
+	}
+	if !stringSliceContains(apps[actor.Actor], show.Name) {
+		apps[actor.Actor] = append(apps[actor.Actor], show.Name)
+	}
+}
+
+func stringSliceContains(s []string, a string) bool {
+	for _, v := range s {
+		if a == v {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
-	demo()
+	usage := func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s <save|analyze>\n", os.Args[0])
+		os.Exit(1)
+	}
+	if len(os.Args) < 2 {
+		usage()
+	}
+	switch strings.ToLower(os.Args[1]) {
+	case "save":
+		SaveShows()
+	case "analyze":
+		AnalyzeShows()
+	default:
+		usage()
+	}
 }
 
 func init() {
