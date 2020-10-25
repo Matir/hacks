@@ -22,7 +22,7 @@ var (
 	DivInfoSel cascadia.Sel
 	ASel cascadia.Sel
 	CastRowSel cascadia.Sel
-	TDASel cascadia.Sel
+	TDSel cascadia.Sel
 )
 
 type Show struct {
@@ -182,32 +182,49 @@ func (e *Episode) LoadCast() error {
 }
 
 func parseCastRow(n *html.Node) *CastMember {
-	links := cascadia.QueryAll(n, TDASel)
-	if len(links) == 0 {
+	cells := cascadia.QueryAll(n, TDSel)
+	if len(cells) != 4 {
 		return nil
 	}
 	cm := &CastMember{}
-	for _, link := range links {
-		if link.FirstChild.Type != html.TextNode {
-			continue
-		}
-		if cm.Actor == "" {
-			cm.Actor = strings.TrimSpace(link.FirstChild.Data)
-			for _, attr := range link.Attr {
-				if attr.Key == "href" {
-					pieces := strings.Split(attr.Val, "/")
-					if len(pieces) >= 3 {
-						cm.ActorID = pieces[2]
-					}
-					break
-				}
-			}
-		} else {
-			cm.Role = strings.TrimSpace(link.FirstChild.Data)
+	actorNode := cells[1]
+	for child := actorNode.FirstChild; child != nil; child=child.NextSibling {
+		if child.Data == "a" {
+			actorNode = child
 			break
 		}
 	}
+	cm.Actor = getTextContent(actorNode)
+	for _, attr := range actorNode.Attr {
+		if attr.Key == "href" {
+			pieces := strings.Split(attr.Val, "/")
+			if len(pieces) >= 3 {
+				cm.ActorID = pieces[2]
+			}
+			break
+		}
+	}
+	roleNode := cells[3]
+	for child := roleNode.FirstChild; child != nil; child=child.NextSibling {
+		if child.Data == "a" {
+			roleNode = child
+			break
+		}
+	}
+	cm.Role = getTextContent(roleNode)
 	return cm
+}
+
+func getTextContent(n *html.Node) string {
+	for {
+		if n == nil {
+			return ""
+		}
+		if n.Type == html.TextNode {
+			return strings.TrimSpace(n.Data)
+		}
+		n = n.FirstChild
+	}
 }
 
 // Extract the name of the episode and the IMDB EpId
@@ -310,5 +327,5 @@ func init() {
 	ASel = mustParse("a")
 	DivInfoSel = mustParse("div.info")
 	CastRowSel = mustParse("table.cast_list tr")
-	TDASel = mustParse("td a")
+	TDSel = mustParse("td")
 }
