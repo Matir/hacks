@@ -1,6 +1,14 @@
 #!/bin/bash
 
+# Todo:
+# arguments for disk size, cpu, memory, network
+
+set -ue
+
 NAME=${1:-vi-test}
+VMDIR=${VMDIR:-/vms}
+NET=${NET:-bridge=br-lab}
+PRESEED=${PRESEED:-$(pwd)/preseed.vm.cfg}
 
 virt-install \
   --connect qemu:///system \
@@ -10,10 +18,10 @@ virt-install \
   --vcpus 1 \
   --cpu host \
   --location https://debian.osuosl.org/debian/dists/stable/main/installer-amd64/ \
-  --disk /tmp/${NAME}.qcow2,bus=virtio,size=20,format=qcow2 \
-  --network=default \
-  --initrd-inject=$(pwd)/preseed.vm.cfg \
+  --disk ${VMDIR}/${NAME}.qcow2,bus=virtio,size=20,format=qcow2 \
+  --network=${NET} \
+  --initrd-inject=${PRESEED} \
   --video qxl \
   --channel spicevmc \
   --noautoconsole \
-  --extra-args="preseed/file=/preseed.vm.cfg netcfg/hostname=${NAME} auto-install/enable=true debconf/priority=critical"
+  --extra-args="preseed/file=/$(basename ${PRESEED}) netcfg/hostname=${NAME} auto-install/enable=true debconf/priority=critical"
