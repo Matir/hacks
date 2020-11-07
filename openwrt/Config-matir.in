@@ -1,0 +1,77 @@
+menu "Matir Custom Options"
+  config MATIR_BASE_PACKAGES
+    default y
+    bool "Matir's Base Packages"
+    select PACKAGE_dropbear
+    select DROPBEAR_ECC
+		select PACKAGE_ethtool
+		select PACKAGE_fcgi
+		select BUSYBOX_CUSTOM
+		select BUSYBOX_CONFIG_UNICODE_SUPPORT
+		select BUSYBOX_CONFIG_UNICODE_COMBINING_WCHARS
+		select BUSYBOX_CONFIG_UNICODE_WIDE_WCHARS
+		select BUSYBOX_CONFIG_UNICODE_BIDI_SUPPORT
+		select BUSYBOX_CONFIG_UNICODE_NEUTRAL_TABLE
+		select BUSYBOX_CONFIG_UNICODE_PRESERVE_BROKEN
+		select BUSYBOX_CONFIG_FEATURE_WGET_TIMEOUT
+		select BUSYBOX_CONFIG_FUSER
+		select BUSYBOX_CONFIG_IPCRM
+		select BUSYBOX_CONFIG_IPCS
+		select BUSYBOX_CONFIG_FEATURE_FLOAT_SLEEP
+		select BUSYBOX_CONFIG_NC_SERVER
+		select BUSYBOX_CONFIG_NC_EXTRA
+		select BUSYBOX_CONFIG_NC_110_COMPAT
+		select BUSYBOX_CONFIG_FEATURE_TAR_OLDGNU_COMPATIBILITY
+		select BUSYBOX_CONFIG_TIMEOUT
+		select BUSYBOX_CONFIG_FEATURE_SEAMLESS_BZ2
+		select BUSYBOX_CONFIG_FEATURE_COMPRESS_USAGE
+		select BUSYBOX_CONFIG_FEATURE_VI_UNDO
+		select PACKAGE_lighttpd
+		select PACKAGE_lighttpd-mod-access
+		select PACKAGE_lighttpd-mod-cgi
+		select PACKAGE_lighttpd-mod-expire
+		select PACKAGE_lighttpd-mod-fastcgi
+		select PACKAGE_lighttpd-mod-proxy
+		select PACKAGE_luci
+		select PACKAGE_luci-mod-rpc
+		select LUCI_LANG_en
+		select PACKAGE_unzip
+		select PACKAGE_wpa-cli
+		select PACKAGE_bridge
+		select PACKAGE_wpad
+		select PACKAGE_wget
+		select PACKAGE_mwan3
+		select PACKAGE_relayd
+		select PACKAGE_stubby
+		select PACKAGE_ip-full
+		select PACKAGE_kmod-nls-cp437
+		select PACKAGE_kmod-nls-iso8859-1
+		select PACKAGE_kmod-nls-utf8
+		select PACKAGE_kmod-nf-nathelper-extra
+		select PACKAGE_libcares
+
+  config MATIR_VPN
+    bool "VPN Packages"
+    select PACKAGE_wireguard
+    select PACKAGE_openvpn-openssl
+    select PACKAGE_luci-app-openvpn
+    select PACKAGE_luci-app-wireguard
+    select PACKAGE_luci-proto-wireguard
+
+  config MATIR_STORAGE
+    bool "Storage/USB Packages"
+    select PACKAGE_kmod-fs-vfat
+    select PACKAGE_kmod-hid
+    select PACKAGE_kmod-usb-storage
+
+  config MATIR_HACKING_PACKAGES
+    bool "Matir Hacking Packages"
+    select PACKAGE_nmap
+    select PACKAGE_ncat
+    select PACKAGE_bind-dig
+    select PACKAGE_sshtunnel
+    select PACKAGE_autossh
+    select PACKAGE_kismet-drone
+    select PACKAGE_socat
+    select PACKAGE_tcpdump
+endmenu
