@@ -710,4 +710,33 @@ F 3 "" H 7100 2850 50  0001 C CNN
 	1    7100 2850
 	1    0    0    -1  
 $EndComp
+$Comp
+L Device:Jumper_NO_Small JP1
+U 1 1 5F705426
+P 1650 1550
+F 0 "JP1" H 1650 1735 50  0000 C CNN
+F 1 "Jumper_NO_Small" H 1650 1644 50  0000 C CNN
+F 2 "Jumper:SolderJumper-2_P1.3mm_Open_TrianglePad1.0x1.5mm" H 1650 1550 50  0001 C CNN
+F 3 "~" H 1650 1550 50  0001 C CNN
+	1    1650 1550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1750 1550 1900 1550
+Connection ~ 1900 1550
+$Comp
+L power:VCC #PWR06
+U 1 1 5F7076A5
+P 1250 1500
+F 0 "#PWR06" H 1250 1350 50  0001 C CNN
+F 1 "VCC" H 1265 1673 50  0000 C CNN
+F 2 "" H 1250 1500 50  0001 C CNN
+F 3 "" H 1250 1500 50  0001 C CNN
+	1    1250 1500
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1250 1500 1250 1550
+Wire Wire Line
+	1250 1550 1550 1550
 $EndSCHEMATC
