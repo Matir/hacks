@@ -39,8 +39,17 @@ const pattern_frame_t test_pattern_frames[] = {
     {0}
 };
 
+const pattern_frame_t all_on[] = {
+  {
+    .duration = 100,
+    .led_states = {ON, ON, ON, ON, ON, ON},
+  },
+  {0}
+};
+
 const pattern_frame_t *patterns[] = {
   test_pattern_frames,
+  all_on,
   NULL,
 };
 

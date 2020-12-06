@@ -14,6 +14,7 @@
 #ifndef PWM_RESOLUTION_STEPS
 # define PWM_RESOLUTION_STEPS 0x7F
 #endif
+#define TOUCH_ENABLED
 #define MAX_BRIGHTNESS 0xFF
 #define DESIRED_FRAMERATE 60
 #define PWM_FRAME_MASK PWM_RESOLUTION_STEPS
@@ -52,6 +53,16 @@ ISR(TIM0_COMPA_vect) {
 // Ignore the overflow we should never see
 ISR(TIM0_OVF_vect){}
 
+// Handle touch sensor
+#ifdef TOUCH_ENABLED
+ISR(EXT_INT0_vect){
+  if (current_pattern)
+    current_pattern = NULL;
+  else
+    current_pattern = next_pattern();
+}
+#endif
+
 void setup(void) {
   // Disable interrupts while setting up
   cli();
@@ -80,6 +91,13 @@ void setup(void) {
   // Reduce power consumption slightly
   PRR |= (1<<PRTIM1) | (1<<PRUSI);
 
+  // Enable the touch sensor
+#ifdef TOUCH_ENABLED
+  // INT0 on rising edge
+  MCUCR |= (1 << ISC01) | (1 << ISC00);
+  GIMSK |= (1 << INT0);
+#endif
+
   // Re-enable interrupts
   sei();
 }
@@ -104,8 +122,12 @@ void main(void) {
 
 // Compute the next frame, returns 1 on wrap around
 uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
-  if (p == NULL)
+  if (p == NULL) {
+    for(uint8_t i = 0; i<NUM_LEDS; i++) {
+      brightness[i] = 0;
+    }
     return 0;
+  }
   uint8_t rv = 0;
   pattern_frame_t *frame = &p->frames[p->frame_id];
   p->frame_timer++;
@@ -125,7 +147,7 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
   uint32_t prop = MAX_BRIGHTNESS;
 
   // Linear interpolation
-  for(uint16_t i = 0; i<NUM_LEDS; i++) {
+  for(uint8_t i = 0; i<NUM_LEDS; i++) {
     switch(frame->led_states[i]) {
       case OFF:
         brightness[i] = 0;
