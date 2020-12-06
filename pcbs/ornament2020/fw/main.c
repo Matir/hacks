@@ -5,7 +5,13 @@
 #include <avr/pgmspace.h>
 #include "avr_mcu_section.h"
 
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
 // Settings
+#ifndef PWM_RESOLUTION_STEPS
+# define PWM_RESOLUTION_STEPS 0x7F
+#endif
 #define DESIRED_FRAMERATE 60
 #define NUM_LEDS 6
 #define PWM_FRAME_MASK PWM_RESOLUTION_STEPS
@@ -14,6 +20,7 @@
 #if (TIMER_INTERVAL > 255)
 # error "Unable to use 8-bit timer!"
 #endif
+#pragma message "TIMER_INTERVAL is " XSTR(TIMER_INTERVAL) "!"
 
 // From gamma.c
 extern const uint8_t consts_num_steps;
@@ -51,9 +58,12 @@ void update_active_leds(uint8_t off);
 static void update_out(uint8_t leds);
 
 // Handle the Timer compare
-ISR(TIMER0_COMPA_vect) {
+ISR(TIM0_COMPA_vect) {
   update_frame = 1;
 }
+
+// Ignore the overflow we should never see
+ISR(TIM0_OVF_vect){}
 
 void setup(void) {
   // Disable interrupts while setting up
@@ -65,7 +75,7 @@ void setup(void) {
 
   // Enable timer for next frame
   OCR0A = TIMER_INTERVAL;   // Interval
-  TIMSK0 = 0x01;            // Interrupt on compare
+  TIMSK0 = 0x02;            // Interrupt on compare
   TCCR0A = 0x02;            // CTC Mode
 #if TIMER_PRESCALER == 1
   TCCR0B = 1<<CS00;         // No prescaler
@@ -195,6 +205,8 @@ static void update_out(uint8_t leds) {
 // simavr stuff
 AVR_MCU_VCD_FILE("gtkwave_trace.vcd", 300000);
 const struct avr_mmcu_vcd_trace_t _mytrace[]  _MMCU_ = {
+  {AVR_MCU_VCD_SYMBOL("PORTA"), .what = (void *)&PORTA},
+  {AVR_MCU_VCD_SYMBOL("PORTB"), .what = (void *)&PORTB},
   {AVR_MCU_VCD_SYMBOL("update_frame"), .what = (uint8_t *)(&update_frame)},
 #ifdef DEBUG
   {AVR_MCU_VCD_SYMBOL("frame_id"), .what = &frame_id},
