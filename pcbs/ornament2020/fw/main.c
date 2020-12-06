@@ -58,7 +58,12 @@ void setup(void) {
 
   // Low 4 pins are output
   DDRA = 0x0F;
-  DDRB = 0x02;
+  // Low 2 pins here are output
+  DDRB = 0x03;
+
+  // Zero values
+  PORTA = 0;
+  PORTB = 0;
 
   // Enable timer for next frame
   OCR0A = TIMER_INTERVAL;   // Interval
@@ -87,10 +92,10 @@ void main(void) {
     // TODO: sleep?
     if (update_frame) {
       cli();
-      update_loop_step();
 #ifdef DEBUG
       frame_id++;
 #endif
+      update_loop_step();
       update_frame = 0;
       sei();
     }
@@ -146,11 +151,17 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
 
 void update_loop_step() {
   static uint8_t pwm_frame = 0;
-  uint8_t brightness[NUM_LEDS];
+  static uint8_t brightness[NUM_LEDS];
   pwm_frame &= PWM_FRAME_MASK;
   if (!pwm_frame) {
     // Generate next frame
+#ifdef DEBUG
+    running_brightness = 1;
+#endif
     get_brightness_from_pattern(brightness, current_pattern);
+#ifdef DEBUG
+    running_brightness = 0;
+#endif
   }
   pwm_frame_update(pwm_frame++, brightness);
 }
@@ -172,10 +183,17 @@ void pwm_frame_update(uint8_t frame_no, uint8_t *brightness) {
   update_out(out);
 }
 
+#ifdef DEBUG
+uint8_t global_leds = 0;
+#endif
+
 // LEDS are on PA0-3 and PB0-1
 static void update_out(uint8_t leds) {
+#ifdef DEBUG
+  global_leds = leds;
+#endif
 #define PORTA_MASK 0x0F
-#define PORTB_MASK 0x2
+#define PORTB_MASK 0x3
   PORTA &= (0xFF ^ PORTA_MASK);
   PORTA |= (leds & PORTA_MASK);
   leds = leds >> 4;  // 4 bits used
@@ -192,6 +210,7 @@ const struct avr_mmcu_vcd_trace_t _mytrace[]  _MMCU_ = {
   {AVR_MCU_VCD_SYMBOL("update_frame"), .what = (uint8_t *)(&update_frame)},
 #ifdef DEBUG
   {AVR_MCU_VCD_SYMBOL("frame_id"), .what = &frame_id},
+  {AVR_MCU_VCD_SYMBOL("global_leds"), .what = &global_leds},
   {AVR_MCU_VCD_SYMBOL("running_bright"), .what = &running_brightness},
 #endif
 };

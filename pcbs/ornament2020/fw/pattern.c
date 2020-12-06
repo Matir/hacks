@@ -6,6 +6,10 @@
 const pattern_frame_t test_pattern_frames[] = {
     {
       .duration = 100,
+      .led_states = {OFF, OFF, OFF, OFF, OFF, OFF},
+    },
+    {
+      .duration = 100,
       .led_states = {ON, OFF, OFF, OFF, OFF, OFF},
     },
     {
