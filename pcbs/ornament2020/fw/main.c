@@ -1,9 +1,11 @@
+#include <stddef.h>
 #include <stdint.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/power.h>
 #include <avr/pgmspace.h>
 #include "avr_mcu_section.h"
+#include "pattern.h"
 
 #define XSTR(x) STR(x)
 #define STR(x) #x
@@ -12,8 +14,8 @@
 #ifndef PWM_RESOLUTION_STEPS
 # define PWM_RESOLUTION_STEPS 0x7F
 #endif
+#define MAX_BRIGHTNESS 0xFF
 #define DESIRED_FRAMERATE 60
-#define NUM_LEDS 6
 #define PWM_FRAME_MASK PWM_RESOLUTION_STEPS
 #define TIMER_PRESCALER 8
 #define TIMER_INTERVAL (F_CPU/(DESIRED_FRAMERATE*(PWM_FRAME_MASK+1))/TIMER_PRESCALER)
@@ -26,21 +28,7 @@
 extern const uint8_t consts_num_steps;
 extern const uint8_t gamma_table[];
 
-// Brightness divisors
-const uint8_t MAX_BRIGHTNESS_SCALE[NUM_LEDS] = {0, 0, 0, 0, 0, 0};
-// Scaling factors
-const uint8_t RAMP_UP_SPEED[NUM_LEDS] =   {0x2F, 0x4F, 0x3F, 0x1F, 0x04, 0x12};
-const uint8_t RAMP_DOWN_SPEED[NUM_LEDS] = {0x20, 0x40, 0x10, 0x20, 0x30, 0x40};
-// INTERVAL is 2x as long as ramp up/down time
-const uint8_t OFF_SPEED[NUM_LEDS] =       {0x40, 0x00, 0x20, 0x00, 0x40, 0x00};
-
-// Current brightness
-uint8_t brightness[NUM_LEDS]     = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-// Current frame
-uint16_t px_frame_no[NUM_LEDS]   = {0};
-
-// Limit to 3 active LEDs at any given time
-uint8_t active_leds = 0b010101;
+pattern_t *current_pattern = NULL;
 
 // Update frame
 volatile uint8_t update_frame = 1;
@@ -52,8 +40,7 @@ volatile uint8_t running_brightness = 0;
 // Declarations
 void setup(void);
 void update_loop_step();
-void pwm_frame_update(uint8_t frame_no);
-uint8_t calc_brightness(uint8_t which);
+void pwm_frame_update(uint8_t frame_no, uint8_t *brightness);
 void update_active_leds(uint8_t off);
 static void update_out(uint8_t leds);
 
@@ -95,6 +82,7 @@ void setup(void) {
 __attribute__((noreturn))
 void main(void) {
   setup();
+  current_pattern = next_pattern();
   while (1) {
     // TODO: sleep?
     if (update_frame) {
@@ -109,77 +97,70 @@ void main(void) {
   }
 }
 
-__attribute__((optimize("unroll-loops")))
+// Compute the next frame, returns 1 on wrap around
+uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
+  if (p == NULL)
+    return 0;
+  uint8_t rv = 0;
+  pattern_frame_t *frame = &p->frames[p->frame_id];
+  p->frame_timer++;
+
+  // Check if we need to advance the frame
+  if (p->frame_timer == frame->duration) {
+    p->frame_timer = 0;
+    p->frame_id++;
+    frame = &p->frames[p->frame_id];
+    if (frame->duration == 0) {
+      rv = 1;
+      p->frame_id = 0;
+      frame = &p->frames[0];
+    }
+  }
+
+  uint32_t prop = MAX_BRIGHTNESS;
+
+  // Linear interpolation
+  for(uint16_t i = 0; i<NUM_LEDS; i++) {
+    switch(frame->led_states[i]) {
+      case OFF:
+        brightness[i] = 0;
+        break;
+      case ON:
+        brightness[i] = MAX_BRIGHTNESS;
+        break;
+      case RAMP_UP:
+        prop *= p->frame_timer;
+        prop /= frame->duration;
+        brightness[i] = (uint8_t)(prop);
+        break;
+      case RAMP_DN:
+        prop *= p->frame_timer;
+        prop /= frame->duration;
+        brightness[i] = (uint8_t)(prop);
+        break;
+    }
+  }
+
+  return rv;
+}
+
 void update_loop_step() {
   static uint8_t pwm_frame = 0;
+  uint8_t brightness[NUM_LEDS];
   pwm_frame &= PWM_FRAME_MASK;
   if (!pwm_frame) {
-    for(uint8_t i=0; i<NUM_LEDS; i++) {
-      if (active_leds & (1 << i)) {
-        if (calc_brightness(i)) {
-          update_active_leds(i);
-        }
-      }
-    }
+    // Generate next frame
+    get_brightness_from_pattern(brightness, current_pattern);
   }
-  pwm_frame_update(pwm_frame++);
-}
-
-uint8_t calc_brightness(uint8_t which) {
-  // Returns 1 on overflow (cycle around), 0 otherwise
-#ifdef DEBUG
-  running_brightness = 1;
-#endif
-  uint8_t brightness_tmp = 0;
-  uint16_t cur_frame = px_frame_no[which];
-  uint16_t init_frame = cur_frame;
-
-  // Ramp up phase
-  if (cur_frame <= 0x3FFF) {
-    // Scales to [0-255]
-    brightness_tmp = (uint8_t)(cur_frame >> 6);
-    cur_frame += RAMP_UP_SPEED[which];
-  } else if (cur_frame <= 0x7FFF) {
-    if (!RAMP_DOWN_SPEED[which]) {
-      cur_frame = 0x8000;
-    } else {
-      brightness_tmp = 255 - (uint8_t)(cur_frame >> 6);
-      cur_frame += RAMP_DOWN_SPEED[which];
-    }
-  } else {
-    // Waiting INTERVAL
-    if (!OFF_SPEED[which]) {
-      cur_frame = 0;
-    } else {
-      cur_frame += ((uint16_t)OFF_SPEED[which]) << 1;
-    }
-  }
-  if (MAX_BRIGHTNESS_SCALE[which])
-    brightness_tmp >>= MAX_BRIGHTNESS_SCALE[which];
-  brightness[which] = brightness_tmp;
-  px_frame_no[which] = cur_frame;
-#ifdef DEBUG
-  running_brightness = 0;
-#endif
-  return (cur_frame < init_frame) ? 1 : 0;
-}
-
-void update_active_leds(uint8_t off) {
-  static uint8_t next = 1;
-  while(active_leds & (1 << next)) {
-    next = (next == 5) ? 0 : next + 1;
-  }
-  px_frame_no[next] = 0;
-  active_leds |= (1 << next);
-  active_leds &= ~(1 << off);
+  pwm_frame_update(pwm_frame++, brightness);
 }
 
 __attribute__((optimize("unroll-loops")))
-void pwm_frame_update(uint8_t frame_no) {
+void pwm_frame_update(uint8_t frame_no, uint8_t *brightness) {
   uint8_t out = 0;
   uint8_t bright;
   for(int8_t i=0; i<NUM_LEDS; i++) {
-    if(!(active_leds & (1 << i)))
+    if (brightness[i] == 0)
       continue;
     // Convert via gamma table
     bright = pgm_read_byte(&(gamma_table[brightness[i]]));
@@ -201,6 +182,7 @@ static void update_out(uint8_t leds) {
   PORTB &= (0xFF ^ PORTB_MASK);
   PORTB |= (leds & PORTB_MASK);
 }
+
 
 // simavr stuff
 AVR_MCU_VCD_FILE("gtkwave_trace.vcd", 300000);
