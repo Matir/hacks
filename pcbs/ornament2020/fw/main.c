@@ -141,7 +141,7 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
       case RAMP_DN:
         prop *= p->frame_timer;
         prop /= frame->duration;
-        brightness[i] = (uint8_t)(prop);
+        brightness[i] = MAX_BRIGHTNESS-(uint8_t)(prop);
         break;
     }
   }

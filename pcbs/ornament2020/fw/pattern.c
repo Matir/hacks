@@ -34,7 +34,7 @@ const pattern_frame_t test_pattern_frames[] = {
     },
     {
       .duration = 100,
-      .led_states = {OFF, OFF, OFF, OFF, OFF, OFF},
+      .led_states = {OFF, OFF, OFF, OFF, OFF, RAMP_DN},
     },
     {0}
 };
