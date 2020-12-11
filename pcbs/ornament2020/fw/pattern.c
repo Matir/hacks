@@ -39,6 +39,34 @@ const pattern_frame_t test_pattern_frames[] = {
     {0}
 };
 
+const pattern_frame_t ramps[] = {
+  {
+    .duration = 100,
+    .led_states = {RAMP_UP, OFF, OFF, OFF, OFF, RAMP_DN},
+  },
+  {
+    .duration = 100,
+    .led_states = {RAMP_DN, RAMP_UP, OFF, OFF, OFF, OFF},
+  },
+  {
+    .duration = 100,
+    .led_states = {OFF, RAMP_DN, RAMP_UP, OFF, OFF, OFF},
+  },
+  {
+    .duration = 100,
+    .led_states = {OFF, OFF, RAMP_DN, RAMP_UP, OFF, OFF},
+  },
+  {
+    .duration = 100,
+    .led_states = {OFF, OFF, OFF, RAMP_DN, RAMP_UP, OFF},
+  },
+  {
+    .duration = 100,
+    .led_states = {OFF, OFF, OFF, OFF, RAMP_DN, RAMP_UP},
+  },
+  {0},
+};
+
 const pattern_frame_t all_on[] = {
   {
     .duration = 100,
@@ -49,6 +77,7 @@ const pattern_frame_t all_on[] = {
 
 const pattern_frame_t *patterns[] = {
   test_pattern_frames,
+  ramps,
   all_on,
   NULL,
 };

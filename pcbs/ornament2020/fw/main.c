@@ -4,6 +4,8 @@
 #include <avr/interrupt.h>
 #include <avr/power.h>
 #include <avr/pgmspace.h>
+#include <avr/sleep.h>
+#include <util/delay.h>
 #include "avr_mcu_section.h"
 #include "pattern.h"
 
@@ -14,9 +16,14 @@
 #ifndef PWM_RESOLUTION_STEPS
 # define PWM_RESOLUTION_STEPS 0x7F
 #endif
+#ifndef AUTO_OFF_TIME_SECS
+# define AUTO_OFF_TIME_SECS 3*60*60
+#endif
+#define uint24_t __uint24
 #define TOUCH_ENABLED
-#define MAX_BRIGHTNESS 0xFF
+#define MAX_BRIGHTNESS PWM_RESOLUTION_STEPS
 #define DESIRED_FRAMERATE 60
+#define RAMP_TIME 0x40
 #define PWM_FRAME_MASK PWM_RESOLUTION_STEPS
 #define TIMER_PRESCALER 8
 #define TIMER_INTERVAL (F_CPU/(DESIRED_FRAMERATE*(PWM_FRAME_MASK+1))/TIMER_PRESCALER)
@@ -56,6 +63,15 @@ ISR(TIM0_OVF_vect){}
 // Handle touch sensor
 #ifdef TOUCH_ENABLED
 ISR(EXT_INT0_vect){
+  update_out(0);
+  // Verify it's low for a bit
+  for (int16_t i=0xFFFF;i;i--)
+    if ((PINB & (1 << PINB2)) == 0)
+      return;
+#ifdef DEBUG
+  update_out(0x55);
+  _delay_ms(1000);
+#endif
   if (current_pattern)
     current_pattern = NULL;
   else
@@ -144,7 +160,6 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
     }
   }
 
-  uint32_t prop = MAX_BRIGHTNESS;
 
   // Linear interpolation
   for(uint8_t i = 0; i<NUM_LEDS; i++) {
@@ -156,14 +171,24 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
         brightness[i] = MAX_BRIGHTNESS;
         break;
       case RAMP_UP:
-        prop *= p->frame_timer;
-        prop /= frame->duration;
-        brightness[i] = (uint8_t)(prop);
+        if (p->frame_timer < RAMP_TIME) {
+          uint24_t prop = MAX_BRIGHTNESS;
+          prop *= p->frame_timer;
+          prop /= RAMP_TIME;
+          brightness[i] = (uint8_t)(prop);
+        } else {
+          brightness[i] = MAX_BRIGHTNESS;
+        }
         break;
       case RAMP_DN:
-        prop *= p->frame_timer;
-        prop /= frame->duration;
-        brightness[i] = MAX_BRIGHTNESS-(uint8_t)(prop);
+        if (p->frame_timer < RAMP_TIME) {
+          uint24_t prop = MAX_BRIGHTNESS;
+          prop *= p->frame_timer;
+          prop /= RAMP_TIME;
+          brightness[i] = MAX_BRIGHTNESS-(uint8_t)(prop);
+        } else {
+          brightness[i] = 0;
+        }
         break;
     }
   }

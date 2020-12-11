@@ -17,6 +17,9 @@
 #define RT_EYE   4
 #define LEFT_EYE 5
 
+/*
+ * Note: duration is in units of ~16.67ms. (16.25 when tested)
+ */
 typedef struct {
   uint16_t duration;
   uint8_t led_states[NUM_LEDS];

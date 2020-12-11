@@ -2,7 +2,7 @@ DEVICE     = attiny84
 CLOCK      = 8000000
 PWM_RESOLUTION_STEPS = 0x7F
 CC         = avr-gcc
-CFLAGS     = -Wall -Wno-main -Wextra -O0 -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) \
+CFLAGS     = -Wall -Wno-main -Wextra -O2 -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) \
 						 -DPWM_RESOLUTION_STEPS=$(PWM_RESOLUTION_STEPS) -g -DDEBUG=1
 #SIMAVR		 = /home/david/tmp/simavr/simavr/run_avr
 SIMAVR		 = /usr/bin/simavr
