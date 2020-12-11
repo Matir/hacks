@@ -26,6 +26,9 @@ main.elf: ${OBJS}
 %.o: %.c
 	${CC} ${CFLAGS} -c $<
 
+%.s: %.c
+	${CC} ${CFLAGS} -S -fverbose-asm -o $@ $<
+
 gamma.c: gentable.py
 	python3 gentable.py 256 $(PWM_RESOLUTION_STEPS) $@
 

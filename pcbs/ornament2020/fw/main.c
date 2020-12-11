@@ -36,7 +36,7 @@
 extern const uint8_t consts_num_steps;
 extern const uint8_t gamma_table[];
 
-pattern_t *current_pattern = NULL;
+pattern_t * volatile current_pattern = NULL;
 
 // Update frame
 volatile uint8_t update_frame = 1;
@@ -65,9 +65,12 @@ ISR(TIM0_OVF_vect){}
 ISR(EXT_INT0_vect){
   update_out(0);
   // Verify it's low for a bit
-  for (int16_t i=0xFFFF;i;i--)
-    if ((PINB & (1 << PINB2)) == 0)
+  for (volatile int16_t i=0xFEEE;i;i--) {
+    if ((PINB & (1 << PINB2)) == 0) {
       return;
+    }
+    asm("");
+  }
 #ifdef DEBUG
   update_out(0x55);
   _delay_ms(1000);
