@@ -1,5 +1,5 @@
 DEVICE     = attiny84
-CLOCK      = 8000000
+CLOCK      = 4000000
 PWM_RESOLUTION_STEPS = 0x7F
 CC         = avr-gcc
 CFLAGS     = -Wall -Wno-main -Wextra -O2 -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) \

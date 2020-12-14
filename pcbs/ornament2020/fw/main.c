@@ -102,6 +102,13 @@ void setup(void) {
   // Disable interrupts while setting up
   cli();
 
+  // Do clock setup
+#if F_CPU == 4000000
+  // Must be done in 2 steps per datasheet!
+  CLKPR = (1<<CLKPCE);
+  CLKPR = (1<<CLKPS0);
+#endif
+
   // Low 4 pins are output
   DDRA = 0x0F;
   // Low 2 pins here are output
@@ -184,6 +191,7 @@ void get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
       p->frame_id = 0;
       frame = &p->frames[0];
     }
+    return;
   }
 
   // Linear interpolation
