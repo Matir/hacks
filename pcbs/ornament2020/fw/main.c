@@ -85,6 +85,7 @@ ISR(EXT_INT0_vect){
     current_pattern = NULL;
   else
     current_pattern = next_pattern();
+  frame_id = 0;
 }
 #endif
 
@@ -158,14 +159,6 @@ void main(void) {
     // TODO: sleep?
     if (update_frame) {
       cli();
-#if AUTO_OFF_TIME_SECS > 0
-      if (frame_id >= (uint24_t)(AUTO_OFF_TIME_SECS * DESIRED_FRAMERATE)) {
-        frame_id = 0;
-        sleep_until_touch();
-        continue;
-      }
-#endif
-      frame_id++;
       update_loop_step();
       update_frame = 0;
       sei();
@@ -234,7 +227,15 @@ void update_loop_step() {
   static uint8_t brightness[NUM_LEDS];
   pwm_frame &= PWM_FRAME_MASK;
   if (!pwm_frame) {
+    // Check auto-off
+#if AUTO_OFF_TIME_SECS > 0
+      if (frame_id >= (uint24_t)(AUTO_OFF_TIME_SECS * DESIRED_FRAMERATE)) {
+        frame_id = 0;
+        sleep_until_touch();
+      }
+#endif
     // Generate next frame
+    frame_id++;
 #ifdef DEBUG
     running_brightness = 1;
 #endif
