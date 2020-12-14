@@ -40,9 +40,10 @@ http {
 
         root          /srv/dav;
 
-        dav_methods   PUT DELETE MKCOL COPY MOVE;
-        dav_ext_methods PROPFIND OPTIONS;
-        dav_access    user:rw;
+        autoindex               on;
+        dav_methods             PUT DELETE MKCOL COPY MOVE;
+        dav_ext_methods         PROPFIND OPTIONS;
+        dav_access              user:rw;
         create_full_put_path    on;
 
         client_max_body_size    0;

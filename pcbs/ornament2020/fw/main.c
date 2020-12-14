@@ -93,6 +93,7 @@ static void idle() {
 }
 
 static void sleep_until_touch() {
+  current_pattern = NULL;
   update_out(0);
   // Disable timer
   PRR |= (1<<PRTIM0);

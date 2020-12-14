@@ -4,7 +4,7 @@
 
 // TODO: investigate switching to PROGMEM
 
-const pattern_frame_t test_pattern_frames[] = {
+static const pattern_frame_t test_pattern_frames[] = {
     {
       .duration = 100,
       .led_states = {OFF, OFF, OFF, OFF, OFF, OFF},
@@ -40,7 +40,7 @@ const pattern_frame_t test_pattern_frames[] = {
     {0}
 };
 
-const pattern_frame_t ramps[] = {
+static const pattern_frame_t ramps[] = {
   {
     .duration = 100,
     .led_states = {RAMP_UP, OFF, OFF, OFF, OFF, RAMP_DN},
@@ -68,7 +68,7 @@ const pattern_frame_t ramps[] = {
   {0},
 };
 
-const pattern_frame_t ornament[] = {
+static const pattern_frame_t ornament[] = {
   // Go through body LEDs
   {
     .duration = RAMP_TIME,
@@ -135,7 +135,7 @@ const pattern_frame_t ornament[] = {
   {0},
 };
 
-const pattern_frame_t all_on[] = {
+static const pattern_frame_t all_on[] = {
   {
     .duration = 100,
     .led_states = {ON, ON, ON, ON, ON, ON},
@@ -144,10 +144,14 @@ const pattern_frame_t all_on[] = {
 };
 
 const pattern_frame_t *patterns[] = {
+#ifdef DEBUG
   test_pattern_frames,
   ramps,
   ornament,
   all_on,
+#else
+  ornament,
+#endif
   NULL,
 };
 
