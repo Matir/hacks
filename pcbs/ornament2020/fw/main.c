@@ -40,8 +40,8 @@ pattern_t * volatile current_pattern = NULL;
 
 // Update frame
 volatile uint8_t update_frame = 1;
-#ifdef DEBUG
 volatile uint32_t frame_id = 0;
+#ifdef DEBUG
 volatile uint8_t running_brightness = 0;
 #endif
 
@@ -51,6 +51,8 @@ void update_loop_step();
 void pwm_frame_update(uint8_t frame_no, uint8_t *brightness);
 void update_active_leds(uint8_t off);
 static void update_out(uint8_t leds);
+static void idle();
+static void sleep_until_touch();
 
 // Handle the Timer compare
 ISR(TIM0_COMPA_vect) {
@@ -71,6 +73,8 @@ ISR(EXT_INT0_vect){
     }
     asm("");
   }
+  // Restart timer
+  PRR &= ~(1<<PRTIM0);
 #ifdef DEBUG
   update_out(0x55);
   _delay_ms(1000);
@@ -81,6 +85,17 @@ ISR(EXT_INT0_vect){
     current_pattern = next_pattern();
 }
 #endif
+
+static void idle() {
+  sleep_mode();
+}
+
+static void sleep_until_touch() {
+  // Disable timer
+  PRR |= (1<<PRTIM0);
+  sei();
+  sleep_mode();
+}
 
 void setup(void) {
   // Disable interrupts while setting up
@@ -108,7 +123,7 @@ void setup(void) {
 #endif
 
   // Reduce power consumption slightly
-  PRR |= (1<<PRTIM1) | (1<<PRUSI);
+  PRR |= (1<<PRTIM1) | (1<<PRUSI) | (1<<PRADC);
 
   // Enable the touch sensor
 #ifdef TOUCH_ENABLED
@@ -116,6 +131,9 @@ void setup(void) {
   MCUCR |= (1 << ISC01) | (1 << ISC00);
   GIMSK |= (1 << INT0);
 #endif
+
+  // Setup sleep mode
+  set_sleep_mode(SLEEP_MODE_IDLE);
 
   // Re-enable interrupts
   sei();
@@ -129,13 +147,20 @@ void main(void) {
     // TODO: sleep?
     if (update_frame) {
       cli();
-#ifdef DEBUG
-      frame_id++;
+#if AUTO_OFF_TIME_SECS > 0
+      if (frame_id >= AUTO_OFF_TIME_SECS) {
+        frame_id = 0;
+        sleep_until_touch();
+        continue;
+      }
 #endif
+      frame_id++;
       update_loop_step();
       update_frame = 0;
       sei();
     }
+    // Sleep until a wakeup
+    idle();
   }
 }
 
@@ -258,8 +283,8 @@ const struct avr_mmcu_vcd_trace_t _mytrace[]  _MMCU_ = {
   {AVR_MCU_VCD_SYMBOL("PORTA"), .what = (void *)&PORTA},
   {AVR_MCU_VCD_SYMBOL("PORTB"), .what = (void *)&PORTB},
   {AVR_MCU_VCD_SYMBOL("update_frame"), .what = (uint8_t *)(&update_frame)},
-#ifdef DEBUG
   {AVR_MCU_VCD_SYMBOL("frame_id"), .what = &frame_id},
+#ifdef DEBUG
   {AVR_MCU_VCD_SYMBOL("global_leds"), .what = &global_leds},
   {AVR_MCU_VCD_SYMBOL("running_bright"), .what = &running_brightness},
 #endif
