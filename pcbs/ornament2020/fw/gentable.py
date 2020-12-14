@@ -11,11 +11,8 @@ const uint8_t consts_num_steps = %(nsteps)d;
 const uint8_t gamma_table[] PROGMEM = {%(gamma_table)s};
 '''
 
-nsteps = int(sys.argv[1])
-if sys.argv[2].startswith('0x'):
-    maxval = int(sys.argv[2], 16)
-else:
-    maxval = int(sys.argv[2])
+nsteps = int(sys.argv[1], 0)
+maxval = int(sys.argv[2], 0)
 outfile = sys.argv[3]
 
 # Gamma adjustment table per Adafruit
