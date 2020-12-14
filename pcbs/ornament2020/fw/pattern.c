@@ -1,4 +1,5 @@
 #include "pattern.h"
+#include "consts.h"
 #include <stddef.h>
 
 // TODO: investigate switching to PROGMEM
@@ -67,6 +68,73 @@ const pattern_frame_t ramps[] = {
   {0},
 };
 
+const pattern_frame_t ornament[] = {
+  // Go through body LEDs
+  {
+    .duration = RAMP_TIME,
+    .led_states = {RAMP_UP, OFF, OFF, OFF, OFF, OFF},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {ON, RAMP_UP, OFF, OFF, OFF, OFF},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {ON, ON, RAMP_UP, OFF, OFF, OFF},
+  },
+  {
+    .duration = 1800,
+    .led_states = {ON, ON, ON, OFF, OFF, OFF},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {RAMP_DN, ON, ON, OFF, OFF, OFF},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {OFF, RAMP_DN, ON, OFF, OFF, OFF},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {OFF, OFF, RAMP_DN, OFF, OFF, OFF},
+  },
+  // Now head
+  {
+    .duration = RAMP_TIME,
+    .led_states = {OFF, OFF, OFF, RAMP_UP, OFF, OFF},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {OFF, OFF, OFF, ON, RAMP_UP, RAMP_UP},
+  },
+  {
+    .duration = 1800,
+    .led_states = {OFF, OFF, OFF, ON, ON, ON},
+  },
+  // Wink
+  {
+    .duration = 40,
+    .led_states = {OFF, OFF, OFF, ON, ON, OFF},
+  },
+  {
+    .duration = 40,
+    .led_states = {OFF, OFF, OFF, ON, ON, ON},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {OFF, OFF, OFF, RAMP_DN, ON, ON},
+  },
+  {
+    .duration = RAMP_TIME,
+    .led_states = {OFF, OFF, OFF, OFF, RAMP_DN, RAMP_DN},
+  },
+  {
+    .duration = 600,
+    .led_states = {OFF},
+  },
+  {0},
+};
+
 const pattern_frame_t all_on[] = {
   {
     .duration = 100,
@@ -78,6 +146,7 @@ const pattern_frame_t all_on[] = {
 const pattern_frame_t *patterns[] = {
   test_pattern_frames,
   ramps,
+  ornament,
   all_on,
   NULL,
 };

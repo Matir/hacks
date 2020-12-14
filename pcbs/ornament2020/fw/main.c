@@ -8,6 +8,7 @@
 #include <util/delay.h>
 #include "avr_mcu_section.h"
 #include "pattern.h"
+#include "consts.h"
 
 #define XSTR(x) STR(x)
 #define STR(x) #x
@@ -23,7 +24,6 @@
 #define TOUCH_ENABLED
 #define MAX_BRIGHTNESS PWM_RESOLUTION_STEPS
 #define DESIRED_FRAMERATE 60
-#define RAMP_TIME 0x40
 #define PWM_FRAME_MASK PWM_RESOLUTION_STEPS
 #define TIMER_PRESCALER 8
 #define TIMER_INTERVAL (F_CPU/(DESIRED_FRAMERATE*(PWM_FRAME_MASK+1))/TIMER_PRESCALER)
