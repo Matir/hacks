@@ -18,7 +18,7 @@
 # define PWM_RESOLUTION_STEPS 0x7F
 #endif
 #ifndef AUTO_OFF_TIME_SECS
-# define AUTO_OFF_TIME_SECS 3*60*60
+# define AUTO_OFF_TIME_SECS 3*60*60L
 #endif
 #define uint24_t __uint24
 #define TOUCH_ENABLED
@@ -40,7 +40,7 @@ pattern_t * volatile current_pattern = NULL;
 
 // Update frame
 volatile uint8_t update_frame = 1;
-volatile uint32_t frame_id = 0;
+volatile uint24_t frame_id = 0;
 #ifdef DEBUG
 volatile uint8_t running_brightness = 0;
 #endif
@@ -91,6 +91,7 @@ static void idle() {
 }
 
 static void sleep_until_touch() {
+  update_out(0);
   // Disable timer
   PRR |= (1<<PRTIM0);
   sei();
@@ -148,7 +149,7 @@ void main(void) {
     if (update_frame) {
       cli();
 #if AUTO_OFF_TIME_SECS > 0
-      if (frame_id >= AUTO_OFF_TIME_SECS) {
+      if (frame_id >= (uint24_t)(AUTO_OFF_TIME_SECS * DESIRED_FRAMERATE)) {
         frame_id = 0;
         sleep_until_touch();
         continue;
@@ -165,33 +166,30 @@ void main(void) {
 }
 
 // Compute the next frame, returns 1 on wrap around
-uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
+void get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
   if (p == NULL) {
     for(uint8_t i = 0; i<NUM_LEDS; i++) {
       brightness[i] = 0;
     }
-    return 0;
   }
-  uint8_t rv = 0;
   pattern_frame_t *frame = &p->frames[p->frame_id];
-  p->frame_timer++;
+  uint16_t frame_timer = (++(p->frame_timer));
 
   // Check if we need to advance the frame
-  if (p->frame_timer == frame->duration) {
+  if (frame_timer == frame->duration) {
     p->frame_timer = 0;
-    p->frame_id++;
-    frame = &p->frames[p->frame_id];
+    frame_timer = 0;
+    frame = &p->frames[++(p->frame_id)];
     if (frame->duration == 0) {
-      rv = 1;
       p->frame_id = 0;
       frame = &p->frames[0];
     }
   }
 
-
   // Linear interpolation
+  uint8_t *led_states = &frame->led_states[0];
   for(uint8_t i = 0; i<NUM_LEDS; i++) {
-    switch(frame->led_states[i]) {
+    switch(led_states[i]) {
       case OFF:
         brightness[i] = 0;
         break;
@@ -199,9 +197,8 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
         brightness[i] = MAX_BRIGHTNESS;
         break;
       case RAMP_UP:
-        if (p->frame_timer < RAMP_TIME) {
-          uint24_t prop = MAX_BRIGHTNESS;
-          prop *= p->frame_timer;
+        if (frame_timer < RAMP_TIME) {
+          uint24_t prop = MAX_BRIGHTNESS * (uint24_t)frame_timer;
           prop /= RAMP_TIME;
           brightness[i] = (uint8_t)(prop);
         } else {
@@ -209,9 +206,8 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
         }
         break;
       case RAMP_DN:
-        if (p->frame_timer < RAMP_TIME) {
-          uint24_t prop = MAX_BRIGHTNESS;
-          prop *= p->frame_timer;
+        if (frame_timer < RAMP_TIME) {
+          uint24_t prop = MAX_BRIGHTNESS * (uint24_t)frame_timer;
           prop /= RAMP_TIME;
           brightness[i] = MAX_BRIGHTNESS-(uint8_t)(prop);
         } else {
@@ -220,8 +216,6 @@ uint8_t get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
         break;
     }
   }
-
-  return rv;
 }
 
 void update_loop_step() {
@@ -253,13 +247,13 @@ void pwm_frame_update(uint8_t frame_no, uint8_t *brightness) {
     if(bright > frame_no)
       out |= (1<<i);
     // Stagger the pwm cycles
-    frame_no = (frame_no + PWM_FRAME_MASK/3) & PWM_FRAME_MASK;
+    //frame_no = (frame_no + PWM_FRAME_MASK/3) & PWM_FRAME_MASK;
   }
   update_out(out);
 }
 
 #ifdef DEBUG
-uint8_t global_leds = 0;
+volatile uint8_t global_leds = 0;
 #endif
 
 // LEDS are on PA0-3 and PB0-1
@@ -269,11 +263,8 @@ static void update_out(uint8_t leds) {
 #endif
 #define PORTA_MASK 0x0F
 #define PORTB_MASK 0x3
-  PORTA &= (0xFF ^ PORTA_MASK);
-  PORTA |= (leds & PORTA_MASK);
-  leds = leds >> 4;  // 4 bits used
-  PORTB &= (0xFF ^ PORTB_MASK);
-  PORTB |= (leds & PORTB_MASK);
+  PORTA = (PORTA & ~PORTA_MASK) | (leds & PORTA_MASK);
+  PORTB = (PORTB & ~PORTB_MASK) | ((leds >> 4) & PORTB_MASK);
 }
 
 
@@ -282,10 +273,10 @@ AVR_MCU_VCD_FILE("gtkwave_trace.vcd", 300000);
 const struct avr_mmcu_vcd_trace_t _mytrace[]  _MMCU_ = {
   {AVR_MCU_VCD_SYMBOL("PORTA"), .what = (void *)&PORTA},
   {AVR_MCU_VCD_SYMBOL("PORTB"), .what = (void *)&PORTB},
-  {AVR_MCU_VCD_SYMBOL("update_frame"), .what = (uint8_t *)(&update_frame)},
+  {AVR_MCU_VCD_SYMBOL("update_frame"), .mask=1, .what = (uint8_t *)(&update_frame)},
   {AVR_MCU_VCD_SYMBOL("frame_id"), .what = &frame_id},
 #ifdef DEBUG
-  {AVR_MCU_VCD_SYMBOL("global_leds"), .what = &global_leds},
-  {AVR_MCU_VCD_SYMBOL("running_bright"), .what = &running_brightness},
+  {AVR_MCU_VCD_SYMBOL("global_leds"), .what = (uint8_t *)&global_leds},
+  {AVR_MCU_VCD_SYMBOL("running_bright"), .mask=1, .what = (uint8_t *)&running_brightness},
 #endif
 };
