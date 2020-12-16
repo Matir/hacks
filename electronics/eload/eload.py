@@ -35,12 +35,14 @@ def calc_rload_power(i_out_max, r_load):
     return r_load * i_out_max * i_out_max
 
 
-def transistor_power(vcc_max, i_out_max, r_load, r_set):
+def transistor_power(vcc_max, i_out, r_load, r_set):
     """Calculate power loss in the transistor."""
-    # This is not always the peak
-    load_rdrop = i_out_max * (r_load + r_set)
+    r_tot = r_load + r_set
+    # Find point where power is maximum
+    max_pwr_i = vcc_max/(2 * r_tot)
+    load_rdrop = max_pwr_i * r_tot
     v_trans = vcc_max - load_rdrop
-    return i_out_max * v_trans
+    return max_pwr_i * v_trans
 
 
 def print_line(title, value, unit):
