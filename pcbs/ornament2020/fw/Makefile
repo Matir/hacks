@@ -1,10 +1,11 @@
 DEVICE     = attiny84
 CLOCK      = 4000000
-PWM_RESOLUTION_STEPS = 0x7F
+PWM_RESOLUTION_STEPS = 0x80
+MAX_BRIGHTNESS = 0x10
 CC         = avr-gcc
 CFLAGS     = -Wall -Wno-main -Wextra -O2 -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) \
-						 -DPWM_RESOLUTION_STEPS=$(PWM_RESOLUTION_STEPS) -g \
-						 #-DDEBUG=1
+						 -DPWM_RESOLUTION_STEPS=$(PWM_RESOLUTION_STEPS) \
+						 -g #-DDEBUG=1
 #SIMAVR		 = /home/david/tmp/simavr/simavr/run_avr
 SIMAVR		 = /usr/bin/simavr
 AVRDUDE_DEVICE = t84
@@ -24,14 +25,14 @@ main.elf: ${OBJS}
 	${CC} ${CFLAGS} -Wl,--undefined=_mmcu,--section-start=.mmcu=0x910000 $^ -o $@
 	avr-size --mcu=${DEVICE} -C $@
 
-%.o: %.c
+%.o: %.c Makefile
 	${CC} ${CFLAGS} -c $<
 
 %.s: %.c
 	${CC} ${CFLAGS} -S -fverbose-asm -o $@ $<
 
-gamma.c: gentable.py
-	python3 gentable.py 256 $(PWM_RESOLUTION_STEPS) $@
+gamma.c: gentable.py Makefile
+	python3 gentable.py $(PWM_RESOLUTION_STEPS) $(MAX_BRIGHTNESS) $@
 
 simavr: main.elf
 	${SIMAVR} -f ${CLOCK} -m ${DEVICE} ${SIMAVR_FLAGS} $^
@@ -42,4 +43,4 @@ avrdude: main.hex
 	avrdude ${AVRDUDE_FLAGS} -U flash:w:$< ${FUSEBITS}
 
 clean:
-	rm -f *.o *.hex *.elf
+	rm -f *.o *.hex *.elf gamma.c
