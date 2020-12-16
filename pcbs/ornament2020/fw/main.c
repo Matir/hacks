@@ -75,16 +75,13 @@ ISR(EXT_INT0_vect){
     }
     asm("");
   }
-  // Restart timer
+  // Restart timer if stopped
   PRR &= ~(1<<PRTIM0);
-#ifdef DEBUG
-  update_out(0x55);
-  _delay_ms(1000);
-#endif
-  if (current_pattern)
+  if (current_pattern) {
     current_pattern = NULL;
-  else
+  } else {
     current_pattern = next_pattern();
+  }
   frame_id = 0;
 }
 #endif
@@ -156,7 +153,9 @@ void main(void) {
   setup();
   current_pattern = next_pattern();
   while (1) {
-    // TODO: sleep?
+    if (!current_pattern) {
+      sleep_until_touch();
+    }
     if (update_frame) {
       cli();
       update_loop_step();
@@ -224,7 +223,7 @@ void get_brightness_from_pattern(uint8_t *brightness, pattern_t *p) {
 
 void update_loop_step() {
   static uint8_t pwm_frame = 0;
-  static uint8_t brightness[NUM_LEDS];
+  static uint8_t brightness[NUM_LEDS] = {0};
   pwm_frame &= PWM_FRAME_MASK;
   if (!pwm_frame) {
     // Check auto-off
@@ -232,6 +231,7 @@ void update_loop_step() {
       if (frame_id >= (uint24_t)(AUTO_OFF_TIME_SECS * DESIRED_FRAMERATE)) {
         frame_id = 0;
         sleep_until_touch();
+        return;
       }
 #endif
     // Generate next frame
@@ -258,8 +258,6 @@ void pwm_frame_update(uint8_t frame_no, uint8_t *brightness) {
     bright = pgm_read_byte(&(gamma_table[brightness[i]]));
     if(bright > frame_no)
       out |= (1<<i);
-    // Stagger the pwm cycles
-    //frame_no = (frame_no + PWM_FRAME_MASK/3) & PWM_FRAME_MASK;
   }
   update_out(out);
 }
