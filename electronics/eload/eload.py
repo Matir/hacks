@@ -6,9 +6,9 @@ Constant current load calculator.
 Based on TI AppNote SLAA868: https://www.ti.com/lit/an/slaa868/slaa868.pdf
 """
 
-DAC_MAX_VOLTAGE = 0.510
-VCC_MAX = 5.0
-CURRENT_MAX = 0.100
+DAC_MAX_VOLTAGE = 2.048
+VCC_MAX = 8.0
+CURRENT_MAX = 0.500
 
 OHM = "\u03A9"
 
