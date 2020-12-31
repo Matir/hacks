@@ -916,15 +916,15 @@ Text Label 5100 5150 2    50   ~ 0
 CH4
 Text Label 5100 5250 2    50   ~ 0
 CH5
-Text Label 5100 5350 2    50   ~ 0
+Text Label 5100 4150 2    50   ~ 0
 CH6
-Text Label 5100 5450 2    50   ~ 0
+Text Label 5100 4250 2    50   ~ 0
 CH7
-Text Label 5100 5550 2    50   ~ 0
+Text Label 5100 4350 2    50   ~ 0
 CH8
-Text Label 5100 5650 2    50   ~ 0
+Text Label 5100 4450 2    50   ~ 0
 CH9
-Text Label 5100 5750 2    50   ~ 0
+Text Label 5100 4550 2    50   ~ 0
 CH10
 $Comp
 L power:+5V #PWR05
@@ -1248,11 +1248,6 @@ Wire Wire Line
 Connection ~ 7700 1450
 Wire Wire Line
 	7700 1450 7700 1700
-NoConn ~ 4850 4150
-NoConn ~ 4850 4250
-NoConn ~ 4850 4350
-NoConn ~ 4850 4450
-NoConn ~ 4850 4550
 NoConn ~ 4850 5850
 NoConn ~ 4850 5950
 $Comp
@@ -1390,4 +1385,71 @@ F17 "SEG_F" I L 8650 4450 50
 F18 "SEG_G" I L 8650 4550 50 
 F19 "SEG_DP" I L 8650 4650 50 
 $EndSheet
+Wire Wire Line
+	4850 4150 5100 4150
+Wire Wire Line
+	4850 4250 5100 4250
+Wire Wire Line
+	4850 4350 5100 4350
+Wire Wire Line
+	4850 4450 5100 4450
+Wire Wire Line
+	4850 4550 5100 4550
+NoConn ~ 5100 5350
+NoConn ~ 5100 5450
+NoConn ~ 5100 5550
+NoConn ~ 5100 5650
+NoConn ~ 5100 5750
+$Comp
+L Connector_Generic:Conn_02x05_Odd_Even J2
+U 1 1 600C746C
+P 10200 2500
+F 0 "J2" H 10250 2917 50  0000 C CNN
+F 1 "CORTEX" H 10250 2826 50  0000 C CNN
+F 2 "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD" H 10200 2500 50  0001 C CNN
+F 3 "~" H 10200 2500 50  0001 C CNN
+	1    10200 2500
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	10500 2300 10750 2300
+Wire Wire Line
+	10500 2400 10750 2400
+Text Label 10750 2300 2    50   ~ 0
+SWDIO
+Text Label 10750 2400 2    50   ~ 0
+SWCLK
+Text Label 10750 2700 2    50   ~ 0
+MC_RST
+Wire Wire Line
+	10750 2700 10500 2700
+NoConn ~ 10000 2600
+NoConn ~ 10000 2300
+NoConn ~ 10500 2500
+NoConn ~ 10500 2600
+$Comp
+L power:GND #PWR040
+U 1 1 60121361
+P 9850 2800
+F 0 "#PWR040" H 9850 2550 50  0001 C CNN
+F 1 "GND" H 9855 2627 50  0000 C CNN
+F 2 "" H 9850 2800 50  0001 C CNN
+F 3 "" H 9850 2800 50  0001 C CNN
+	1    9850 2800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	9850 2800 9850 2700
+Wire Wire Line
+	9850 2400 10000 2400
+Wire Wire Line
+	10000 2500 9850 2500
+Connection ~ 9850 2500
+Wire Wire Line
+	9850 2500 9850 2400
+Wire Wire Line
+	10000 2700 9850 2700
+Connection ~ 9850 2700
+Wire Wire Line
+	9850 2700 9850 2500
 $EndSCHEMATC
