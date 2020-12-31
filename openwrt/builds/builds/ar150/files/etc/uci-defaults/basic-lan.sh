@@ -1,0 +1,1 @@
+../../../../../uci-defaults/basic-lan.sh
