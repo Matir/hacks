@@ -1,0 +1,1288 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 2 2
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L Display_Character:KCSC02-105 U7
+U 1 1 5FED7342
+P 2250 2550
+F 0 "U7" H 2250 3217 50  0000 C CNN
+F 1 "KCSC02-105" H 2250 3126 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 2250 1950 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 1750 3025 50  0001 L CNN
+	1    2250 2550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1950 2250 1700 2250
+Wire Wire Line
+	1950 2350 1700 2350
+Wire Wire Line
+	1950 2450 1700 2450
+Wire Wire Line
+	1950 2550 1700 2550
+Wire Wire Line
+	1950 2650 1700 2650
+Wire Wire Line
+	1950 2750 1700 2750
+Wire Wire Line
+	1950 2850 1700 2850
+Wire Wire Line
+	1950 2950 1700 2950
+Text Label 1700 2250 0    50   ~ 0
+SEGA
+Text Label 1700 2350 0    50   ~ 0
+SEGB
+Text Label 1700 2450 0    50   ~ 0
+SEGC
+Text Label 1700 2550 0    50   ~ 0
+SEGD
+Text Label 1700 2650 0    50   ~ 0
+SEGE
+Text Label 1700 2750 0    50   ~ 0
+SEGF
+Text Label 1700 2850 0    50   ~ 0
+SEGG
+Text Label 1700 2950 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	2550 2850 2650 2850
+Wire Wire Line
+	2650 2850 2650 2950
+Wire Wire Line
+	2650 2950 2550 2950
+$Comp
+L power:GND #PWR029
+U 1 1 5FEDAA38
+P 2650 3650
+F 0 "#PWR029" H 2650 3400 50  0001 C CNN
+F 1 "GND" H 2655 3477 50  0000 C CNN
+F 2 "" H 2650 3650 50  0001 C CNN
+F 3 "" H 2650 3650 50  0001 C CNN
+	1    2650 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q3
+U 1 1 5FEDB600
+P 2550 3300
+F 0 "Q3" H 2754 3346 50  0000 L CNN
+F 1 "BSS138" H 2754 3255 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 2750 3225 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 2550 3300 50  0001 L CNN
+	1    2550 3300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2650 3100 2650 2950
+Connection ~ 2650 2950
+$Comp
+L Display_Character:KCSC02-105 U9
+U 1 1 5FEDEEB6
+P 3500 2550
+F 0 "U9" H 3500 3217 50  0000 C CNN
+F 1 "KCSC02-105" H 3500 3126 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 3500 1950 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 3000 3025 50  0001 L CNN
+	1    3500 2550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3200 2250 2950 2250
+Wire Wire Line
+	3200 2350 2950 2350
+Wire Wire Line
+	3200 2450 2950 2450
+Wire Wire Line
+	3200 2550 2950 2550
+Wire Wire Line
+	3200 2650 2950 2650
+Wire Wire Line
+	3200 2750 2950 2750
+Wire Wire Line
+	3200 2850 2950 2850
+Wire Wire Line
+	3200 2950 2950 2950
+Text Label 2950 2250 0    50   ~ 0
+SEGA
+Text Label 2950 2350 0    50   ~ 0
+SEGB
+Text Label 2950 2450 0    50   ~ 0
+SEGC
+Text Label 2950 2550 0    50   ~ 0
+SEGD
+Text Label 2950 2650 0    50   ~ 0
+SEGE
+Text Label 2950 2750 0    50   ~ 0
+SEGF
+Text Label 2950 2850 0    50   ~ 0
+SEGG
+Text Label 2950 2950 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	3800 2850 3900 2850
+Wire Wire Line
+	3900 2850 3900 2950
+Wire Wire Line
+	3900 2950 3800 2950
+$Comp
+L power:GND #PWR031
+U 1 1 5FEDEFE3
+P 3900 3650
+F 0 "#PWR031" H 3900 3400 50  0001 C CNN
+F 1 "GND" H 3905 3477 50  0000 C CNN
+F 2 "" H 3900 3650 50  0001 C CNN
+F 3 "" H 3900 3650 50  0001 C CNN
+	1    3900 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q5
+U 1 1 5FEDEFED
+P 3800 3300
+F 0 "Q5" H 4004 3346 50  0000 L CNN
+F 1 "BSS138" H 4004 3255 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 4000 3225 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 3800 3300 50  0001 L CNN
+	1    3800 3300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3900 3100 3900 2950
+Connection ~ 3900 2950
+Wire Wire Line
+	3900 3500 3900 3550
+$Comp
+L Display_Character:KCSC02-105 U11
+U 1 1 5FEE55C3
+P 4750 2550
+F 0 "U11" H 4750 3217 50  0000 C CNN
+F 1 "KCSC02-105" H 4750 3126 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 4750 1950 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 4250 3025 50  0001 L CNN
+	1    4750 2550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4450 2250 4200 2250
+Wire Wire Line
+	4450 2350 4200 2350
+Wire Wire Line
+	4450 2450 4200 2450
+Wire Wire Line
+	4450 2550 4200 2550
+Wire Wire Line
+	4450 2650 4200 2650
+Wire Wire Line
+	4450 2750 4200 2750
+Wire Wire Line
+	4450 2850 4200 2850
+Wire Wire Line
+	4450 2950 4200 2950
+Text Label 4200 2250 0    50   ~ 0
+SEGA
+Text Label 4200 2350 0    50   ~ 0
+SEGB
+Text Label 4200 2450 0    50   ~ 0
+SEGC
+Text Label 4200 2550 0    50   ~ 0
+SEGD
+Text Label 4200 2650 0    50   ~ 0
+SEGE
+Text Label 4200 2750 0    50   ~ 0
+SEGF
+Text Label 4200 2850 0    50   ~ 0
+SEGG
+Text Label 4200 2950 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	5050 2850 5150 2850
+Wire Wire Line
+	5150 2850 5150 2950
+Wire Wire Line
+	5150 2950 5050 2950
+$Comp
+L power:GND #PWR033
+U 1 1 5FEE57D4
+P 5150 3650
+F 0 "#PWR033" H 5150 3400 50  0001 C CNN
+F 1 "GND" H 5155 3477 50  0000 C CNN
+F 2 "" H 5150 3650 50  0001 C CNN
+F 3 "" H 5150 3650 50  0001 C CNN
+	1    5150 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q7
+U 1 1 5FEE57DE
+P 5050 3300
+F 0 "Q7" H 5254 3346 50  0000 L CNN
+F 1 "BSS138" H 5254 3255 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 5250 3225 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 5050 3300 50  0001 L CNN
+	1    5050 3300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5150 3100 5150 2950
+Connection ~ 5150 2950
+Wire Wire Line
+	5150 3500 5150 3550
+$Comp
+L Display_Character:KCSC02-105 U13
+U 1 1 5FEE57EB
+P 6000 2550
+F 0 "U13" H 6000 3217 50  0000 C CNN
+F 1 "KCSC02-105" H 6000 3126 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 6000 1950 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 5500 3025 50  0001 L CNN
+	1    6000 2550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5700 2250 5450 2250
+Wire Wire Line
+	5700 2350 5450 2350
+Wire Wire Line
+	5700 2450 5450 2450
+Wire Wire Line
+	5700 2550 5450 2550
+Wire Wire Line
+	5700 2650 5450 2650
+Wire Wire Line
+	5700 2750 5450 2750
+Wire Wire Line
+	5700 2850 5450 2850
+Wire Wire Line
+	5700 2950 5450 2950
+Text Label 5450 2250 0    50   ~ 0
+SEGA
+Text Label 5450 2350 0    50   ~ 0
+SEGB
+Text Label 5450 2450 0    50   ~ 0
+SEGC
+Text Label 5450 2550 0    50   ~ 0
+SEGD
+Text Label 5450 2650 0    50   ~ 0
+SEGE
+Text Label 5450 2750 0    50   ~ 0
+SEGF
+Text Label 5450 2850 0    50   ~ 0
+SEGG
+Text Label 5450 2950 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	6300 2850 6400 2850
+Wire Wire Line
+	6400 2850 6400 2950
+Wire Wire Line
+	6400 2950 6300 2950
+$Comp
+L power:GND #PWR035
+U 1 1 5FEE5808
+P 6400 3650
+F 0 "#PWR035" H 6400 3400 50  0001 C CNN
+F 1 "GND" H 6405 3477 50  0000 C CNN
+F 2 "" H 6400 3650 50  0001 C CNN
+F 3 "" H 6400 3650 50  0001 C CNN
+	1    6400 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q9
+U 1 1 5FEE5812
+P 6300 3300
+F 0 "Q9" H 6504 3346 50  0000 L CNN
+F 1 "BSS138" H 6504 3255 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 6500 3225 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 6300 3300 50  0001 L CNN
+	1    6300 3300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6400 3100 6400 2950
+Connection ~ 6400 2950
+Wire Wire Line
+	6400 3500 6400 3550
+$Comp
+L Display_Character:KCSC02-105 U8
+U 1 1 5FEFDE35
+P 2250 4450
+F 0 "U8" H 2250 5117 50  0000 C CNN
+F 1 "KCSC02-105" H 2250 5026 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 2250 3850 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 1750 4925 50  0001 L CNN
+	1    2250 4450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1950 4150 1700 4150
+Wire Wire Line
+	1950 4250 1700 4250
+Wire Wire Line
+	1950 4350 1700 4350
+Wire Wire Line
+	1950 4450 1700 4450
+Wire Wire Line
+	1950 4550 1700 4550
+Wire Wire Line
+	1950 4650 1700 4650
+Wire Wire Line
+	1950 4750 1700 4750
+Wire Wire Line
+	1950 4850 1700 4850
+Text Label 1700 4150 0    50   ~ 0
+SEGA
+Text Label 1700 4250 0    50   ~ 0
+SEGB
+Text Label 1700 4350 0    50   ~ 0
+SEGC
+Text Label 1700 4450 0    50   ~ 0
+SEGD
+Text Label 1700 4550 0    50   ~ 0
+SEGE
+Text Label 1700 4650 0    50   ~ 0
+SEGF
+Text Label 1700 4750 0    50   ~ 0
+SEGG
+Text Label 1700 4850 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	2550 4750 2650 4750
+Wire Wire Line
+	2650 4750 2650 4850
+Wire Wire Line
+	2650 4850 2550 4850
+$Comp
+L power:GND #PWR030
+U 1 1 5FEFE20E
+P 2650 5550
+F 0 "#PWR030" H 2650 5300 50  0001 C CNN
+F 1 "GND" H 2655 5377 50  0000 C CNN
+F 2 "" H 2650 5550 50  0001 C CNN
+F 3 "" H 2650 5550 50  0001 C CNN
+	1    2650 5550
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q4
+U 1 1 5FEFE218
+P 2550 5200
+F 0 "Q4" H 2754 5246 50  0000 L CNN
+F 1 "BSS138" H 2754 5155 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 2750 5125 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 2550 5200 50  0001 L CNN
+	1    2550 5200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2650 5000 2650 4850
+Connection ~ 2650 4850
+Wire Wire Line
+	2650 5400 2650 5450
+$Comp
+L Display_Character:KCSC02-105 U10
+U 1 1 5FEFE225
+P 3500 4450
+F 0 "U10" H 3500 5117 50  0000 C CNN
+F 1 "KCSC02-105" H 3500 5026 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 3500 3850 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 3000 4925 50  0001 L CNN
+	1    3500 4450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3200 4150 2950 4150
+Wire Wire Line
+	3200 4250 2950 4250
+Wire Wire Line
+	3200 4350 2950 4350
+Wire Wire Line
+	3200 4450 2950 4450
+Wire Wire Line
+	3200 4550 2950 4550
+Wire Wire Line
+	3200 4650 2950 4650
+Wire Wire Line
+	3200 4750 2950 4750
+Wire Wire Line
+	3200 4850 2950 4850
+Text Label 2950 4150 0    50   ~ 0
+SEGA
+Text Label 2950 4250 0    50   ~ 0
+SEGB
+Text Label 2950 4350 0    50   ~ 0
+SEGC
+Text Label 2950 4450 0    50   ~ 0
+SEGD
+Text Label 2950 4550 0    50   ~ 0
+SEGE
+Text Label 2950 4650 0    50   ~ 0
+SEGF
+Text Label 2950 4750 0    50   ~ 0
+SEGG
+Text Label 2950 4850 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	3800 4750 3900 4750
+Wire Wire Line
+	3900 4750 3900 4850
+Wire Wire Line
+	3900 4850 3800 4850
+$Comp
+L power:GND #PWR032
+U 1 1 5FEFE242
+P 3900 5550
+F 0 "#PWR032" H 3900 5300 50  0001 C CNN
+F 1 "GND" H 3905 5377 50  0000 C CNN
+F 2 "" H 3900 5550 50  0001 C CNN
+F 3 "" H 3900 5550 50  0001 C CNN
+	1    3900 5550
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q6
+U 1 1 5FEFE24C
+P 3800 5200
+F 0 "Q6" H 4004 5246 50  0000 L CNN
+F 1 "BSS138" H 4004 5155 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 4000 5125 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 3800 5200 50  0001 L CNN
+	1    3800 5200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3900 5000 3900 4850
+Connection ~ 3900 4850
+Wire Wire Line
+	3900 5400 3900 5450
+$Comp
+L Display_Character:KCSC02-105 U12
+U 1 1 5FEFE259
+P 4750 4450
+F 0 "U12" H 4750 5117 50  0000 C CNN
+F 1 "KCSC02-105" H 4750 5026 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 4750 3850 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 4250 4925 50  0001 L CNN
+	1    4750 4450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4450 4150 4200 4150
+Wire Wire Line
+	4450 4250 4200 4250
+Wire Wire Line
+	4450 4350 4200 4350
+Wire Wire Line
+	4450 4450 4200 4450
+Wire Wire Line
+	4450 4550 4200 4550
+Wire Wire Line
+	4450 4650 4200 4650
+Wire Wire Line
+	4450 4750 4200 4750
+Wire Wire Line
+	4450 4850 4200 4850
+Text Label 4200 4150 0    50   ~ 0
+SEGA
+Text Label 4200 4250 0    50   ~ 0
+SEGB
+Text Label 4200 4350 0    50   ~ 0
+SEGC
+Text Label 4200 4450 0    50   ~ 0
+SEGD
+Text Label 4200 4550 0    50   ~ 0
+SEGE
+Text Label 4200 4650 0    50   ~ 0
+SEGF
+Text Label 4200 4750 0    50   ~ 0
+SEGG
+Text Label 4200 4850 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	5050 4750 5150 4750
+Wire Wire Line
+	5150 4750 5150 4850
+Wire Wire Line
+	5150 4850 5050 4850
+$Comp
+L power:GND #PWR034
+U 1 1 5FEFE276
+P 5150 5550
+F 0 "#PWR034" H 5150 5300 50  0001 C CNN
+F 1 "GND" H 5155 5377 50  0000 C CNN
+F 2 "" H 5150 5550 50  0001 C CNN
+F 3 "" H 5150 5550 50  0001 C CNN
+	1    5150 5550
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q8
+U 1 1 5FEFE280
+P 5050 5200
+F 0 "Q8" H 5254 5246 50  0000 L CNN
+F 1 "BSS138" H 5254 5155 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 5250 5125 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 5050 5200 50  0001 L CNN
+	1    5050 5200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5150 5000 5150 4850
+Connection ~ 5150 4850
+Wire Wire Line
+	5150 5400 5150 5450
+$Comp
+L Display_Character:KCSC02-105 U14
+U 1 1 5FEFE28D
+P 6000 4450
+F 0 "U14" H 6000 5117 50  0000 C CNN
+F 1 "KCSC02-105" H 6000 5026 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 6000 3850 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 5500 4925 50  0001 L CNN
+	1    6000 4450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5700 4150 5450 4150
+Wire Wire Line
+	5700 4250 5450 4250
+Wire Wire Line
+	5700 4350 5450 4350
+Wire Wire Line
+	5700 4450 5450 4450
+Wire Wire Line
+	5700 4550 5450 4550
+Wire Wire Line
+	5700 4650 5450 4650
+Wire Wire Line
+	5700 4750 5450 4750
+Wire Wire Line
+	5700 4850 5450 4850
+Text Label 5450 4150 0    50   ~ 0
+SEGA
+Text Label 5450 4250 0    50   ~ 0
+SEGB
+Text Label 5450 4350 0    50   ~ 0
+SEGC
+Text Label 5450 4450 0    50   ~ 0
+SEGD
+Text Label 5450 4550 0    50   ~ 0
+SEGE
+Text Label 5450 4650 0    50   ~ 0
+SEGF
+Text Label 5450 4750 0    50   ~ 0
+SEGG
+Text Label 5450 4850 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	6300 4750 6400 4750
+Wire Wire Line
+	6400 4750 6400 4850
+Wire Wire Line
+	6400 4850 6300 4850
+$Comp
+L power:GND #PWR036
+U 1 1 5FEFE2AA
+P 6400 5550
+F 0 "#PWR036" H 6400 5300 50  0001 C CNN
+F 1 "GND" H 6405 5377 50  0000 C CNN
+F 2 "" H 6400 5550 50  0001 C CNN
+F 3 "" H 6400 5550 50  0001 C CNN
+	1    6400 5550
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q10
+U 1 1 5FEFE2B4
+P 6300 5200
+F 0 "Q10" H 6504 5246 50  0000 L CNN
+F 1 "BSS138" H 6504 5155 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 6500 5125 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 6300 5200 50  0001 L CNN
+	1    6300 5200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6400 5000 6400 4850
+Connection ~ 6400 4850
+Wire Wire Line
+	6400 5400 6400 5450
+$Comp
+L Display_Character:KCSC02-105 U15
+U 1 1 5FF3B181
+P 7250 2550
+F 0 "U15" H 7250 3217 50  0000 C CNN
+F 1 "KCSC02-105" H 7250 3126 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 7250 1950 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 6750 3025 50  0001 L CNN
+	1    7250 2550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6950 2250 6700 2250
+Wire Wire Line
+	6950 2350 6700 2350
+Wire Wire Line
+	6950 2450 6700 2450
+Wire Wire Line
+	6950 2550 6700 2550
+Wire Wire Line
+	6950 2650 6700 2650
+Wire Wire Line
+	6950 2750 6700 2750
+Wire Wire Line
+	6950 2850 6700 2850
+Wire Wire Line
+	6950 2950 6700 2950
+Text Label 6700 2250 0    50   ~ 0
+SEGA
+Text Label 6700 2350 0    50   ~ 0
+SEGB
+Text Label 6700 2450 0    50   ~ 0
+SEGC
+Text Label 6700 2550 0    50   ~ 0
+SEGD
+Text Label 6700 2650 0    50   ~ 0
+SEGE
+Text Label 6700 2750 0    50   ~ 0
+SEGF
+Text Label 6700 2850 0    50   ~ 0
+SEGG
+Text Label 6700 2950 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	7550 2850 7650 2850
+Wire Wire Line
+	7650 2850 7650 2950
+Wire Wire Line
+	7650 2950 7550 2950
+$Comp
+L power:GND #PWR037
+U 1 1 5FF3B8EA
+P 7650 3650
+F 0 "#PWR037" H 7650 3400 50  0001 C CNN
+F 1 "GND" H 7655 3477 50  0000 C CNN
+F 2 "" H 7650 3650 50  0001 C CNN
+F 3 "" H 7650 3650 50  0001 C CNN
+	1    7650 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q11
+U 1 1 5FF3B8F4
+P 7550 3300
+F 0 "Q11" H 7754 3346 50  0000 L CNN
+F 1 "BSS138" H 7754 3255 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 7750 3225 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 7550 3300 50  0001 L CNN
+	1    7550 3300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7650 3100 7650 2950
+Connection ~ 7650 2950
+Wire Wire Line
+	7650 3500 7650 3550
+$Comp
+L Display_Character:KCSC02-105 U16
+U 1 1 5FF3B901
+P 7250 4450
+F 0 "U16" H 7250 5117 50  0000 C CNN
+F 1 "KCSC02-105" H 7250 5026 50  0000 C CNN
+F 2 "Display_7Segment:KCSC02-105" H 7250 3850 50  0001 C CNN
+F 3 "http://www.kingbright.com/attachments/file/psearch/000/00/00/KCSC02-105(Ver.9A).pdf" H 6750 4925 50  0001 L CNN
+	1    7250 4450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6950 4150 6700 4150
+Wire Wire Line
+	6950 4250 6700 4250
+Wire Wire Line
+	6950 4350 6700 4350
+Wire Wire Line
+	6950 4450 6700 4450
+Wire Wire Line
+	6950 4550 6700 4550
+Wire Wire Line
+	6950 4650 6700 4650
+Wire Wire Line
+	6950 4750 6700 4750
+Wire Wire Line
+	6950 4850 6700 4850
+Text Label 6700 4150 0    50   ~ 0
+SEGA
+Text Label 6700 4250 0    50   ~ 0
+SEGB
+Text Label 6700 4350 0    50   ~ 0
+SEGC
+Text Label 6700 4450 0    50   ~ 0
+SEGD
+Text Label 6700 4550 0    50   ~ 0
+SEGE
+Text Label 6700 4650 0    50   ~ 0
+SEGF
+Text Label 6700 4750 0    50   ~ 0
+SEGG
+Text Label 6700 4850 0    50   ~ 0
+SEGDP
+Wire Wire Line
+	7550 4750 7650 4750
+Wire Wire Line
+	7650 4750 7650 4850
+Wire Wire Line
+	7650 4850 7550 4850
+$Comp
+L power:GND #PWR038
+U 1 1 5FF3B91E
+P 7650 5550
+F 0 "#PWR038" H 7650 5300 50  0001 C CNN
+F 1 "GND" H 7655 5377 50  0000 C CNN
+F 2 "" H 7650 5550 50  0001 C CNN
+F 3 "" H 7650 5550 50  0001 C CNN
+	1    7650 5550
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_FET:BSS138 Q12
+U 1 1 5FF3B928
+P 7550 5200
+F 0 "Q12" H 7754 5246 50  0000 L CNN
+F 1 "BSS138" H 7754 5155 50  0000 L CNN
+F 2 "Package_TO_SOT_SMD:SOT-23" H 7750 5125 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF" H 7550 5200 50  0001 L CNN
+	1    7550 5200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7650 5000 7650 4850
+Connection ~ 7650 4850
+Wire Wire Line
+	7650 5400 7650 5450
+$Comp
+L Device:R_Small R17
+U 1 1 5FF80A21
+P 2200 3300
+F 0 "R17" V 2004 3300 50  0000 C CNN
+F 1 "200" V 2095 3300 50  0000 C CNN
+F 2 "" H 2200 3300 50  0001 C CNN
+F 3 "~" H 2200 3300 50  0001 C CNN
+	1    2200 3300
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R19
+U 1 1 5FF82D17
+P 2300 3450
+F 0 "R19" H 2241 3404 50  0000 R CNN
+F 1 "10k" H 2241 3495 50  0000 R CNN
+F 2 "" H 2300 3450 50  0001 C CNN
+F 3 "~" H 2300 3450 50  0001 C CNN
+	1    2300 3450
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	2300 3300 2350 3300
+Wire Wire Line
+	2650 3500 2650 3550
+Wire Wire Line
+	2300 3350 2300 3300
+Connection ~ 2300 3300
+Wire Wire Line
+	2300 3550 2650 3550
+Connection ~ 2650 3550
+Wire Wire Line
+	2650 3550 2650 3650
+$Comp
+L Device:R_Small R21
+U 1 1 5FFC20DD
+P 3450 3300
+F 0 "R21" V 3254 3300 50  0000 C CNN
+F 1 "200" V 3345 3300 50  0000 C CNN
+F 2 "" H 3450 3300 50  0001 C CNN
+F 3 "~" H 3450 3300 50  0001 C CNN
+	1    3450 3300
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R23
+U 1 1 5FFC20E3
+P 3550 3450
+F 0 "R23" H 3491 3404 50  0000 R CNN
+F 1 "10k" H 3491 3495 50  0000 R CNN
+F 2 "" H 3550 3450 50  0001 C CNN
+F 3 "~" H 3550 3450 50  0001 C CNN
+	1    3550 3450
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	3550 3300 3600 3300
+Wire Wire Line
+	3550 3350 3550 3300
+Connection ~ 3550 3300
+Wire Wire Line
+	3550 3550 3900 3550
+Connection ~ 3900 3550
+Wire Wire Line
+	3900 3550 3900 3650
+$Comp
+L Device:R_Small R25
+U 1 1 5FFCC1D3
+P 4700 3300
+F 0 "R25" V 4504 3300 50  0000 C CNN
+F 1 "200" V 4595 3300 50  0000 C CNN
+F 2 "" H 4700 3300 50  0001 C CNN
+F 3 "~" H 4700 3300 50  0001 C CNN
+	1    4700 3300
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R27
+U 1 1 5FFCC1D9
+P 4800 3450
+F 0 "R27" H 4741 3404 50  0000 R CNN
+F 1 "10k" H 4741 3495 50  0000 R CNN
+F 2 "" H 4800 3450 50  0001 C CNN
+F 3 "~" H 4800 3450 50  0001 C CNN
+	1    4800 3450
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	4800 3300 4850 3300
+Wire Wire Line
+	4800 3350 4800 3300
+Connection ~ 4800 3300
+Wire Wire Line
+	4800 3550 5150 3550
+$Comp
+L Device:R_Small R29
+U 1 1 5FFD3A99
+P 5950 3300
+F 0 "R29" V 5754 3300 50  0000 C CNN
+F 1 "200" V 5845 3300 50  0000 C CNN
+F 2 "" H 5950 3300 50  0001 C CNN
+F 3 "~" H 5950 3300 50  0001 C CNN
+	1    5950 3300
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R31
+U 1 1 5FFD3A9F
+P 6050 3450
+F 0 "R31" H 5991 3404 50  0000 R CNN
+F 1 "10k" H 5991 3495 50  0000 R CNN
+F 2 "" H 6050 3450 50  0001 C CNN
+F 3 "~" H 6050 3450 50  0001 C CNN
+	1    6050 3450
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	6050 3300 6100 3300
+Wire Wire Line
+	6050 3350 6050 3300
+Connection ~ 6050 3300
+Wire Wire Line
+	6050 3550 6400 3550
+$Comp
+L Device:R_Small R18
+U 1 1 5FFDAE1A
+P 2200 5200
+F 0 "R18" V 2004 5200 50  0000 C CNN
+F 1 "200" V 2095 5200 50  0000 C CNN
+F 2 "" H 2200 5200 50  0001 C CNN
+F 3 "~" H 2200 5200 50  0001 C CNN
+	1    2200 5200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R20
+U 1 1 5FFDAE20
+P 2300 5350
+F 0 "R20" H 2241 5304 50  0000 R CNN
+F 1 "10k" H 2241 5395 50  0000 R CNN
+F 2 "" H 2300 5350 50  0001 C CNN
+F 3 "~" H 2300 5350 50  0001 C CNN
+	1    2300 5350
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	2300 5200 2350 5200
+Wire Wire Line
+	2300 5250 2300 5200
+Connection ~ 2300 5200
+Wire Wire Line
+	2300 5450 2650 5450
+$Comp
+L Device:R_Small R22
+U 1 1 5FFE29EC
+P 3450 5200
+F 0 "R22" V 3254 5200 50  0000 C CNN
+F 1 "200" V 3345 5200 50  0000 C CNN
+F 2 "" H 3450 5200 50  0001 C CNN
+F 3 "~" H 3450 5200 50  0001 C CNN
+	1    3450 5200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R24
+U 1 1 5FFE29F2
+P 3550 5350
+F 0 "R24" H 3491 5304 50  0000 R CNN
+F 1 "10k" H 3491 5395 50  0000 R CNN
+F 2 "" H 3550 5350 50  0001 C CNN
+F 3 "~" H 3550 5350 50  0001 C CNN
+	1    3550 5350
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	3550 5200 3600 5200
+Wire Wire Line
+	3550 5250 3550 5200
+Connection ~ 3550 5200
+Wire Wire Line
+	3550 5450 3900 5450
+$Comp
+L Device:R_Small R26
+U 1 1 5FFEB016
+P 4700 5200
+F 0 "R26" V 4504 5200 50  0000 C CNN
+F 1 "200" V 4595 5200 50  0000 C CNN
+F 2 "" H 4700 5200 50  0001 C CNN
+F 3 "~" H 4700 5200 50  0001 C CNN
+	1    4700 5200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R28
+U 1 1 5FFEB01C
+P 4800 5350
+F 0 "R28" H 4741 5304 50  0000 R CNN
+F 1 "10k" H 4741 5395 50  0000 R CNN
+F 2 "" H 4800 5350 50  0001 C CNN
+F 3 "~" H 4800 5350 50  0001 C CNN
+	1    4800 5350
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	4800 5200 4850 5200
+Wire Wire Line
+	4800 5250 4800 5200
+Connection ~ 4800 5200
+Wire Wire Line
+	4800 5450 5150 5450
+$Comp
+L Device:R_Small R30
+U 1 1 5FFF3C69
+P 5950 5200
+F 0 "R30" V 5754 5200 50  0000 C CNN
+F 1 "200" V 5845 5200 50  0000 C CNN
+F 2 "" H 5950 5200 50  0001 C CNN
+F 3 "~" H 5950 5200 50  0001 C CNN
+	1    5950 5200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R32
+U 1 1 5FFF3C6F
+P 6050 5350
+F 0 "R32" H 5991 5304 50  0000 R CNN
+F 1 "10k" H 5991 5395 50  0000 R CNN
+F 2 "" H 6050 5350 50  0001 C CNN
+F 3 "~" H 6050 5350 50  0001 C CNN
+	1    6050 5350
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	6050 5200 6100 5200
+Wire Wire Line
+	6050 5250 6050 5200
+Connection ~ 6050 5200
+Wire Wire Line
+	6050 5450 6400 5450
+$Comp
+L Device:R_Small R33
+U 1 1 60003F7B
+P 7200 3300
+F 0 "R33" V 7004 3300 50  0000 C CNN
+F 1 "200" V 7095 3300 50  0000 C CNN
+F 2 "" H 7200 3300 50  0001 C CNN
+F 3 "~" H 7200 3300 50  0001 C CNN
+	1    7200 3300
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R35
+U 1 1 60003F81
+P 7300 3450
+F 0 "R35" H 7241 3404 50  0000 R CNN
+F 1 "10k" H 7241 3495 50  0000 R CNN
+F 2 "" H 7300 3450 50  0001 C CNN
+F 3 "~" H 7300 3450 50  0001 C CNN
+	1    7300 3450
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	7300 3300 7350 3300
+Wire Wire Line
+	7300 3350 7300 3300
+Connection ~ 7300 3300
+Wire Wire Line
+	7300 3550 7650 3550
+$Comp
+L Device:R_Small R34
+U 1 1 6000DB10
+P 7200 5200
+F 0 "R34" V 7004 5200 50  0000 C CNN
+F 1 "200" V 7095 5200 50  0000 C CNN
+F 2 "" H 7200 5200 50  0001 C CNN
+F 3 "~" H 7200 5200 50  0001 C CNN
+	1    7200 5200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R36
+U 1 1 6000DB16
+P 7300 5350
+F 0 "R36" H 7241 5304 50  0000 R CNN
+F 1 "10k" H 7241 5395 50  0000 R CNN
+F 2 "" H 7300 5350 50  0001 C CNN
+F 3 "~" H 7300 5350 50  0001 C CNN
+	1    7300 5350
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	7300 5200 7350 5200
+Wire Wire Line
+	7300 5250 7300 5200
+Connection ~ 7300 5200
+Wire Wire Line
+	7300 5450 7650 5450
+Connection ~ 7650 3550
+Wire Wire Line
+	7650 3550 7650 3650
+Connection ~ 6400 3550
+Wire Wire Line
+	6400 3550 6400 3650
+Connection ~ 5150 3550
+Wire Wire Line
+	5150 3550 5150 3650
+Connection ~ 5150 5450
+Wire Wire Line
+	5150 5450 5150 5550
+Connection ~ 6400 5450
+Wire Wire Line
+	6400 5450 6400 5550
+Connection ~ 7650 5450
+Wire Wire Line
+	7650 5450 7650 5550
+Connection ~ 3900 5450
+Wire Wire Line
+	3900 5450 3900 5550
+Connection ~ 2650 5450
+Wire Wire Line
+	2650 5450 2650 5550
+Text HLabel 2050 3300 0    50   Input ~ 0
+CH1
+Text HLabel 3300 3300 0    50   Input ~ 0
+CH2
+Text HLabel 4550 3300 0    50   Input ~ 0
+CH3
+Text HLabel 5800 3300 0    50   Input ~ 0
+CH4
+Wire Wire Line
+	3300 3300 3350 3300
+Wire Wire Line
+	4550 3300 4600 3300
+Wire Wire Line
+	5800 3300 5850 3300
+Text HLabel 7050 3300 0    50   Input ~ 0
+CH5
+Text HLabel 7050 5200 0    50   Input ~ 0
+CH10
+Text HLabel 5800 5200 0    50   Input ~ 0
+CH9
+Text HLabel 4550 5200 0    50   Input ~ 0
+CH8
+Text HLabel 3300 5200 0    50   Input ~ 0
+CH7
+Text HLabel 2050 5200 0    50   Input ~ 0
+CH6
+Wire Wire Line
+	2050 3300 2100 3300
+Wire Wire Line
+	3300 5200 3350 5200
+Wire Wire Line
+	2100 5200 2050 5200
+Wire Wire Line
+	4550 5200 4600 5200
+Wire Wire Line
+	5800 5200 5850 5200
+Wire Wire Line
+	7050 5200 7100 5200
+Wire Wire Line
+	7100 3300 7050 3300
+Text HLabel 950  750  0    50   Input ~ 0
+SEGA
+Text HLabel 950  900  0    50   Input ~ 0
+SEGB
+Text HLabel 950  1050 0    50   Input ~ 0
+SEGC
+Text HLabel 950  1200 0    50   Input ~ 0
+SEGD
+Text HLabel 950  1350 0    50   Input ~ 0
+SEGE
+Text HLabel 950  1500 0    50   Input ~ 0
+SEGF
+Text HLabel 950  1650 0    50   Input ~ 0
+SEGG
+Text HLabel 950  1800 0    50   Input ~ 0
+SEGDP
+$Comp
+L Device:R_Small R9
+U 1 1 600DF2A9
+P 1200 750
+F 0 "R9" V 1150 600 50  0000 C CNN
+F 1 "390" V 1200 750 50  0000 C CNN
+F 2 "" H 1200 750 50  0001 C CNN
+F 3 "~" H 1200 750 50  0001 C CNN
+	1    1200 750 
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R10
+U 1 1 600DF644
+P 1200 900
+F 0 "R10" V 1150 750 50  0000 C CNN
+F 1 "390" V 1200 900 50  0000 C CNN
+F 2 "" H 1200 900 50  0001 C CNN
+F 3 "~" H 1200 900 50  0001 C CNN
+	1    1200 900 
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R11
+U 1 1 600DFA59
+P 1200 1050
+F 0 "R11" V 1150 900 50  0000 C CNN
+F 1 "390" V 1200 1050 50  0000 C CNN
+F 2 "" H 1200 1050 50  0001 C CNN
+F 3 "~" H 1200 1050 50  0001 C CNN
+	1    1200 1050
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R12
+U 1 1 600DFE9B
+P 1200 1200
+F 0 "R12" V 1150 1050 50  0000 C CNN
+F 1 "390" V 1200 1200 50  0000 C CNN
+F 2 "" H 1200 1200 50  0001 C CNN
+F 3 "~" H 1200 1200 50  0001 C CNN
+	1    1200 1200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R13
+U 1 1 600E0272
+P 1200 1350
+F 0 "R13" V 1150 1200 50  0000 C CNN
+F 1 "390" V 1200 1350 50  0000 C CNN
+F 2 "" H 1200 1350 50  0001 C CNN
+F 3 "~" H 1200 1350 50  0001 C CNN
+	1    1200 1350
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R14
+U 1 1 600E0709
+P 1200 1500
+F 0 "R14" V 1150 1350 50  0000 C CNN
+F 1 "390" V 1200 1500 50  0000 C CNN
+F 2 "" H 1200 1500 50  0001 C CNN
+F 3 "~" H 1200 1500 50  0001 C CNN
+	1    1200 1500
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R15
+U 1 1 600E0AF1
+P 1200 1650
+F 0 "R15" V 1150 1500 50  0000 C CNN
+F 1 "390" V 1200 1650 50  0000 C CNN
+F 2 "" H 1200 1650 50  0001 C CNN
+F 3 "~" H 1200 1650 50  0001 C CNN
+	1    1200 1650
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R_Small R16
+U 1 1 600E0F45
+P 1200 1800
+F 0 "R16" V 1150 1650 50  0000 C CNN
+F 1 "390" V 1200 1800 50  0000 C CNN
+F 2 "" H 1200 1800 50  0001 C CNN
+F 3 "~" H 1200 1800 50  0001 C CNN
+	1    1200 1800
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	1100 750  950  750 
+Wire Wire Line
+	950  900  1100 900 
+Wire Wire Line
+	1100 1050 950  1050
+Wire Wire Line
+	950  1200 1100 1200
+Wire Wire Line
+	1100 1350 950  1350
+Wire Wire Line
+	950  1500 1100 1500
+Wire Wire Line
+	1100 1650 950  1650
+Wire Wire Line
+	950  1800 1100 1800
+Wire Wire Line
+	1300 750  1550 750 
+Wire Wire Line
+	1300 900  1550 900 
+Wire Wire Line
+	1550 1050 1300 1050
+Wire Wire Line
+	1300 1200 1550 1200
+Wire Wire Line
+	1550 1350 1300 1350
+Wire Wire Line
+	1300 1500 1550 1500
+Wire Wire Line
+	1300 1650 1550 1650
+Wire Wire Line
+	1300 1800 1550 1800
+Text Label 1550 750  2    50   ~ 0
+SEGA
+Text Label 1550 900  2    50   ~ 0
+SEGB
+Text Label 1550 1050 2    50   ~ 0
+SEGC
+Text Label 1550 1200 2    50   ~ 0
+SEGD
+Text Label 1550 1350 2    50   ~ 0
+SEGE
+Text Label 1550 1500 2    50   ~ 0
+SEGF
+Text Label 1550 1650 2    50   ~ 0
+SEGG
+Text Label 1550 1800 2    50   ~ 0
+SEGDP
+$EndSCHEMATC
