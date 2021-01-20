@@ -10,6 +10,7 @@ if test -z "${1:-}" ; then
 fi
 
 BUILD="${1}"
+shift
 BUILDSRC="$(pwd)/builds/${BUILD}"
 
 if test \! -d "${BUILDSRC}" ; then
@@ -29,6 +30,6 @@ if test -d "${BUILDSRC}/files" ; then
   ARGS="${ARGS} -v ${TEMPD}/files:/opt/files"
 fi
 
-CMD="docker run --user=$(id -u) ${ARGS} matir/wrtbuilder"
+CMD="docker run --user=$(id -u) ${ARGS} matir/wrtbuilder /opt/build.sh $*"
 echo ${CMD}
 eval ${CMD}
