@@ -28,6 +28,7 @@ class FIORunner(object):
     def run(self):
         args = ['--{}={}'.format(k, v) for k, v in self.args.items()]
         args = [self.fio_path] + args
+        args.append('--group_reporting')  # TODO: ugly hack
         for j in self.jobs.values():
             args.extend(j.args)
         print('Command: {}'.format(' '.join(args)))
@@ -47,7 +48,7 @@ class FIORunner(object):
 
 class FIOJob(object):
 
-    def __init__(self, name, size=4096, op='read', iodepth=1):
+    def __init__(self, name, size=4096, op='read', iodepth=1, threads=1):
         assert(op in ('read', 'write', 'randread', 'randwrite'))
         self.name = name
         self.size = size
@@ -55,14 +56,17 @@ class FIOJob(object):
         self.iodepth = iodepth
         self.speed = None
         self.iops = None
+        self.threads = threads
 
     @property
     def args(self):
         return [
+                '--new_group',
                 '--name={}'.format(self.name),
                 '--bs={}'.format(self.size),
                 '--rw={}'.format(self.op),
                 '--iodepth={}'.format(self.iodepth),
+                '--numjobs={}'.format(self.threads),
         ]
 
     def load_results(self, json_data):
@@ -94,17 +98,21 @@ class FIOJob(object):
 def main(path):
     runner = FIORunner(path)
     runner.addjob(FIOJob(
-        'Seqread', size=1024*1024))
+        'SEQ1M Q1T1 Read', size=1024*1024))
     runner.addjob(FIOJob(
-        'Seqwrite', size=1024*1024, op='write'))
+        'SEQ1M Q1T1 Write', size=1024*1024, op='write'))
     runner.addjob(FIOJob(
-        '512Kread', size=512*1024, op='randread'))
+        'SEQ1M Q8T1 Read', size=1024*1024, iodepth=8))
     runner.addjob(FIOJob(
-        '512Kwrite', size=512*1024, op='randwrite'))
+        'SEQ1M Q8T1 Write', size=1024*1024, op='write', iodepth=8))
     runner.addjob(FIOJob(
-        '4kQD32read', op='randread', iodepth=32))
+        'RND4K Q32T1 Read', op='randread', iodepth=32))
     runner.addjob(FIOJob(
-        '4kQD32write', op='randwrite', iodepth=32))
+        'RND4K Q32T1 Write', op='randwrite', iodepth=32))
+    runner.addjob(FIOJob(
+        'RND4K Q32T16 Read', op='randread', iodepth=32, threads=16))
+    runner.addjob(FIOJob(
+        'RND4K Q32T16 Write', op='randwrite', iodepth=32, threads=16))
     if runner.run():
         print(str(runner))
 
