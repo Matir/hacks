@@ -34,6 +34,7 @@ class FIORunner(object):
         cp = subprocess.run(args, capture_output=True)
         if cp.returncode:
             print('Error running!')
+            print(cp.stderr.decode('utf-8'))
             return False
         results = json.loads(cp.stdout)
         for j in results['jobs']:
@@ -67,16 +68,27 @@ class FIOJob(object):
     def load_results(self, json_data):
         """Load relevant JSON properties."""
         results = json_data['write' if 'write' in self.op else 'read']
-        self.speed = results['bw']
+        self.speed = results['bw']*1024.0  # results in k
         self.iops = results['iops']
 
     def __str__(self):
         """Stringify"""
-        ret = self.name
         if self.speed:
-            ret += " {}k/s".format(self.speed)
-            ret += " {}iops".format(self.iops)
-        return ret
+            return "{:20s} {:>10s}/s  {:5.0f} iops".format(
+                    self.name,
+                    self.format_bytes(self.speed),
+                    self.iops)
+        return self.name
+
+    @staticmethod
+    def format_bytes(n):
+        exts = ["", "k", "M", "G", "T"]
+        for e in exts:
+            if n >= 1024:
+                n /= 1024.0
+                continue
+            break
+        return "{:0.2f}{}B".format(n, e)
 
 
 def main(path):
@@ -93,8 +105,8 @@ def main(path):
         '4kQD32read', op='randread', iodepth=32))
     runner.addjob(FIOJob(
         '4kQD32write', op='randwrite', iodepth=32))
-    runner.run()
-    print(str(runner))
+    if runner.run():
+        print(str(runner))
 
 
 if __name__ == '__main__':
