@@ -5,6 +5,10 @@ import subprocess
 import sys
 
 
+def debug_json(data):
+    json.dump(data, sys.stdout, sort_keys=True, indent=2)
+
+
 class FIORunner(object):
 
     def __init__(
@@ -27,20 +31,12 @@ class FIORunner(object):
 
     def run(self):
         args = ['--{}={}'.format(k, v) for k, v in self.args.items()]
-        args = [self.fio_path] + args
         args.append('--group_reporting')  # TODO: ugly hack
+        success = True
         for j in self.jobs.values():
-            args.extend(j.args)
-        print('Command: {}'.format(' '.join(args)))
-        cp = subprocess.run(args, capture_output=True)
-        if cp.returncode:
-            print('Error running!')
-            print(cp.stderr.decode('utf-8'))
-            return False
-        results = json.loads(cp.stdout)
-        for j in results['jobs']:
-            self.jobs[j['jobname']].load_results(j)
-        return True
+            if not j.run(self.fio_path, args):
+                success = False
+        return success
 
     def __str__(self):
         return '\n'.join(str(j) for j in self.jobs.values())
@@ -68,6 +64,24 @@ class FIOJob(object):
                 '--iodepth={}'.format(self.iodepth),
                 '--numjobs={}'.format(self.threads),
         ]
+
+    def run(self, fio_path, base_args=[]):
+        args = [fio_path]
+        args.extend(base_args)
+        args.extend(self.args)
+        print('Command: {}'.format(' '.join(args)))
+        cp = subprocess.run(args, capture_output=True)
+        if cp.returncode:
+            print('Error running!')
+            print(cp.stderr.decode('utf-8'))
+            return False
+        results = json.loads(cp.stdout)
+        if len(results['jobs']) != 1:
+            print('Expected only one result!')
+            debug_json(results)
+            return False
+        self.load_results(results['jobs'][0])
+        return True
 
     def load_results(self, json_data):
         """Load relevant JSON properties."""
