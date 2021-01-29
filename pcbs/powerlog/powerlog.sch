@@ -148,9 +148,9 @@ Wire Wire Line
 	2400 4150 2100 4150
 Connection ~ 2400 4150
 Text Label 2100 4150 0    50   ~ 0
-INP_A
-Text Label 3100 4150 2    50   ~ 0
 OUT_A
+Text Label 3100 4150 2    50   ~ 0
+INP_A
 $Comp
 L power:GND #PWR010
 U 1 1 6014224B
@@ -774,11 +774,11 @@ Wire Wire Line
 Wire Wire Line
 	4550 3100 5500 3100
 Text Label 5500 2900 2    50   ~ 0
-LED_1
+LED_3
 Text Label 5500 3000 2    50   ~ 0
 LED_2
 Text Label 5500 3100 2    50   ~ 0
-LED_3
+LED_1
 Wire Wire Line
 	7950 1650 7650 1650
 Wire Wire Line
@@ -986,9 +986,9 @@ Wire Wire Line
 	1600 4450 1300 4450
 Connection ~ 1600 4450
 Text Label 1300 4450 0    50   ~ 0
-INP_B
-Text Label 2300 4450 2    50   ~ 0
 OUT_B
+Text Label 2300 4450 2    50   ~ 0
+INP_B
 Wire Wire Line
 	1600 4800 1600 4900
 Wire Wire Line
@@ -1064,9 +1064,9 @@ Wire Wire Line
 	1600 5250 1300 5250
 Connection ~ 1600 5250
 Text Label 1300 5250 0    50   ~ 0
-INP_C
-Text Label 2300 5250 2    50   ~ 0
 OUT_C
+Text Label 2300 5250 2    50   ~ 0
+INP_C
 Wire Wire Line
 	1600 5600 1600 5700
 Wire Wire Line
@@ -1123,4 +1123,60 @@ Text Label 1600 1250 0    50   ~ 0
 OUT_C
 Text Label 1300 1250 2    50   ~ 0
 INP_C
+$Comp
+L Mechanical:MountingHole H3
+U 1 1 60464762
+P 10250 5800
+F 0 "H3" H 10350 5846 50  0000 L CNN
+F 1 "3mm" H 10350 5755 50  0000 L CNN
+F 2 "MountingHole:MountingHole_3.2mm_M3" H 10250 5800 50  0001 C CNN
+F 3 "~" H 10250 5800 50  0001 C CNN
+	1    10250 5800
+	1    0    0    -1  
+$EndComp
+$Comp
+L Mechanical:MountingHole H4
+U 1 1 60464A41
+P 10250 6000
+F 0 "H4" H 10350 6046 50  0000 L CNN
+F 1 "3mm" H 10350 5955 50  0000 L CNN
+F 2 "MountingHole:MountingHole_3.2mm_M3" H 10250 6000 50  0001 C CNN
+F 3 "~" H 10250 6000 50  0001 C CNN
+	1    10250 6000
+	1    0    0    -1  
+$EndComp
+$Comp
+L Mechanical:MountingHole H1
+U 1 1 60464C19
+P 10050 5800
+F 0 "H1" H 10150 5846 50  0000 L CNN
+F 1 "3mm" H 10150 5755 50  0000 L CNN
+F 2 "MountingHole:MountingHole_3.2mm_M3" H 10050 5800 50  0001 C CNN
+F 3 "~" H 10050 5800 50  0001 C CNN
+	1    10050 5800
+	1    0    0    -1  
+$EndComp
+$Comp
+L Mechanical:MountingHole H2
+U 1 1 60464E90
+P 10050 6000
+F 0 "H2" H 10150 6046 50  0000 L CNN
+F 1 "3mm" H 10150 5955 50  0000 L CNN
+F 2 "MountingHole:MountingHole_3.2mm_M3" H 10050 6000 50  0001 C CNN
+F 3 "~" H 10050 6000 50  0001 C CNN
+	1    10050 6000
+	1    0    0    -1  
+$EndComp
+Text Label 2850 4600 0    50   ~ 0
+IN+1
+Text Label 2850 4900 0    50   ~ 0
+IN+2
+Text Label 2850 4700 0    50   ~ 0
+IN-1
+Text Label 2850 5000 0    50   ~ 0
+IN-2
+Text Label 2850 5200 0    50   ~ 0
+IN+3
+Text Label 2850 5300 0    50   ~ 0
+IN-3
 $EndSCHEMATC
