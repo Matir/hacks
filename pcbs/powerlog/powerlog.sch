@@ -1092,24 +1092,13 @@ Wire Wire Line
 $Comp
 L Connector_Generic:Conn_01x06 J3
 U 1 1 60435955
-P 2100 1050
-F 0 "J3" H 2180 1042 50  0000 L CNN
-F 1 "Conn_01x06" H 2180 951 50  0000 L CNN
-F 2 "TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-6-5.0-H_1x06_P5.00mm_Horizontal" H 2100 1050 50  0001 C CNN
-F 3 "~" H 2100 1050 50  0001 C CNN
-	1    2100 1050
-	1    0    0    -1  
-$EndComp
-$Comp
-L Connector_Generic:Conn_01x06 J1
-U 1 1 60435D1F
-P 850 1150
-F 0 "J1" H 768 625 50  0000 C CNN
-F 1 "Conn_01x06" H 768 716 50  0000 C CNN
-F 2 "TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-6-5.0-H_1x06_P5.00mm_Horizontal" H 850 1150 50  0001 C CNN
-F 3 "~" H 850 1150 50  0001 C CNN
-	1    850  1150
-	-1   0    0    1   
+P 2100 1150
+F 0 "J3" H 2018 625 50  0000 C CNN
+F 1 "Conn_01x06" H 2018 716 50  0000 C CNN
+F 2 "TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-6-5.0-H_1x06_P5.00mm_Horizontal" H 2100 1150 50  0001 C CNN
+F 3 "~" H 2100 1150 50  0001 C CNN
+	1    2100 1150
+	1    0    0    1   
 $EndComp
 Wire Wire Line
 	1050 1350 1900 1350
@@ -1123,50 +1112,6 @@ Text Label 1600 1250 0    50   ~ 0
 OUT_C
 Text Label 1300 1250 2    50   ~ 0
 INP_C
-$Comp
-L Mechanical:MountingHole H3
-U 1 1 60464762
-P 10250 5800
-F 0 "H3" H 10350 5846 50  0000 L CNN
-F 1 "3mm" H 10350 5755 50  0000 L CNN
-F 2 "MountingHole:MountingHole_3.2mm_M3" H 10250 5800 50  0001 C CNN
-F 3 "~" H 10250 5800 50  0001 C CNN
-	1    10250 5800
-	1    0    0    -1  
-$EndComp
-$Comp
-L Mechanical:MountingHole H4
-U 1 1 60464A41
-P 10250 6000
-F 0 "H4" H 10350 6046 50  0000 L CNN
-F 1 "3mm" H 10350 5955 50  0000 L CNN
-F 2 "MountingHole:MountingHole_3.2mm_M3" H 10250 6000 50  0001 C CNN
-F 3 "~" H 10250 6000 50  0001 C CNN
-	1    10250 6000
-	1    0    0    -1  
-$EndComp
-$Comp
-L Mechanical:MountingHole H1
-U 1 1 60464C19
-P 10050 5800
-F 0 "H1" H 10150 5846 50  0000 L CNN
-F 1 "3mm" H 10150 5755 50  0000 L CNN
-F 2 "MountingHole:MountingHole_3.2mm_M3" H 10050 5800 50  0001 C CNN
-F 3 "~" H 10050 5800 50  0001 C CNN
-	1    10050 5800
-	1    0    0    -1  
-$EndComp
-$Comp
-L Mechanical:MountingHole H2
-U 1 1 60464E90
-P 10050 6000
-F 0 "H2" H 10150 6046 50  0000 L CNN
-F 1 "3mm" H 10150 5955 50  0000 L CNN
-F 2 "MountingHole:MountingHole_3.2mm_M3" H 10050 6000 50  0001 C CNN
-F 3 "~" H 10050 6000 50  0001 C CNN
-	1    10050 6000
-	1    0    0    -1  
-$EndComp
 Text Label 2850 4600 0    50   ~ 0
 IN+1
 Text Label 2850 4900 0    50   ~ 0
@@ -1179,4 +1124,15 @@ Text Label 2850 5200 0    50   ~ 0
 IN+3
 Text Label 2850 5300 0    50   ~ 0
 IN-3
+$Comp
+L Connector_Generic:Conn_01x06 J1
+U 1 1 60435D1F
+P 850 1050
+F 0 "J1" H 768 1467 50  0000 C CNN
+F 1 "Conn_01x06" H 768 1376 50  0000 C CNN
+F 2 "TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-6-5.0-H_1x06_P5.00mm_Horizontal" H 850 1050 50  0001 C CNN
+F 3 "~" H 850 1050 50  0001 C CNN
+	1    850  1050
+	-1   0    0    -1  
+$EndComp
 $EndSCHEMATC
