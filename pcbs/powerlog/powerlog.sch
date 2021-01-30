@@ -1101,9 +1101,9 @@ F 3 "~" H 2100 1150 50  0001 C CNN
 	1    0    0    1   
 $EndComp
 Wire Wire Line
-	1050 1350 1900 1350
+	1050 1350 1450 1350
 Wire Wire Line
-	1450 1150 1450 1500
+	1450 1150 1450 1350
 Wire Wire Line
 	1050 1250 1300 1250
 Wire Wire Line
@@ -1135,4 +1135,9 @@ F 3 "~" H 850 1050 50  0001 C CNN
 	1    850  1050
 	-1   0    0    -1  
 $EndComp
+Connection ~ 1450 1350
+Wire Wire Line
+	1450 1350 1900 1350
+Wire Wire Line
+	1450 1350 1450 1500
 $EndSCHEMATC
