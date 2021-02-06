@@ -78,6 +78,7 @@ class FIOJob(object):
         args.extend(base_args)
         args.extend(self.args)
         print('Command: {}'.format(' '.join(args)))
+        sys.stdout.flush()
         cp = subprocess.run(args, capture_output=True)
         if cp.returncode:
             print('Error running!')
@@ -137,6 +138,7 @@ def main(path):
         'RND4K Q32T16 Write', op='randwrite', iodepth=32, threads=16))
     if runner.run():
         print(str(runner))
+        sys.stdout.flush()
 
 
 if __name__ == '__main__':
