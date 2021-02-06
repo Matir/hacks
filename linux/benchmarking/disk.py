@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import subprocess
 import sys
 
@@ -23,6 +24,7 @@ class FIORunner(object):
                 'filename': test_filename,
                 'size': size,
                 'loops': str(loops),
+                'end_fsync': 1,
         }
         self.jobs = {}
 
@@ -31,11 +33,17 @@ class FIORunner(object):
 
     def run(self):
         args = ['--{}={}'.format(k, v) for k, v in self.args.items()]
-        args.append('--group_reporting')  # TODO: ugly hack
+        args += ['--group_reporting']
         success = True
         for j in self.jobs.values():
-            if not j.run(self.fio_path, args):
-                success = False
+            try:
+                if not j.run(self.fio_path, args):
+                    success = False
+            finally:
+                try:
+                    os.unlink(self.filename)
+                except Exception as ex:
+                    print('Error unlinking:', ex)
         return success
 
     def __str__(self):
