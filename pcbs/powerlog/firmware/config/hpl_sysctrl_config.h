@@ -447,7 +447,7 @@
 // <i> Indicates whether Bypass coarse lock is enabled or not
 // <id> dfll48m_arch_bplckc
 #ifndef CONF_DFLL_BPLCKC
-#define CONF_DFLL_BPLCKC 0
+#define CONF_DFLL_BPLCKC 1
 #endif
 
 // <q> Quick Lock Disable
@@ -461,7 +461,7 @@
 // <i> Chill Cycle Disable
 // <id> dfll48m_arch_ccdis
 #ifndef CONF_DFLL_CCDIS
-#define CONF_DFLL_CCDIS 0
+#define CONF_DFLL_CCDIS 1
 #endif
 
 // <q> On Demand
@@ -520,7 +520,7 @@
 // <i> Mode
 // <id> dfll48m_mode
 #ifndef CONF_DFLL_MODE
-#define CONF_DFLL_MODE CONF_DFLL_OPEN_LOOP_MODE
+#define CONF_DFLL_MODE CONF_DFLL_CLOSED_LOOP_MODE
 #endif
 
 // <o> Coarse Maximum Step <0x0-0x1F>
