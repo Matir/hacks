@@ -11,7 +11,7 @@ extern "C" {
 /**
  * Initializes MCU, drivers and middleware in the project
  **/
-void atmel_start_init(void);
+int atmel_start_init(void);
 
 #ifdef __cplusplus
 }

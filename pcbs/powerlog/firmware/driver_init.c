@@ -218,6 +218,16 @@ void system_init(void)
 
 	gpio_set_pin_function(PA02, GPIO_PIN_FUNCTION_OFF);
 
+#ifdef __SAMD21J18A__
+	gpio_set_pin_level(PB30,
+	                   false);
+
+	// Set pin direction to output
+	gpio_set_pin_direction(PB30, GPIO_DIRECTION_OUT);
+
+	gpio_set_pin_function(PB30, GPIO_PIN_FUNCTION_OFF);
+#endif
+
 	I2C_0_init();
 
 	TIMER_0_init();
