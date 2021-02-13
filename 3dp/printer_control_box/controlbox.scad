@@ -78,7 +78,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     l = 26;
     w = 31;
     difference() {
-      cube([l+4, w+4, 14]);
+      cube([l+4, w+2, 14]);
       translate([2, 2, 10])
         cube([l, w, 6]);
     }
@@ -141,7 +141,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
       cylinder(d=8, h=wall*3, $fn=16);
 
     // stop button
-    translate([-wall, boxdim[1]-28, bottom_thick+32])
+    translate([-wall, boxdim[1]-40, bottom_thick+32])
       rotate([0, 90, 0])
       cylinder(d=16.2, h=wall*3, $fn=25);
 
@@ -151,6 +151,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
         vents(l=boxdim[0]-15, h=boxdim[2]-25);
 
     // usb opening
+    // Serial board
     translate([-wall, boxdim[1]-23+wall, bottom_thick+18])
       rotate([0, 90, 0])
       hull() {
@@ -182,7 +183,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     pi_stands();
 
   // DCDC
-  translate([boxdim[0]-33, wall-1, bottom_thick])
+  translate([boxdim[0]-32, wall-1, bottom_thick])
     dc_dc_holder();
 
   // dimmer
@@ -190,7 +191,7 @@ module controlbox_bottom(boxdim=[96, 96, 44], wall=2) {
     dimmer_holder();
 
   // relay
-  translate([boxdim[0]-(34+28), wall-1, bottom_thick])
+  translate([boxdim[0]-(32+28), wall-2, bottom_thick])
     relay_holder();
 
   // reinforce rear
