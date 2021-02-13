@@ -470,7 +470,7 @@
 // <i> If this bit is 1: the DFLL will only be running when requested by a peripheral.
 // <id> dfll48m_arch_ondemand
 #ifndef CONF_DFLL_ONDEMAND
-#define CONF_DFLL_ONDEMAND 1
+#define CONF_DFLL_ONDEMAND 0
 #endif
 
 // <q> Run In Standby

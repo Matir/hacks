@@ -4,3 +4,6 @@
 *.bin
 *.elf
 *.lss
+*.d
+*.map
+*.eep
