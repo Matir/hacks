@@ -3,10 +3,10 @@
 
 int main(void)
 {
+  char hw[] = "hello world\r\n";
 	/* Initializes MCU, drivers and middleware */
-	if (atmel_start_init() == 0) {
-    cdcd_acm_example();
-  }
+	atmel_start_init();
+  
 
 	/* Replace with your application code */
 	while (1) {
@@ -14,5 +14,6 @@ int main(void)
     delay_ms(5000);
 	  gpio_set_pin_level(PB30, true);
     delay_ms(1000);
+    cdcdf_acm_write(hw, strlen(hw));
 	}
 }
