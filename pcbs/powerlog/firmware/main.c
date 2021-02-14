@@ -4,6 +4,13 @@
 
 #include "ina3221.h"
 
+#define LED_STATUS  PA00
+#define LED_READING PA01
+#define LED_ERROR   PA02
+
+#define LED_ON(x)  gpio_set_pin_level((x), false)
+#define LED_OFF(x) gpio_set_pin_level((x), true);
+
 uint32_t sample_id = 0;
 uint8_t run_sample = 1;
 static struct timer_task TIMER_0_task;
@@ -11,17 +18,26 @@ static struct timer_task TIMER_0_task;
 static void sample_report_once();
 static void setup_timer();
 static void TIMER0_callback(const struct timer_task *const timer_task);
+static void led_error_code(int n);
+static void led_error_code_forever(int n);
 
 int main(void)
 {
 	/* Initializes MCU, drivers and middleware */
-	atmel_start_init();
+	if (atmel_start_init() != 0) {
+	  led_error_code_forever(3);
+  }
+	LED_OFF(LED_STATUS);
+	LED_OFF(LED_READING);
+	LED_OFF(LED_ERROR);
 
 	/* Prepare i2c */
 	if (setup_i2c() != 0) {
+	  led_error_code_forever(4);
   }
 
 	if (configure_ina3221() != 0) {
+	  led_error_code_forever(5);
   }
 
   setup_timer();
@@ -33,6 +49,23 @@ int main(void)
 	  sample_report_once();
 	  run_sample = 0;
 	}
+}
+
+static void led_error_code_forever(int n) {
+  while(1) {
+    led_error_code(n);
+    delay_ms(1000);
+  }
+}
+
+static void led_error_code(int n) {
+  while(n--) {
+    LED_ON(LED_ERROR);
+    delay_ms(200);
+    LED_OFF(LED_ERROR);
+    if(n)
+      delay_ms(200);
+  }
 }
 
 static void setup_timer() {
@@ -67,6 +100,7 @@ static void sample_report_once() {
     buf[used]='\n';
     buf[used+1]='\0';
   } else {
+    led_error_code(1);
     used = snprintf(buf, sizeof(buf), "%08lu|FAIL\n", (unsigned long)sample_id-1);
   }
   cdcdf_acm_write((uint8_t *)buf, used);
