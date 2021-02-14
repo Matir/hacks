@@ -13,8 +13,6 @@
 #include <hpl_gclk_base.h>
 #include <hpl_pm_base.h>
 
-#include <hpl_rtc_base.h>
-
 struct timer_descriptor TIMER_0;
 
 struct i2c_m_sync_desc I2C_0;
@@ -64,9 +62,10 @@ void I2C_0_init(void)
  */
 static void TIMER_0_init(void)
 {
-	_pm_enable_bus_clock(PM_BUS_APBA, RTC);
-	_gclk_enable_channel(RTC_GCLK_ID, CONF_GCLK_RTC_SRC);
-	timer_init(&TIMER_0, RTC, _rtc_get_timer());
+  _pm_enable_bus_clock(PM_BUS_APBC, TC3);
+	_gclk_enable_channel(TC3_GCLK_ID, CONF_GCLK_TC3_SRC);
+
+	timer_init(&TIMER_0, TC3, _tc_get_timer());
 }
 
 void USB_0_PORT_init(void)

@@ -111,23 +111,15 @@ int cdc_device_acm_init(void)
  */
 void cdcd_acm_example(void)
 {
-  //delay_ms(2000);
 	while (!cdcdf_acm_is_enabled()) {
 		// wait cdc acm to be installed
 	};
 
-	//cdcdf_acm_register_callback(CDCDF_ACM_CB_STATE_C, (FUNC_PTR)usb_device_cb_state_c);
   cdcdf_acm_register_callback(CDCDF_ACM_CB_READ, (FUNC_PTR)usb_device_cb_bulk_out);
   cdcdf_acm_register_callback(CDCDF_ACM_CB_WRITE, (FUNC_PTR)usb_device_cb_bulk_in);
 	cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
 
-  char s[] = "hello world\r\n";
-  char x[64];
-
 	while (1) {
-	  delay_ms(2000);
-	  memcpy(x, s, 64);
-    cdcdf_acm_write((uint8_t *)x, strlen(x));
 	}
 }
 

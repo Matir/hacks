@@ -110,7 +110,7 @@ drivers:
       enable_gclk_gen_0__externalclock: 1000000
       enable_gclk_gen_1: true
       enable_gclk_gen_1__externalclock: 1000000
-      enable_gclk_gen_2: true
+      enable_gclk_gen_2: false
       enable_gclk_gen_2__externalclock: 1000000
       enable_gclk_gen_3: true
       enable_gclk_gen_3__externalclock: 1000000
@@ -133,7 +133,7 @@ drivers:
       gclk_arch_gen_1_oe: false
       gclk_arch_gen_1_oov: false
       gclk_arch_gen_2_RUNSTDBY: false
-      gclk_arch_gen_2_enable: true
+      gclk_arch_gen_2_enable: false
       gclk_arch_gen_2_idc: false
       gclk_arch_gen_2_oe: false
       gclk_arch_gen_2_oov: false
@@ -260,35 +260,34 @@ drivers:
           slow_gclk_selection: Generic clock generator 1
   TIMER_0:
     user_label: TIMER_0
-    definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21E15A-MF::RTC::driver_config_definition::Timer::HAL:Driver:Timer
+    definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21E15A-MF::TC3::driver_config_definition::Timer::HAL:Driver:Timer
     functionality: Timer
     api: HAL:Driver:Timer
     configuration:
-      rtc_arch_comp_val: 1024
-      rtc_arch_init_reset: true
-      rtc_arch_prescaler: Peripheral clock divided by 1
-      rtc_cmpeo0: false
-      rtc_event_control: false
-      rtc_ovfeo: false
-      rtc_pereo0: false
-      rtc_pereo1: false
-      rtc_pereo2: false
-      rtc_pereo3: false
-      rtc_pereo4: false
-      rtc_pereo5: false
-      rtc_pereo6: false
-      rtc_pereo7: false
+      tc_arch_dbgrun: false
+      tc_arch_evact: Event action disabled
+      tc_arch_mceo0: true
+      tc_arch_mceo1: false
+      tc_arch_ovfeo: false
+      tc_arch_presync: Reload or reset counter on next GCLK
+      tc_arch_runstdby: false
+      tc_arch_tcei: false
+      tc_arch_tceinv: false
+      timer_advanced_configuration: false
+      timer_event_control: true
+      timer_prescaler: Divide by 8
+      timer_tick: 1000
     optional_signals: []
     variant: null
     clocks:
       domain_group:
         nodes:
-        - name: RTC
+        - name: TC
           input: Generic clock generator 0
           external: false
           external_frequency: 0
         configuration:
-          rtc_clk_selection: Generic clock generator 0
+          tc_gclk_selection: Generic clock generator 0
   DMAC:
     user_label: DMAC
     definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21E15A-MF::DMAC::driver_config_definition::DMAC::HAL:HPL:DMAC
@@ -376,7 +375,7 @@ drivers:
       dmac_dstinc_7: false
       dmac_dstinc_8: false
       dmac_dstinc_9: false
-      dmac_enable: false
+      dmac_enable: true
       dmac_enable_0: false
       dmac_enable_1: false
       dmac_enable_10: false
@@ -678,7 +677,7 @@ drivers:
       usb_ep7_I_CACHE: No cache
       usbd_arch_max_ep_n: 2 (EP 0x82 or 0x02)
       usbd_arch_speed: Full speed
-      usbd_num_ep_sp: 4 (EP0 + 3 endpoints)
+      usbd_num_ep_sp: 8 (EP0 + 7 endpoints)
     optional_signals: []
     variant:
       specification: default
@@ -693,11 +692,11 @@ drivers:
       domain_group:
         nodes:
         - name: USB
-          input: Generic clock generator 2
+          input: Generic clock generator 0
           external: false
           external_frequency: 0
         configuration:
-          usb_gclk_selection: Generic clock generator 2
+          usb_gclk_selection: Generic clock generator 0
 pads:
   PA00:
     name: PA00

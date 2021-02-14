@@ -5,6 +5,7 @@
 #include "ina3221.h"
 
 uint32_t sample_id = 0;
+uint8_t run_sample = 1;
 
 void sample_report_once();
 
@@ -22,14 +23,17 @@ int main(void)
 
 	/* Replace with your application code */
 	while (1) {
+	  // Busy wait for interrupt
+	  while (!run_sample) {}
 	  sample_report_once();
+	  run_sample = 0;
 	}
 }
 
 void sample_report_once() {
   int fail = 0;
   char buf[64];
-  int used = snprintf(buf, sizeof(buf), "%08lu|", sample_id++);
+  int used = snprintf(buf, sizeof(buf), "%08lu|", (unsigned long)sample_id++);
   for(int i=0; i<3; i++) {
     int16_t bus, shunt;
     if (get_channel_voltages(i, &shunt, &bus) != 0) {

@@ -43,7 +43,7 @@ hpl/sercom \
 examples \
 hpl/gclk \
 samd21a/gcc/gcc \
-hpl/rtc \
+hpl/tc \
 hpl/core \
 usb
 
@@ -71,7 +71,7 @@ hal/src/hal_usb_device.o \
 main.o \
 ina3221.o \
 samd21a/gcc/system_samd21.o \
-hpl/rtc/hpl_rtc.o \
+hpl/tc/hpl_tc.o \
 examples/driver_examples.o \
 driver_init.o \
 hpl/sercom/hpl_sercom.o \
@@ -106,7 +106,7 @@ OBJS_AS_ARGS +=  \
 "main.o" \
 "ina3221.o" \
 "samd21a/gcc/system_samd21.o" \
-"hpl/rtc/hpl_rtc.o" \
+"hpl/tc/hpl_tc.o" \
 "examples/driver_examples.o" \
 "driver_init.o" \
 "hpl/sercom/hpl_sercom.o" \
@@ -130,7 +130,7 @@ DIR_INCLUDES +=  \
 -I"../hpl/gclk" \
 -I"../hpl/pm" \
 -I"../hpl/port" \
--I"../hpl/rtc" \
+-I"../hpl/tc" \
 -I"../hpl/sercom" \
 -I"../hpl/sysctrl" \
 -I"../hpl/usb" \
@@ -174,7 +174,7 @@ DEPS_AS_ARGS +=  \
 "main.d" \
 "ina3221.d" \
 "examples/driver_examples.d" \
-"hpl/rtc/hpl_rtc.d" \
+"hpl/tc/hpl_tc.d" \
 "hal/src/hal_sleep.d" \
 "hpl/sercom/hpl_sercom.d" \
 "hal/src/hal_gpio.d" \

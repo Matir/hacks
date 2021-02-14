@@ -1,9 +1,9 @@
 /**
  * \file
  *
- * \brief RTC
+ * \brief SAM Timer/Counter
  *
- * Copyright (c) 2016-2018 Microchip Technology Inc. and its subsidiaries.
+ * Copyright (c) 2014-2018 Microchip Technology Inc. and its subsidiaries.
  *
  * \asf_license_start
  *
@@ -30,23 +30,48 @@
  * \asf_license_stop
  */
 
-#ifndef _HPL_RTC2_V200_H_INCLUDED
-#define _HPL_RTC2_V200_H_INCLUDED
+#ifndef _HPL_TC_BASE_H_INCLUDED
+#define _HPL_TC_BASE_H_INCLUDED
 
 #include <hpl_timer.h>
+#include <hpl_pwm.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
+ * \addtogroup tc_group TC Hardware Proxy Layer
+ *
+ * \section tc_hpl_rev Revision History
+ * - v0.0.0.1 Initial Commit
+ *
+ *@{
+ */
+
+/**
+ * \name HPL functions
+ */
+//@{
+
+/**
  * \brief Retrieve timer helper functions
  *
  * \return A pointer to set of timer helper functions
  */
-struct _timer_hpl_interface *_rtc_get_timer(void);
+struct _timer_hpl_interface *_tc_get_timer(void);
+
+/**
+ * \brief Retrieve pwm helper functions
+ *
+ * \return A pointer to set of pwm helper functions
+ */
+struct _pwm_hpl_interface *_tc_get_pwm(void);
+
+//@}
+/**@}*/
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* _HPL_RTC2_V200_H_INCLUDED */
+#endif /* _HPL_TC_BASE_H_INCLUDED */

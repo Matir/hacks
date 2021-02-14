@@ -76,8 +76,8 @@
 #define CONF_GCLK_SERCOM0_SLOW_FREQUENCY 125000
 #endif
 
-// <y> RTC Clock Source
-// <id> rtc_clk_selection
+// <y> TC Clock Source
+// <id> tc_gclk_selection
 
 // <GCLK_CLKCTRL_GEN_GCLK0_Val"> Generic clock generator 0
 
@@ -95,18 +95,19 @@
 
 // <GCLK_CLKCTRL_GEN_GCLK7_Val"> Generic clock generator 7
 
-// <i> Select the clock source for RTC.
-#ifndef CONF_GCLK_RTC_SRC
-#define CONF_GCLK_RTC_SRC GCLK_CLKCTRL_GEN_GCLK0_Val
+// <i> Select the clock source for TC.
+#ifndef CONF_GCLK_TC3_SRC
+#define CONF_GCLK_TC3_SRC GCLK_CLKCTRL_GEN_GCLK0_Val
 #endif
 
 /**
- * \def CONF_GCLK_RTC_FREQUENCY
- * \brief RTC's Clock frequency
+ * \def CONF_GCLK_TC3_FREQUENCY
+ * \brief TC3's Clock frequency
  */
-#ifndef CONF_GCLK_RTC_FREQUENCY
-#define CONF_GCLK_RTC_FREQUENCY 48000000
+#ifndef CONF_GCLK_TC3_FREQUENCY
+#define CONF_GCLK_TC3_FREQUENCY 48000000
 #endif
+
 
 // <y> USB Clock Source
 // <id> usb_gclk_selection

@@ -23,6 +23,7 @@ extern "C" {
 
 #include <hal_i2c_m_sync.h>
 #include <hal_timer.h>
+#include <hpl_tc_base.h>
 
 #include "hal_usb_device.h"
 
