@@ -27,6 +27,8 @@ else
 	endif
 endif
 
+OPT=-Os
+
 # List the subdirectories for creating object files
 SUB_DIRS +=  \
  \
@@ -40,7 +42,6 @@ hpl/pm \
 hpl/sysctrl \
 hal/utils/src \
 hpl/sercom \
-examples \
 hpl/gclk \
 samd21a/gcc/gcc \
 hpl/tc \
@@ -72,7 +73,6 @@ main.o \
 ina3221.o \
 samd21a/gcc/system_samd21.o \
 hpl/tc/hpl_tc.o \
-examples/driver_examples.o \
 driver_init.o \
 hpl/sercom/hpl_sercom.o \
 hal/src/hal_gpio.o \
@@ -107,7 +107,6 @@ OBJS_AS_ARGS +=  \
 "ina3221.o" \
 "samd21a/gcc/system_samd21.o" \
 "hpl/tc/hpl_tc.o" \
-"examples/driver_examples.o" \
 "driver_init.o" \
 "hpl/sercom/hpl_sercom.o" \
 "hal/src/hal_gpio.o" \
@@ -122,7 +121,6 @@ OBJS_AS_ARGS +=  \
 DIR_INCLUDES +=  \
 -I"../" \
 -I"../config" \
--I"../examples" \
 -I"../hal/include" \
 -I"../hal/utils/include" \
 -I"../hpl/core" \
@@ -173,7 +171,6 @@ DEPS_AS_ARGS +=  \
 "samd21a/gcc/system_samd21.d" \
 "main.d" \
 "ina3221.d" \
-"examples/driver_examples.d" \
 "hpl/tc/hpl_tc.d" \
 "hal/src/hal_sleep.d" \
 "hpl/sercom/hpl_sercom.d" \
@@ -226,7 +223,7 @@ $(OUTPUT_FILE_PATH): $(OBJS)
 %.o: %.c
 	@echo Building file: $<
 	@echo ARM/GNU C Compiler
-	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
+	$(QUOTE)arm-none-eabi-gcc$(QUOTE) $(OPT) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
 -D__SAMD21E15A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
@@ -235,7 +232,7 @@ $(DIR_INCLUDES) \
 %.o: %.s
 	@echo Building file: $<
 	@echo ARM/GNU Assembler
-	$(QUOTE)arm-none-eabi-as$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
+	$(QUOTE)arm-none-eabi-as$(QUOTE) $(OPT) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
 -D__SAMD21E15A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
@@ -244,7 +241,7 @@ $(DIR_INCLUDES) \
 %.o: %.S
 	@echo Building file: $<
 	@echo ARM/GNU Preprocessing Assembler
-	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
+	$(QUOTE)arm-none-eabi-gcc$(QUOTE) $(OPT) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
 -D__SAMD21E15A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"

@@ -6,8 +6,11 @@
 
 uint32_t sample_id = 0;
 uint8_t run_sample = 1;
+static struct timer_task TIMER_0_task;
 
-void sample_report_once();
+static void sample_report_once();
+static void setup_timer();
+static void TIMER0_callback(const struct timer_task *const timer_task);
 
 int main(void)
 {
@@ -21,6 +24,8 @@ int main(void)
 	if (configure_ina3221() != 0) {
   }
 
+  setup_timer();
+
 	/* Replace with your application code */
 	while (1) {
 	  // Busy wait for interrupt
@@ -30,7 +35,22 @@ int main(void)
 	}
 }
 
-void sample_report_once() {
+static void setup_timer() {
+  TIMER_0_task.interval = 100;
+  TIMER_0_task.mode = TIMER_TASK_REPEAT;
+  TIMER_0_task.cb = TIMER0_callback;
+  timer_add_task(&TIMER_0, &TIMER_0_task);
+  timer_start(&TIMER_0);
+}
+
+static void TIMER0_callback(const struct timer_task *const timer_task) {
+  if (!run_sample) {
+    run_sample = 1;
+    return;
+  }
+}
+
+static void sample_report_once() {
   int fail = 0;
   char buf[64];
   int used = snprintf(buf, sizeof(buf), "%08lu|", (unsigned long)sample_id++);
