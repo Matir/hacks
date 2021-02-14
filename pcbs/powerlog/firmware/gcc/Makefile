@@ -69,6 +69,7 @@ usb/usb_protocol.o \
 hal/src/hal_init.o \
 hal/src/hal_usb_device.o \
 main.o \
+ina3221.o \
 samd21a/gcc/system_samd21.o \
 hpl/rtc/hpl_rtc.o \
 examples/driver_examples.o \
@@ -103,6 +104,7 @@ OBJS_AS_ARGS +=  \
 "hal/src/hal_init.o" \
 "hal/src/hal_usb_device.o" \
 "main.o" \
+"ina3221.o" \
 "samd21a/gcc/system_samd21.o" \
 "hpl/rtc/hpl_rtc.o" \
 "examples/driver_examples.o" \
@@ -170,6 +172,7 @@ DEPS_AS_ARGS +=  \
 "driver_init.d" \
 "samd21a/gcc/system_samd21.d" \
 "main.d" \
+"ina3221.d" \
 "examples/driver_examples.d" \
 "hpl/rtc/hpl_rtc.d" \
 "hal/src/hal_sleep.d" \
@@ -200,7 +203,7 @@ $(OUTPUT_FILE_PATH): $(OBJS)
 	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -o $(OUTPUT_FILE_NAME).elf $(OBJS_AS_ARGS) -Wl,--start-group -lm -Wl,--end-group -mthumb \
 -Wl,-Map="$(OUTPUT_FILE_NAME).map" --specs=nano.specs -Wl,--gc-sections -mcpu=cortex-m0plus \
  \
--T"../samd21a/gcc/gcc/samd21j18a_flash.ld" \
+-T"../samd21a/gcc/gcc/samd21e15a_flash.ld" \
 -L"../samd21a/gcc/gcc"
 	@echo Finished building target: $@
 
@@ -224,7 +227,7 @@ $(OUTPUT_FILE_PATH): $(OBJS)
 	@echo Building file: $<
 	@echo ARM/GNU C Compiler
 	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
--D__SAMD21J18A__ -mcpu=cortex-m0plus  \
+-D__SAMD21E15A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
 	@echo Finished building: $<
@@ -233,7 +236,7 @@ $(DIR_INCLUDES) \
 	@echo Building file: $<
 	@echo ARM/GNU Assembler
 	$(QUOTE)arm-none-eabi-as$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
--D__SAMD21J18A__ -mcpu=cortex-m0plus  \
+-D__SAMD21E15A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
 	@echo Finished building: $<
@@ -242,7 +245,7 @@ $(DIR_INCLUDES) \
 	@echo Building file: $<
 	@echo ARM/GNU Preprocessing Assembler
 	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
--D__SAMD21J18A__ -mcpu=cortex-m0plus  \
+-D__SAMD21E15A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
 	@echo Finished building: $<
