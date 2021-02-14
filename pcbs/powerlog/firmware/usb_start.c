@@ -42,7 +42,8 @@ static uint8_t ctrl_buffer[64];
  */
 static bool usb_device_cb_bulk_out(const uint8_t ep, const enum usb_xfer_code rc, const uint32_t count)
 {
-	cdcdf_acm_write((uint8_t *)usbd_cdc_buffer, count);
+  if(count)
+    cdcdf_acm_write((uint8_t *)usbd_cdc_buffer, count);
 
 	/* No error. */
 	return false;
@@ -54,7 +55,8 @@ static bool usb_device_cb_bulk_out(const uint8_t ep, const enum usb_xfer_code rc
 static bool usb_device_cb_bulk_in(const uint8_t ep, const enum usb_xfer_code rc, const uint32_t count)
 {
 	/* Echo data. */
-	cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
+	if (count)
+    cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
 
 	/* No error. */
 	return false;
@@ -65,13 +67,12 @@ static bool usb_device_cb_bulk_in(const uint8_t ep, const enum usb_xfer_code rc,
  */
 static bool usb_device_cb_state_c(usb_cdc_control_signal_t state)
 {
-	if (state.rs232.DTR) {
+	/*if (state.rs232.DTR) {*/
 		/* Callbacks must be registered after endpoint allocation */
 		cdcdf_acm_register_callback(CDCDF_ACM_CB_READ, (FUNC_PTR)usb_device_cb_bulk_out);
 		cdcdf_acm_register_callback(CDCDF_ACM_CB_WRITE, (FUNC_PTR)usb_device_cb_bulk_in);
 		/* Start Rx */
-		cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
-	}
+	/*}*/
 
 	/* No error. */
 	return false;
@@ -80,16 +81,22 @@ static bool usb_device_cb_state_c(usb_cdc_control_signal_t state)
 /**
  * \brief CDC ACM Init
  */
-void cdc_device_acm_init(void)
+int cdc_device_acm_init(void)
 {
+  int rv;
 	/* usb stack init */
-	usbdc_init(ctrl_buffer);
+	if ((rv = usbdc_init(ctrl_buffer)) != 0)
+	  return rv;
 
 	/* usbdc_register_funcion inside */
-	cdcdf_acm_init();
+	if ((rv = cdcdf_acm_init()) != ERR_NONE)
+	  return rv;
 
-	usbdc_start(single_desc);
+	if ((rv = usbdc_start(single_desc)) != ERR_NONE)
+	  return rv;
+
 	usbdc_attach();
+	return 0;
 }
 
 /**
@@ -104,18 +111,28 @@ void cdc_device_acm_init(void)
  */
 void cdcd_acm_example(void)
 {
+  //delay_ms(2000);
 	while (!cdcdf_acm_is_enabled()) {
 		// wait cdc acm to be installed
 	};
 
-	cdcdf_acm_register_callback(CDCDF_ACM_CB_STATE_C, (FUNC_PTR)usb_device_cb_state_c);
+	//cdcdf_acm_register_callback(CDCDF_ACM_CB_STATE_C, (FUNC_PTR)usb_device_cb_state_c);
+  cdcdf_acm_register_callback(CDCDF_ACM_CB_READ, (FUNC_PTR)usb_device_cb_bulk_out);
+  cdcdf_acm_register_callback(CDCDF_ACM_CB_WRITE, (FUNC_PTR)usb_device_cb_bulk_in);
+	cdcdf_acm_read((uint8_t *)usbd_cdc_buffer, sizeof(usbd_cdc_buffer));
+
+  char s[] = "hello world\r\n";
+  char x[64];
 
 	while (1) {
+	  delay_ms(2000);
+	  memcpy(x, s, 64);
+    cdcdf_acm_write((uint8_t *)x, strlen(x));
 	}
 }
 
-void usb_init(void)
+int usb_init(void)
 {
 
-	cdc_device_acm_init();
+	return cdc_device_acm_init();
 }

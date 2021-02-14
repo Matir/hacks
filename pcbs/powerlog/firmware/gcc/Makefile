@@ -180,7 +180,7 @@ DEPS_AS_ARGS +=  \
 "hpl/pm/hpl_pm.d" \
 "atmel_start.d"
 
-OUTPUT_FILE_NAME :=AtmelStart
+OUTPUT_FILE_NAME := firmware
 QUOTE := "
 OUTPUT_FILE_PATH +=$(OUTPUT_FILE_NAME).elf
 OUTPUT_FILE_PATH_AS_ARGS +=$(OUTPUT_FILE_NAME).elf
@@ -200,7 +200,7 @@ $(OUTPUT_FILE_PATH): $(OBJS)
 	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -o $(OUTPUT_FILE_NAME).elf $(OBJS_AS_ARGS) -Wl,--start-group -lm -Wl,--end-group -mthumb \
 -Wl,-Map="$(OUTPUT_FILE_NAME).map" --specs=nano.specs -Wl,--gc-sections -mcpu=cortex-m0plus \
  \
--T"../samd21a/gcc/gcc/samd21e15a_flash.ld" \
+-T"../samd21a/gcc/gcc/samd21j18a_flash.ld" \
 -L"../samd21a/gcc/gcc"
 	@echo Finished building target: $@
 
@@ -223,8 +223,8 @@ $(OUTPUT_FILE_PATH): $(OBJS)
 %.o: %.c
 	@echo Building file: $<
 	@echo ARM/GNU C Compiler
-	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -Os -ffunction-sections -mlong-calls -g3 -Wall -c -std=gnu99 \
--D__SAMD21E15A__ -mcpu=cortex-m0plus  \
+	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
+-D__SAMD21J18A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
 	@echo Finished building: $<
@@ -232,8 +232,8 @@ $(DIR_INCLUDES) \
 %.o: %.s
 	@echo Building file: $<
 	@echo ARM/GNU Assembler
-	$(QUOTE)arm-none-eabi-as$(QUOTE) -x c -mthumb -DDEBUG -Os -ffunction-sections -mlong-calls -g3 -Wall -c -std=gnu99 \
--D__SAMD21E15A__ -mcpu=cortex-m0plus  \
+	$(QUOTE)arm-none-eabi-as$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
+-D__SAMD21J18A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
 	@echo Finished building: $<
@@ -241,8 +241,8 @@ $(DIR_INCLUDES) \
 %.o: %.S
 	@echo Building file: $<
 	@echo ARM/GNU Preprocessing Assembler
-	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -Os -ffunction-sections -mlong-calls -g3 -Wall -c -std=gnu99 \
--D__SAMD21E15A__ -mcpu=cortex-m0plus  \
+	$(QUOTE)arm-none-eabi-gcc$(QUOTE) -x c -mthumb -DDEBUG -ffunction-sections -mlong-calls -g -Wall -c -std=gnu99 \
+-D__SAMD21J18A__ -mcpu=cortex-m0plus  \
 $(DIR_INCLUDES) \
 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -o "$@" "$<"
 	@echo Finished building: $<

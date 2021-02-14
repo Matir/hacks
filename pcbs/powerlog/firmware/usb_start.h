@@ -16,12 +16,12 @@ extern "C" {
 #include "cdcdf_acm_desc.h"
 
 void cdcd_acm_example(void);
-void cdc_device_acm_init(void);
+int cdc_device_acm_init(void);
 
 /**
  * \berif Initialize USB
  */
-void usb_init(void);
+int usb_init(void);
 
 #ifdef __cplusplus
 }

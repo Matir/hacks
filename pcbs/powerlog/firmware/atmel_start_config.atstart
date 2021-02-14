@@ -94,13 +94,13 @@ drivers:
     functionality: System
     api: HAL:HPL:GCLK
     configuration:
-      $input: 1000000
-      $input_id: 8MHz Internal Oscillator (OSC8M)
-      RESERVED_InputFreq: 1000000
-      RESERVED_InputFreq_id: 8MHz Internal Oscillator (OSC8M)
-      _$freq_output_Generic clock generator 0: 48000000
+      $input: 0
+      $input_id: Digital Frequency Locked Loop (DFLL48M)
+      RESERVED_InputFreq: 0
+      RESERVED_InputFreq_id: Digital Frequency Locked Loop (DFLL48M)
+      _$freq_output_Generic clock generator 0: 0
       _$freq_output_Generic clock generator 1: 125000
-      _$freq_output_Generic clock generator 2: 400000
+      _$freq_output_Generic clock generator 2: 0
       _$freq_output_Generic clock generator 3: 32768
       _$freq_output_Generic clock generator 4: 400000
       _$freq_output_Generic clock generator 5: 400000
@@ -110,7 +110,7 @@ drivers:
       enable_gclk_gen_0__externalclock: 1000000
       enable_gclk_gen_1: true
       enable_gclk_gen_1__externalclock: 1000000
-      enable_gclk_gen_2: false
+      enable_gclk_gen_2: true
       enable_gclk_gen_2__externalclock: 1000000
       enable_gclk_gen_3: true
       enable_gclk_gen_3__externalclock: 1000000
@@ -133,7 +133,7 @@ drivers:
       gclk_arch_gen_1_oe: false
       gclk_arch_gen_1_oov: false
       gclk_arch_gen_2_RUNSTDBY: false
-      gclk_arch_gen_2_enable: false
+      gclk_arch_gen_2_enable: true
       gclk_arch_gen_2_idc: false
       gclk_arch_gen_2_oe: false
       gclk_arch_gen_2_oov: false
@@ -170,10 +170,10 @@ drivers:
       gclk_gen_1_oscillator: 8MHz Internal Oscillator (OSC8M)
       gclk_gen_2_div: 1
       gclk_gen_2_div_sel: false
-      gclk_gen_2_oscillator: External Crystal Oscillator 0.4-32MHz (XOSC)
+      gclk_gen_2_oscillator: Digital Frequency Locked Loop (DFLL48M)
       gclk_gen_3_div: 1
       gclk_gen_3_div_sel: false
-      gclk_gen_3_oscillator: 32kHz Ultra Low Power Internal Oscillator (OSCULP32K)
+      gclk_gen_3_oscillator: 32kHz High Accuracy Internal Oscillator (OSC32K)
       gclk_gen_4_div: 1
       gclk_gen_4_div_sel: false
       gclk_gen_4_oscillator: External Crystal Oscillator 0.4-32MHz (XOSC)
@@ -196,18 +196,18 @@ drivers:
     functionality: System
     api: HAL:HPL:PM
     configuration:
-      $input: 48000000
+      $input: 0
       $input_id: Generic clock generator 0
-      RESERVED_InputFreq: 48000000
+      RESERVED_InputFreq: 0
       RESERVED_InputFreq_id: Generic clock generator 0
-      _$freq_output_CPU: 48000000
+      _$freq_output_CPU: 0
       apba_div: '1'
       apbb_div: '1'
       apbc_div: '1'
       cpu_clock_source: Generic clock generator 0
       cpu_div: '1'
       enable_cpu_clock: true
-      nvm_wait_states: '0'
+      nvm_wait_states: '1'
     optional_signals: []
     variant: null
     clocks:
@@ -580,30 +580,30 @@ drivers:
       RESERVED_InputFreq: 32768
       RESERVED_InputFreq_id: Generic clock generator 3
       _$freq_output_8MHz Internal Oscillator (OSC8M): 1000000
-      _$freq_output_Digital Frequency Locked Loop (DFLL48M): 48000000
+      _$freq_output_Digital Frequency Locked Loop (DFLL48M): 0
       _$freq_output_External Crystal Oscillator 0.4-32MHz (XOSC): '400000'
-      _$freq_output_Fractional Digital Phase Locked Loop (FDPLL96M): 47998976
-      dfll48m_arch_bplckc: false
+      _$freq_output_Fractional Digital Phase Locked Loop (FDPLL96M): 48031744
+      dfll48m_arch_bplckc: true
       dfll48m_arch_calibration: false
-      dfll48m_arch_ccdis: false
+      dfll48m_arch_ccdis: true
       dfll48m_arch_coarse: 31
       dfll48m_arch_enable: true
       dfll48m_arch_fine: 512
       dfll48m_arch_llaw: false
-      dfll48m_arch_ondemand: true
+      dfll48m_arch_ondemand: false
       dfll48m_arch_qldis: false
       dfll48m_arch_runstdby: false
       dfll48m_arch_stable: false
       dfll48m_arch_usbcrm: true
       dfll48m_arch_waitlock: false
-      dfll48m_mode: Open Loop Mode
+      dfll48m_mode: Closed Loop Mode
       dfll48m_mul: 0
       dfll48m_ref_clock: Generic clock generator 3
       dfll_arch_cstep: 1
       dfll_arch_fstep: 1
       enable_dfll48m: true
       enable_fdpll96m: false
-      enable_osc32k: false
+      enable_osc32k: true
       enable_osc8m: true
       enable_osculp32k: true
       enable_xosc: false
@@ -613,13 +613,13 @@ drivers:
       fdpll96m_arch_ondemand: true
       fdpll96m_arch_runstdby: false
       fdpll96m_clock_div: 0
-      fdpll96m_ldr: 1463
+      fdpll96m_ldr: 1464
       fdpll96m_ldrfrac: 13
       fdpll96m_ref_clock: Generic clock generator 3
       osc32k_arch_calib: 0
       osc32k_arch_en1k: false
       osc32k_arch_en32k: false
-      osc32k_arch_enable: false
+      osc32k_arch_enable: true
       osc32k_arch_ondemand: true
       osc32k_arch_overwrite_calibration: false
       osc32k_arch_runstdby: false
@@ -693,11 +693,11 @@ drivers:
       domain_group:
         nodes:
         - name: USB
-          input: Generic clock generator 0
+          input: Generic clock generator 2
           external: false
           external_frequency: 0
         configuration:
-          usb_gclk_selection: Generic clock generator 0
+          usb_gclk_selection: Generic clock generator 2
 pads:
   PA00:
     name: PA00
