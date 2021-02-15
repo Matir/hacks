@@ -11,8 +11,8 @@
 #define LED_ON(x)  gpio_set_pin_level((x), false)
 #define LED_OFF(x) gpio_set_pin_level((x), true);
 
-uint32_t sample_id = 0;
-uint8_t run_sample = 1;
+volatile uint32_t sample_id = 0;
+volatile uint8_t run_sample = 1;
 static struct timer_task TIMER_0_task;
 
 static void sample_report_once();
@@ -42,12 +42,14 @@ int main(void)
 
   setup_timer();
 
-	/* Replace with your application code */
+  LED_ON(LED_STATUS);
 	while (1) {
 	  // Busy wait for interrupt
 	  while (!run_sample) {}
+	  LED_ON(LED_READING);
 	  sample_report_once();
 	  run_sample = 0;
+	  LED_OFF(LED_READING);
 	}
 }
 
@@ -69,7 +71,7 @@ static void led_error_code(int n) {
 }
 
 static void setup_timer() {
-  TIMER_0_task.interval = 100;
+  TIMER_0_task.interval = 200;
   TIMER_0_task.mode = TIMER_TASK_REPEAT;
   TIMER_0_task.cb = TIMER0_callback;
   timer_add_task(&TIMER_0, &TIMER_0_task);
@@ -81,24 +83,26 @@ static void TIMER0_callback(const struct timer_task *const timer_task) {
     run_sample = 1;
     return;
   }
+  led_error_code(2);
 }
 
 static void sample_report_once() {
   int fail = 0;
-  char buf[64];
+  char buf[96];
   int used = snprintf(buf, sizeof(buf), "%08lu|", (unsigned long)sample_id++);
-  for(int i=0; i<3; i++) {
-    int16_t bus, shunt;
+  for(int i=1; i<=3; i++) {
+    int16_t bus;
+    int32_t shunt;
     if (get_channel_voltages(i, &shunt, &bus) != 0) {
       fail=1;
       continue;
     }
     shunt = shunt_voltage_to_current(shunt);
-    used += snprintf(buf, sizeof(buf)-used, "%05d|%05d|", bus, shunt);
+    used += snprintf(&(buf[used]), sizeof(buf)-used, "%05d|%07ld|", bus, shunt);
   }
   if (!fail) {
-    buf[used]='\n';
-    buf[used+1]='\0';
+    buf[used++]='\n';
+    buf[used++]='\0';
   } else {
     led_error_code(1);
     used = snprintf(buf, sizeof(buf), "%08lu|FAIL\n", (unsigned long)sample_id-1);

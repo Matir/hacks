@@ -42,7 +42,11 @@ int32_t configure_ina3221() {
   return 0;
 }
 
-int32_t get_channel_voltages (const uint8_t channel, int16_t *shunt_voltage, int16_t *bus_voltage) {
+/*
+ * Stores the bus voltage in mv and the shunt voltage in *uv*.
+ * Returns 0 on success, non-zero on failure.
+ */
+int32_t get_channel_voltages (const uint8_t channel, int32_t *shunt_voltage, int16_t *bus_voltage) {
   uint8_t shunt_reg = 2*channel - 1;
   uint8_t bus_reg = 2*channel;
   if (channel < 1 || channel > 3) {
@@ -52,17 +56,27 @@ int32_t get_channel_voltages (const uint8_t channel, int16_t *shunt_voltage, int
   int32_t rv;
   if ((rv = i2c_m_sync_cmd_read(&I2C_0, shunt_reg, (uint8_t *)&tmp, sizeof(tmp))) != 0)
     return rv;
-  *shunt_voltage = bswap16(tmp) >> 3;
+  /*
+   * 40uV/bit
+   * Can potentially overflow 16 bits in uV
+   */
+  *shunt_voltage = (int32_t)(bswap16(tmp)) * 5;
   if ((rv = i2c_m_sync_cmd_read(&I2C_0, bus_reg, (uint8_t *)&tmp, sizeof(tmp))) != 0)
     return rv;
-  *bus_voltage = bswap16(tmp) >> 3;
+  /* 3 LSB are insignificant *but* we need to scale by 8mv, so this does not
+   * need to be scaled at all. */
+  *bus_voltage = bswap16(tmp);
   return 0;
 }
 
-int16_t shunt_voltage_to_current(int16_t volts) {
+/* Converts microvolts to milliamps.
+ * TODO: consider if this can overflow?
+ */
+int32_t shunt_voltage_to_current(int32_t uvolts) {
   /* v = i * shunt_ohms
    * i = v / shunt_ohms
-   * i = v * 1000 / shunt_millis
+   * i = v / (shunt_millis * 1000)
+   * ma = (uv) / shunt_millis
    */
-  return (int16_t)((int32_t)volts * 1000 / SHUNT_MILLIS);
+  return (uvolts / SHUNT_MILLIS);
 }
