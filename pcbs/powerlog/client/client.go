@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,10 +19,11 @@ const (
 
 type PowerLogger struct {
 	srcFilename string
-	dbName      string
-	db          *sql.DB
 	nowFunc     func() time.Time
 	debug       bool
+	handlers    []*PLHandlerChan
+	wg          sync.WaitGroup
+	blocking    bool
 }
 
 type PowerLogRecord struct {
@@ -32,19 +34,29 @@ type PowerLogRecord struct {
 	Milliamps  int32
 }
 
+type PowerLogHandler interface {
+	Name() string
+	HandleRecords(...PowerLogRecord) error
+}
+
+type PLHandlerChan struct {
+	handler PowerLogHandler
+	ch      chan PowerLogRecord
+}
+
+type PowerDBLogger struct {
+	dbName string
+	db     *sql.DB
+}
+
 func (pl *PowerLogger) Run() error {
-	if db, err := sql.Open("sqlite3", pl.dbName); err != nil {
+	if fp, err := os.Open(pl.srcFilename); err != nil {
 		return err
 	} else {
-		defer db.Close()
-		pl.db = db
-		pl.CreateDB()
-		if fp, err := os.Open(pl.srcFilename); err != nil {
-			return err
-		} else {
-			defer fp.Close()
-			return pl.ProcessFile(fp)
-		}
+		defer fp.Close()
+		err := pl.ProcessFile(fp)
+		pl.Finish()
+		return err
 	}
 }
 
@@ -54,12 +66,55 @@ func (pl *PowerLogger) ProcessFile(fp *os.File) error {
 		if records, err := pl.ParseRecords(sc.Text()); err != nil {
 			return err
 		} else {
-			if err := pl.SaveRecords(records...); err != nil {
+			if err := pl.HandleRecords(records...); err != nil {
 				return err
 			}
 		}
 	}
 	return sc.Err()
+}
+
+func (pl *PowerLogger) Finish() {
+	for _, h := range pl.handlers {
+		close(h.ch)
+	}
+	pl.wg.Wait()
+}
+
+func (pl *PowerLogger) HandleRecords(records ...PowerLogRecord) error {
+	for _, h := range pl.handlers {
+		for _, r := range records {
+			if pl.blocking {
+				h.ch <- r
+			} else {
+				select {
+				case h.ch <- r:
+					continue
+				default:
+					log.Printf("Queue for handler %s is blocking.", h.handler.Name())
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (pl *PowerLogger) RegisterHandler(handler PowerLogHandler) {
+	ch := make(chan PowerLogRecord, 32)
+	h := &PLHandlerChan{
+		ch:      ch,
+		handler: handler,
+	}
+	pl.handlers = append(pl.handlers, h)
+	pl.wg.Add(1)
+	go func() {
+		for e := range ch {
+			if err := handler.HandleRecords(e); err != nil {
+				log.Printf("Handler %s failed: %s", handler.Name(), err)
+			}
+		}
+		pl.wg.Done()
+	}()
 }
 
 func (pl *PowerLogger) ParseRecords(line string) ([]PowerLogRecord, error) {
@@ -93,7 +148,24 @@ func (pl *PowerLogger) ParseRecords(line string) ([]PowerLogRecord, error) {
 	return res, nil
 }
 
-func (pl *PowerLogger) SaveRecords(records ...PowerLogRecord) error {
+func NewPowerDBLogger(dbName string) (*PowerDBLogger, error) {
+	dbl := &PowerDBLogger{
+		dbName: dbName,
+	}
+	if db, err := sql.Open("sqlite3", dbName); err != nil {
+		return nil, err
+	} else {
+		dbl.db = db
+		dbl.CreateDB()
+	}
+	return dbl, nil
+}
+
+func (dbl *PowerDBLogger) Name() string {
+	return "PowerDBLogger"
+}
+
+func (pl *PowerDBLogger) HandleRecords(records ...PowerLogRecord) error {
 	tx, err := pl.db.Begin()
 	if err != nil {
 		return err
@@ -109,7 +181,7 @@ func (pl *PowerLogger) SaveRecords(records ...PowerLogRecord) error {
 	return tx.Commit()
 }
 
-func (pl *PowerLogger) CreateDB() error {
+func (pl *PowerDBLogger) CreateDB() error {
 	stmt := `CREATE TABLE %s (
 		timestamp TEXT,
 		sample_id INT,
@@ -132,9 +204,15 @@ func main() {
 	}
 	logger := &PowerLogger{
 		srcFilename: os.Args[1],
-		dbName:      os.Args[2],
 		nowFunc:     time.Now,
+		blocking:    true,
 	}
+	dbHandler, err := NewPowerDBLogger(os.Args[2])
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		os.Exit(1)
+	}
+	logger.RegisterHandler(dbHandler)
 	if err := logger.Run(); err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
