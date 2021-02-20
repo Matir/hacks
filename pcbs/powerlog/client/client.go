@@ -3,9 +3,11 @@ package main
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -14,7 +16,9 @@ import (
 )
 
 const (
-	tblName = "samples"
+	tblName       = "samples"
+	cachedSamples = 128
+	webAddr       = ":9333"
 )
 
 type PowerLogger struct {
@@ -47,6 +51,11 @@ type PLHandlerChan struct {
 type PowerDBLogger struct {
 	dbName string
 	db     *sql.DB
+}
+
+type PowerWebServer struct {
+	sampleCache []PowerLogRecord
+	httpMux     *http.ServeMux
 }
 
 func (pl *PowerLogger) Run() error {
@@ -197,6 +206,37 @@ func (pl *PowerDBLogger) CreateDB() error {
 	return nil
 }
 
+func NewPowerWebServer() *PowerWebServer {
+	pws := &PowerWebServer{
+		sampleCache: make([]PowerLogRecord, 0, cachedSamples*2),
+	}
+	// TODO: serve static
+	mux := http.NewServeMux()
+	mux.HandleFunc("/readings", pws.GetReadings)
+	pws.httpMux = mux
+	go http.ListenAndServe(webAddr, mux)
+	return pws
+}
+
+func (pws *PowerWebServer) Name() string {
+	return "PowerWebServer"
+}
+
+func (pws *PowerWebServer) HandleRecords(rec ...PowerLogRecord) error {
+	pws.sampleCache = append(pws.sampleCache, rec...)
+	if len(pws.sampleCache) > cachedSamples {
+		pws.sampleCache = pws.sampleCache[len(pws.sampleCache)-cachedSamples:]
+	}
+	// TODO: send to websocket
+	return nil
+}
+
+func (pws *PowerWebServer) GetReadings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.Encode(pws.sampleCache)
+}
+
 func main() {
 	if len(os.Args) != 3 {
 		fmt.Printf("Usage: %s <src> <db>\n", os.Args[0])
@@ -213,6 +253,8 @@ func main() {
 		os.Exit(1)
 	}
 	logger.RegisterHandler(dbHandler)
+	pws := NewPowerWebServer()
+	logger.RegisterHandler(pws)
 	if err := logger.Run(); err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
