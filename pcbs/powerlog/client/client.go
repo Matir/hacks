@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
 	"os"
@@ -13,12 +12,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
 	tblName       = "samples"
 	cachedSamples = 128
 	webAddr       = ":9333"
+	pongWait      = 60 * time.Second
 )
 
 type PowerLogger struct {
@@ -56,7 +59,10 @@ type PowerDBLogger struct {
 type PowerWebServer struct {
 	sampleCache []PowerLogRecord
 	httpMux     *http.ServeMux
+	wsChans     map[chan []PowerLogRecord]bool
 }
+
+var upgrader = websocket.Upgrader{}
 
 func (pl *PowerLogger) Run() error {
 	if fp, err := os.Open(pl.srcFilename); err != nil {
@@ -209,10 +215,18 @@ func (pl *PowerDBLogger) CreateDB() error {
 func NewPowerWebServer() *PowerWebServer {
 	pws := &PowerWebServer{
 		sampleCache: make([]PowerLogRecord, 0, cachedSamples*2),
+		wsChans:     make(map[chan []PowerLogRecord]bool),
 	}
 	// TODO: serve static
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readings", pws.GetReadings)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "index.html")
+	})
+	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "app.js")
+	})
+	mux.HandleFunc("/ws", pws.HandleSocket)
 	pws.httpMux = mux
 	go http.ListenAndServe(webAddr, mux)
 	return pws
@@ -227,7 +241,14 @@ func (pws *PowerWebServer) HandleRecords(rec ...PowerLogRecord) error {
 	if len(pws.sampleCache) > cachedSamples {
 		pws.sampleCache = pws.sampleCache[len(pws.sampleCache)-cachedSamples:]
 	}
-	// TODO: send to websocket
+	for ch, _ := range pws.wsChans {
+		select {
+		case ch <- rec:
+			continue
+		default:
+			continue
+		}
+	}
 	return nil
 }
 
@@ -235,6 +256,50 @@ func (pws *PowerWebServer) GetReadings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-type", "application/json")
 	enc := json.NewEncoder(w)
 	enc.Encode(pws.sampleCache)
+}
+
+func (pws *PowerWebServer) HandleSocket(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	ch := make(chan []PowerLogRecord, 10)
+	pws.wsChans[ch] = true
+	defer func() {
+		ws.Close()
+		delete(pws.wsChans, ch)
+		close(ch)
+	}()
+	ws.SetReadDeadline(time.Now().Add(pongWait))
+	ws.SetPongHandler(func(string) error { ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	// Send data from the channel
+	go func() {
+		pingTicker := time.NewTicker(pongWait / 2)
+		defer pingTicker.Stop()
+		for {
+			select {
+			case e, ok := <-ch:
+				if !ok {
+					return
+				}
+				if err := ws.WriteJSON(e); err != nil {
+					return
+				}
+			case <-pingTicker.C:
+				if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+					return
+				}
+			}
+		}
+	}()
+	// Read until socket close
+	for {
+		_, _, err := ws.ReadMessage()
+		if err != nil {
+			break
+		}
+	}
 }
 
 func main() {
