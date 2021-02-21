@@ -1,5 +1,3 @@
-const maxReadingsPerChan = 1024;
-
 function getWSEndpoint() {
   var protocol = document.location.protocol == "https:" ? "wss://" : "ws://";
   var host = document.location.host;
@@ -30,7 +28,7 @@ function parseReadings(chans, newReadings) {
     }
     chans[chid].push(r);
   }
-  for (var c=0;c<chans.length;c++) {
+  for (var c=1;c<=channels;c++) {
     chans[c].sort(function(a, b) {
       if (a['tsmillis'] < b['tsmillis'])
         return -1;
@@ -60,13 +58,16 @@ async function setupReadingHandler(displayUpdater) {
 function getGraphReadings(chanReadings) {
   var v = Array();
   var a = Array();
+  var t = Array();
   for (var i=0;i<chanReadings.length;i++) {
     v.push(chanReadings[i]['Millivolts']/1000);
     a.push(chanReadings[i]['Milliamps']/1000);
+    t.push(chanReadings[i]['Timestamp']);
   }
   return {
     'voltages': v,
     'current': a,
+    'times': t,
   };
 };
 
@@ -78,24 +79,45 @@ function createCharts(readings) {
     charts[i] = new Chart(canvas, {
       type: 'line',
       data: {
+        labels: graphData.times,
         datasets: [
           {
             label: 'Volts',
             data: graphData.voltages,
             fill: false,
             borderColor: 'rgba(255, 0, 0, 0.5)',
+            yAxisID: 'volts-axis',
           },
           {
             label: 'Amps',
             data: graphData.current,
             fill: false,
             borderColor: 'rgba(0, 0, 255, 0.5)',
+            yAxisID: 'amps-axis',
           }
         ]
       },
       options: {
         responsive: false,
         maintainAspectRatio: false,
+        scales: {
+          xAxes: [{
+            type: 'time',
+            time: {
+              unit: 'minute',
+              distribution: 'linear',
+            }
+          }],
+          yAxes: [{
+            id: 'volts-axis',
+            type: 'linear',
+          },
+          {
+            id: 'amps-axis',
+            position: 'right',
+            type: 'linear',
+          }],
+        },
       }
     });
   }
@@ -106,9 +128,12 @@ function updateChartData(charts, readings) {
   for(var i=1;i<=channels;i++) {
     let chart = charts[i];
     let graphData = getGraphReadings(readings[i]);
+    chart.data.labels = graphData.times;
     chart.data.datasets[0].data = graphData.voltages;
     chart.data.datasets[1].data = graphData.current;
-    chart.update();
+    chart.update({
+      duration: 0,
+    });
   }
 }
 
