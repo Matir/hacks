@@ -56,3 +56,69 @@ async function setupReadingHandler(displayUpdater) {
       displayUpdater(readings);
   });
 };
+
+function getGraphReadings(chanReadings) {
+  var v = Array();
+  var a = Array();
+  for (var i=0;i<chanReadings.length;i++) {
+    v.push(chanReadings[i]['Millivolts']/1000);
+    a.push(chanReadings[i]['Milliamps']/1000);
+  }
+  return {
+    'voltages': v,
+    'current': a,
+  };
+};
+
+function createCharts(readings) {
+  var charts = {};
+  for(var i=1;i<=channels;i++) {
+    let canvas = document.getElementById('ch'+i+'-graph');
+    let graphData = getGraphReadings(readings[i]);
+    charts[i] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'Volts',
+            data: graphData.voltages,
+            fill: false,
+            borderColor: 'rgba(255, 0, 0, 0.5)',
+          },
+          {
+            label: 'Amps',
+            data: graphData.current,
+            fill: false,
+            borderColor: 'rgba(0, 0, 255, 0.5)',
+          }
+        ]
+      },
+      options: {
+        responsive: false,
+        maintainAspectRatio: false,
+      }
+    });
+  }
+  return charts;
+};
+
+function updateChartData(charts, readings) {
+  for(var i=1;i<=channels;i++) {
+    let chart = charts[i];
+    let graphData = getGraphReadings(readings[i]);
+    chart.data.datasets[0].data = graphData.voltages;
+    chart.data.datasets[1].data = graphData.current;
+    chart.update();
+  }
+}
+
+async function main() {
+  window.readings = await getReadings();
+  window.charts = createCharts(window.readings);
+  connectWS(function(data) {
+    parseReadings(window.readings, data);
+    updateChartData(window.charts, window.readings);
+  });
+};
+
+window.addEventListener("load", main);

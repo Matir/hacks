@@ -48,7 +48,7 @@ type PowerLogHandler interface {
 
 type PLHandlerChan struct {
 	handler PowerLogHandler
-	ch      chan PowerLogRecord
+	ch      chan []PowerLogRecord
 }
 
 type PowerDBLogger struct {
@@ -98,16 +98,14 @@ func (pl *PowerLogger) Finish() {
 
 func (pl *PowerLogger) HandleRecords(records ...PowerLogRecord) error {
 	for _, h := range pl.handlers {
-		for _, r := range records {
-			if pl.blocking {
-				h.ch <- r
-			} else {
-				select {
-				case h.ch <- r:
-					continue
-				default:
-					log.Printf("Queue for handler %s is blocking.", h.handler.Name())
-				}
+		if pl.blocking {
+			h.ch <- records
+		} else {
+			select {
+			case h.ch <- records:
+				continue
+			default:
+				log.Printf("Queue for handler %s is blocking.", h.handler.Name())
 			}
 		}
 	}
@@ -115,7 +113,7 @@ func (pl *PowerLogger) HandleRecords(records ...PowerLogRecord) error {
 }
 
 func (pl *PowerLogger) RegisterHandler(handler PowerLogHandler) {
-	ch := make(chan PowerLogRecord, 32)
+	ch := make(chan []PowerLogRecord, 32)
 	h := &PLHandlerChan{
 		ch:      ch,
 		handler: handler,
@@ -124,7 +122,7 @@ func (pl *PowerLogger) RegisterHandler(handler PowerLogHandler) {
 	pl.wg.Add(1)
 	go func() {
 		for e := range ch {
-			if err := handler.HandleRecords(e); err != nil {
+			if err := handler.HandleRecords(e...); err != nil {
 				log.Printf("Handler %s failed: %s", handler.Name(), err)
 			}
 		}
