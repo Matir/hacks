@@ -308,7 +308,7 @@ func main() {
 	logger := &PowerLogger{
 		srcFilename: os.Args[1],
 		nowFunc:     time.Now,
-		blocking:    true,
+		//blocking:    true,
 	}
 	dbHandler, err := NewPowerDBLogger(os.Args[2])
 	if err != nil {
