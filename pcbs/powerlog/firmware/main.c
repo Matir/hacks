@@ -102,7 +102,7 @@ static void sample_report_once() {
   }
   if (!fail) {
     buf[used++]='\n';
-    buf[used++]='\0';
+    buf[used]='\0';
   } else {
     led_error_code(1);
     used = snprintf(buf, sizeof(buf), "%08lu|FAIL\n", (unsigned long)sample_id-1);

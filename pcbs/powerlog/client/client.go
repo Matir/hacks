@@ -31,6 +31,7 @@ type PowerLogger struct {
 	handlers    []*PLHandlerChan
 	wg          sync.WaitGroup
 	blocking    bool
+	dieOnError  bool
 }
 
 type PowerLogRecord struct {
@@ -79,7 +80,11 @@ func (pl *PowerLogger) ProcessFile(fp *os.File) error {
 	sc := bufio.NewScanner(fp)
 	for sc.Scan() {
 		if records, err := pl.ParseRecords(sc.Text()); err != nil {
-			return err
+			if pl.dieOnError {
+				return err
+			} else {
+				log.Printf("Error parsing: %s", err)
+			}
 		} else {
 			if err := pl.HandleRecords(records...); err != nil {
 				return err
