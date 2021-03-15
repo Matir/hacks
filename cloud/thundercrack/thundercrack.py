@@ -95,6 +95,7 @@ def get_args(argv):
     args, extras = parser.parse_known_args(argv[1:])
     args.hashcat_args = extras + args.hashcat_args
     if not (args.benchmark or args.hashfile):
+        print('Must specify --hashfile or --benchmark!\n', file=sys.stderr)
         parser.print_usage()
         parser.exit(2)
     return args
