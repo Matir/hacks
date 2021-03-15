@@ -11,8 +11,11 @@ module small_tray() {
     union() {
       for (x=[0:2]) {
         for (y=[0:2]) {
-          translate([x*(pocket+gap)+gap, y*(pocket+gap)+gap, 2])
+          translate([x*(pocket+gap)+gap, y*(pocket+gap)+gap, 3.5])
             rounded_cube([pocket, pocket, 10], 5, $fn=16);
+          magnet_d = 12.5;
+          translate([x*(pocket+gap)+gap+magnet_d, y*(pocket+gap)+gap+magnet_d, 0])
+            cylinder(d=magnet_d, h=2.2, $fn=32);
         }
       }
     }

@@ -12,7 +12,7 @@ module diffuser(ring_dia=34, wall_thick=0.5, height=32, taper=3) {
     // screw supports
     intersection() {
       union() {
-        for(i = [0, 180]) {
+        for(i = [0, 90, 180, 270]) {
           rotate([0, 0, i+22.5])
             translate([0, 27.8/2, 3])
               difference() {

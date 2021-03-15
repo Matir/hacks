@@ -288,7 +288,7 @@ module controlbox_top(boxdim=[96, 96], wall=2) {
 //    cube([100, 60, 100]);
 //}
 
-controlbox_bottom();
-//translate([0, -10, 42])
-//  rotate([180, 0, 0])
-//  controlbox_top();
+//controlbox_bottom();
+translate([0, -10, 42])
+  rotate([180, 0, 0])
+  controlbox_top();
