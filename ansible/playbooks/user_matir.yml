@@ -1,0 +1,44 @@
+- name: Add matir user with skel
+  hosts: all
+  tasks:
+
+  - name: Ensure sudo is installed
+    ansible.builtin.package:
+      name: sudo
+      state: present
+
+  - name: Ensure zsh is installed
+    ansible.builtin.package:
+      name: zsh
+      state: present
+
+  - name: Ensure git is installed
+    ansible.builtin.package:
+      name: git
+      state: present
+
+  - name: Ensure group sudo exists
+    ansible.builtin.group:
+      name: sudo
+      system: yes
+
+  - name: Add user matir
+    ansible.builtin.user:
+      name: "matir"
+      state: present
+      append: yes
+      groups:
+        - sudo
+
+  - name: Install skel
+    become: yes
+    become_user: matir
+    ansible.builtin.git:
+      repo: https://github.com/Matir/skel.git
+      dest: /home/matir/.skel
+
+  - name: Run skel install script
+    become: yes
+    become_user: matir
+    ansible.builtin.command:
+      cmd: /home/matir/.skel/install.sh
