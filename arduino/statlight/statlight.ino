@@ -1,5 +1,6 @@
 #include <FastLED.h>
 #include <string.h>
+#include <stdlib.h>
 
 
 #define NUM_LEDS 8
@@ -18,6 +19,7 @@ typedef struct {
 
 String splitFirstWord(String arg);
 void setAll(String unused_args, funcArg arg);
+void setCustom(String args, funcArg arg);
 
 cmdSet Commands[] = {
   {"off", setAll, {.val = CRGB::Black}},
@@ -26,6 +28,7 @@ cmdSet Commands[] = {
   {"green", setAll, {.val = CRGB::Green}},
   {"yellow", setAll, {.val = CRGB::Yellow}},
   {"white", setAll, {.val = CRGB::White}},
+  {"custom", setCustom, {}},
   {"", NULL, {}},
 };
 
@@ -70,4 +73,12 @@ String splitFirstWord(String arg) {
 void setAll(String unused_args, funcArg arg) {
   for(int i=0;i<NUM_LEDS;i++)
     led_data[i] = arg.val;
+}
+
+void setCustom(String args, funcArg arg) {
+  for(int i=0;i<NUM_LEDS;i++) {
+    String colorWord = splitFirstWord(args);
+    int color = strtol(colorWord.c_str(), NULL, 16);
+    led_data[i] = color;
+  }
 }
