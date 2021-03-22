@@ -36,8 +36,8 @@ CRGB led_data[NUM_LEDS];
 
 void setup() {
   Serial.begin(115200);
-  LEDS.addLeds<WS2812, DATA_PIN, RGB>(led_data, NUM_LEDS);
-  LEDS.setBrightness(128);
+  LEDS.addLeds<WS2812, DATA_PIN, GRB>(led_data, NUM_LEDS);
+  LEDS.setBrightness(32);
 }
 
 void loop() {
