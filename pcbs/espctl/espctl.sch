@@ -186,7 +186,7 @@ U 1 1 60689496
 P 2150 1550
 F 0 "TP1" H 2208 1668 50  0000 L CNN
 F 1 "TP5V" H 2208 1577 50  0000 L CNN
-F 2 "TestPoint:TestPoint_Loop_D1.80mm_Drill1.0mm_Beaded" H 2350 1550 50  0001 C CNN
+F 2 "TestPoint:TestPoint_Pad_D1.0mm" H 2350 1550 50  0001 C CNN
 F 3 "~" H 2350 1550 50  0001 C CNN
 	1    2150 1550
 	1    0    0    -1  
@@ -276,12 +276,12 @@ Connection ~ 4500 2450
 NoConn ~ 4850 2650
 NoConn ~ 4850 2750
 Wire Wire Line
-	6050 3550 6400 3550
+	6050 4350 6400 4350
 Wire Wire Line
 	6050 3650 6400 3650
 Wire Wire Line
 	6050 3750 6400 3750
-Text Label 6400 3550 2    50   ~ 0
+Text Label 6400 4350 2    50   ~ 0
 CH1
 Text Label 6400 3650 2    50   ~ 0
 CH2
@@ -318,7 +318,6 @@ NoConn ~ 6050 3950
 NoConn ~ 6050 4050
 NoConn ~ 6050 4150
 NoConn ~ 6050 4250
-NoConn ~ 6050 4350
 NoConn ~ 6050 4450
 NoConn ~ 6050 4550
 NoConn ~ 6050 4650
@@ -835,50 +834,6 @@ F 3 "" H 9100 5050 50  0001 C CNN
 	1    9100 5050
 	1    0    0    -1  
 $EndComp
-$Comp
-L Connector_Generic:Conn_01x06 J7
-U 1 1 606DC5A1
-P 3500 3900
-F 0 "J7" H 3580 3892 50  0000 L CNN
-F 1 "Conn_01x06" H 3580 3801 50  0000 L CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_2x03_P2.54mm_Vertical" H 3500 3900 50  0001 C CNN
-F 3 "~" H 3500 3900 50  0001 C CNN
-	1    3500 3900
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:GND #PWR023
-U 1 1 606DD72D
-P 3100 3700
-F 0 "#PWR023" H 3100 3450 50  0001 C CNN
-F 1 "GND" V 3105 3572 50  0000 R CNN
-F 2 "" H 3100 3700 50  0001 C CNN
-F 3 "" H 3100 3700 50  0001 C CNN
-	1    3100 3700
-	0    1    1    0   
-$EndComp
-Wire Wire Line
-	3100 3700 3300 3700
-Wire Wire Line
-	3300 3800 3050 3800
-Wire Wire Line
-	3300 3900 3050 3900
-Wire Wire Line
-	3300 4000 3050 4000
-Wire Wire Line
-	3300 4100 3050 4100
-Wire Wire Line
-	3300 4200 3050 4200
-Text Label 3050 3800 0    50   ~ 0
-MTDI
-Text Label 3050 3900 0    50   ~ 0
-MTCK
-Text Label 3050 4000 0    50   ~ 0
-MTMS
-Text Label 3050 4100 0    50   ~ 0
-MTDO
-Text Label 3050 4200 0    50   ~ 0
-~RST
 Text Label 4850 2450 2    50   ~ 0
 ~RST
 $Comp
@@ -942,4 +897,9 @@ F 3 "" H 5850 1400 50  0001 C CNN
 	1    5850 1400
 	1    0    0    -1  
 $EndComp
+NoConn ~ 6400 3050
+NoConn ~ 6400 3150
+NoConn ~ 6400 3250
+NoConn ~ 6400 3350
+NoConn ~ 6050 3550
 $EndSCHEMATC
