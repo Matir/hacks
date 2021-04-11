@@ -184,12 +184,84 @@ module tower_bracket() {
   }
 }
 
+module single_panel() {
+  p_width=80;
+  height=75;
+  thickness=2;
+  rib_thickness=10;
+  rib_offset=width/4;
+
+  difference() {
+    union() {
+      cube([p_width, p_width, thickness]);
+      // ribs
+      for (o = [1/4, 3/4])
+        translate([width*o-rib_width/2+10, 0, 0])
+          cube([rib_width, p_width, rib_thickness]);
+    }
+    union() {
+      // screw holes for back
+      for (o=[1/4, 3/4]) {
+        for (l=[16, 22])
+          for (d=[-1, 1])
+            translate([width*o+10, l*d+(p_width/2), rib_thickness/2])
+              cylinder(d=2.5, h=rib_thickness, $fn=20);
+      };
+      // taper on end
+      for(o=[0, 1])
+        translate([width/2+10, o*p_width, rib_thickness*1.41+thickness])
+          rotate([45, 0, 0])
+            cube([width, rib_thickness*2, rib_thickness*2], center=true);
+      // Cutout for connector
+      translate([p_width/2-5, 0, -thickness])
+        cube([10, 9, thickness*3]);
+      // Screw holes, m3 at 70mm spacing
+      for(x_pos=[1, -1])
+        for(y_pos=[1, -1])
+          translate([p_width/2-x_pos*35, p_width/2-y_pos*35, -thickness])
+            cylinder(d=3.2, h=thickness*3, $fn=20);
+    }
+  }
+}
+
+module single_panel_lens() {
+  p_width=80;
+  thickness=0.6;
+  depth=5;
+
+  union() {
+    difference() {
+      // Main Body
+      cube([p_width, p_width, depth]);
+      // Make it hollow
+      translate([thickness*2, thickness*2, thickness])
+        cube([p_width-thickness*4, p_width-thickness*4, depth]);
+      // Cut out for screw terminal
+      translate([p_width/2-5, 0, -thickness])
+        cube([10, 9, 15]);
+    }
+    // Screw supports, self-tapping M3
+    for(x_pos=[1, -1])
+      for(y_pos=[1, -1])
+        translate([p_width/2-x_pos*35, p_width/2-y_pos*35, 0]) {
+          difference() {
+            cylinder(d=6, h=depth, $fn=20);
+            cylinder(d=2.6, h=depth, $fn=20);
+          }
+        }
+  }
+}
+
 //panel_piece();
 
 //translate([0, -30, 10])
 //back_bracket();
+//translate([0, 0, 30])
+//  single_panel();
 
 //
 //45_bracket();
 
-tower_bracket();
+//tower_bracket();
+
+single_panel_lens();
