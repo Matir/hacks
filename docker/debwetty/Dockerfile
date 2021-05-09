@@ -5,6 +5,6 @@ RUN apt update && \
 
 RUN yarnpkg global add wetty
 
-EXPOSE 4000
+EXPOSE 3000
 
 CMD ["wetty", "--port", "3000", "--command", "/bin/bash", "--base", "/"]
