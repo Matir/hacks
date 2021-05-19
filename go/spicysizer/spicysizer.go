@@ -4,18 +4,21 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/BurntSushi/xgb"
 	"github.com/BurntSushi/xgb/randr"
 	"github.com/BurntSushi/xgb/xproto"
 )
 
+var infoLog = log.New(os.Stderr, "", log.LstdFlags)
+
 func main() {
 	verboseFlag := flag.Bool("-v", false, "Verbose output.")
 	flag.Parse()
 
 	if !*verboseFlag {
-		log.SetOutput(ioutil.Discard)
+		infoLog.SetOutput(ioutil.Discard)
 	}
 
 	X, err := xgb.NewConn()
@@ -40,15 +43,15 @@ func main() {
 	for {
 		ev, xerr := X.WaitForEvent()
 		if xerr != nil {
-			log.Printf("Error processing event: %s", xerr)
+			infoLog.Printf("Error processing event: %s", xerr)
 			continue
 		}
-		log.Printf("Event: %s\n", ev)
+		infoLog.Printf("Event: %s\n", ev)
 		if scn, ok := ev.(randr.ScreenChangeNotifyEvent); ok {
 			width, height := scn.Width, scn.Height
-			log.Printf("New size: %dx%d\n", width, height)
+			infoLog.Printf("New size: %dx%d\n", width, height)
 			if err := updateScreens(X, rootWindow, uint32(scn.Mwidth), uint32(scn.Mheight)); err != nil {
-				log.Printf("Error updating screens: %v\n", err)
+				infoLog.Printf("Error updating screens: %v\n", err)
 			}
 			continue
 		}
@@ -59,11 +62,11 @@ func updateScreens(X *xgb.Conn, w xproto.Window, mmWidth, mmHeight uint32) error
 	if res, err := randr.GetScreenResources(X, w).Reply(); err != nil {
 		return err
 	} else {
-		log.Printf("Resources: %+v\n", res)
+		infoLog.Printf("Resources: %+v\n", res)
 		if szRange, err := randr.GetScreenSizeRange(X, w).Reply(); err != nil {
 			return err
 		} else {
-			log.Printf("Size range: %+v\n", szRange)
+			infoLog.Printf("Size range: %+v\n", szRange)
 		}
 		for _, output := range res.Outputs {
 			// TODO: parallelize
@@ -72,9 +75,9 @@ func updateScreens(X *xgb.Conn, w xproto.Window, mmWidth, mmHeight uint32) error
 				return err
 			}
 			name := string(info.Name)
-			log.Printf("Output info: %s: %+v\n", name, info)
+			infoLog.Printf("Output info: %s: %+v\n", name, info)
 			if info.Connection != randr.ConnectionConnected {
-				log.Printf("%s disconnected", name)
+				infoLog.Printf("%s disconnected", name)
 				continue
 			}
 			bestMode := info.Modes[0]
@@ -84,7 +87,7 @@ func updateScreens(X *xgb.Conn, w xproto.Window, mmWidth, mmHeight uint32) error
 				if randr.Mode(mode.Id) != bestMode {
 					continue
 				}
-				log.Printf("Desired mode: %dx%d\n", mode.Width, mode.Height)
+				infoLog.Printf("Desired mode: %dx%d\n", mode.Width, mode.Height)
 				bestWidth = mode.Width
 				bestHeight = mode.Height
 			}
@@ -92,15 +95,15 @@ func updateScreens(X *xgb.Conn, w xproto.Window, mmWidth, mmHeight uint32) error
 			if err != nil {
 				return err
 			}
-			log.Printf("CRTC: %+v", crtcInfo)
+			infoLog.Printf("CRTC: %+v", crtcInfo)
 			if crtcInfo.Width == bestWidth && crtcInfo.Height == bestHeight {
-				log.Printf("CRTC Configured, no update needed.")
+				infoLog.Printf("CRTC Configured, no update needed.")
 				continue
 			}
-			log.Printf("Setting dims: %vx%v, %vx%v", bestWidth, bestHeight, mmWidth, mmHeight)
+			infoLog.Printf("Setting dims: %vx%v, %vx%v", bestWidth, bestHeight, mmWidth, mmHeight)
 			setScreen := func() error {
 				if err := randr.SetScreenSizeChecked(X, w, bestWidth, bestHeight, mmWidth, mmHeight).Check(); err != nil {
-					log.Printf("Error setting screen size: %v", err)
+					infoLog.Printf("Error setting screen size: %v", err)
 					return err
 				}
 				return nil
@@ -108,7 +111,7 @@ func updateScreens(X *xgb.Conn, w xproto.Window, mmWidth, mmHeight uint32) error
 			setCrtc := func() error {
 				_, err = randr.SetCrtcConfig(X, info.Crtc, crtcInfo.Timestamp, res.ConfigTimestamp, crtcInfo.X, crtcInfo.Y, bestMode, crtcInfo.Rotation, crtcInfo.Outputs).Reply()
 				if err != nil {
-					log.Printf("Error configuring CRTC: %v", err)
+					infoLog.Printf("Error configuring CRTC: %v", err)
 					return err
 				}
 				return nil
