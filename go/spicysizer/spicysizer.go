@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"io"
+	"io/ioutil"
 	"log"
 
 	"github.com/BurntSushi/xgb"
@@ -15,7 +15,7 @@ func main() {
 	flag.Parse()
 
 	if !*verboseFlag {
-		log.SetOutput(io.Discard)
+		log.SetOutput(ioutil.Discard)
 	}
 
 	X, err := xgb.NewConn()
