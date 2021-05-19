@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"io"
 	"log"
 
 	"github.com/BurntSushi/xgb"
@@ -9,6 +11,13 @@ import (
 )
 
 func main() {
+	verboseFlag := flag.Bool("-v", false, "Verbose output.")
+	flag.Parse()
+
+	if !*verboseFlag {
+		log.SetOutput(io.Discard)
+	}
+
 	X, err := xgb.NewConn()
 	if err != nil {
 		log.Fatal(err)
