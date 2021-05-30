@@ -1,0 +1,53 @@
+---
+- name: Install Docker on Debian
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Add prerequisite packages
+      ansible.builtin.apt:
+        update_cache: yes
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+
+    - name: Add GPG key
+      ansible.builtin.copy:
+        mode: 0644
+        dest: /usr/share/keyrings/docker.gpg
+        src: files/docker_keyring.gpg
+      register: docker_keyring
+
+    - name: Add sources file
+      ansible.builtin.template:
+        mode: 0644
+        dest: /etc/apt/sources.list.d/docker.list
+        src: templates/docker.sources.list
+      vars:
+        keyring_path: "{{ docker_keyring.dest }}"
+        release: "{{ ansible_distribution_release | replace('kali-rolling', 'bullseye') }}"
+
+    - name: Install packages
+      ansible.builtin.apt:
+        update_cache: yes
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+
+    - name: Get user info
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Add users to docker group
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      when: item in getent_passwd
+      loop:
+        - matir
+        - david

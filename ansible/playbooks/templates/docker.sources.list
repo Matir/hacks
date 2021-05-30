@@ -1,0 +1,1 @@
+deb [arch=amd64 signed-by={{ keyring_path }}] https://download.docker.com/linux/debian {{ release }} stable
