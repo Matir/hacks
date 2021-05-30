@@ -1,0 +1,42 @@
+# Invoke as:
+# ansible-playbook -i HOSTNAME, ./base.yml --ask-pass --ask-become-pass
+---
+- name: Basic setup and users
+  hosts: all
+  vars:
+    managed_users:
+      - david
+      - matir
+      - root
+
+  tasks:
+  - name: Root tasks
+    become: true
+    block:
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        update_cache: true
+        name:
+          - zsh
+          - vim
+          - git
+          - tmux
+          - sudo
+
+    - name: Ensure users exist.
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups:
+          - sudo
+        update_password: on_create
+        shell: "/usr/bin/zsh"
+      loop: "{{ managed_users }}"
+
+  - name: Get builtin data
+    ansible.builtin.getent:
+      database: passwd
+
+  - name: Per-user tasks
+    loop: "{{ managed_users }}"
+    include_tasks: "tasks/base_peruser.yml"

@@ -1,0 +1,22 @@
+- name: Per-user block
+  become: true
+  become_user: "{{ item }}"
+  block:
+
+  - debug:
+      var: getent_passwd
+  - debug:
+      var: getent_passwd[item]
+
+  - name: Clone skeleton
+    ansible.builtin.git:
+      repo: https://github.com/Matir/skel.git
+      force: no
+      track_submodules: yes
+      dest: "{{ getent_passwd[item][4] }}/.skel"
+    register: skel_clone
+
+  - name: Exec setup
+    ansible.builtin.shell:
+      cmd: "{{ getent_passwd[item][4] }}/.skel/install.sh"
+    when: skel_clone.changed
