@@ -19,4 +19,4 @@
   - name: Exec setup
     ansible.builtin.shell:
       cmd: "{{ getent_passwd[item][4] }}/.skel/install.sh"
-    when: skel_clone.changed
+    when: skel_clone.after != skel_clone.before
