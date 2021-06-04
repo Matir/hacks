@@ -12,6 +12,8 @@ if test -d /app/src/css ; then
 fi
 
 ln -s /app/src/*.html /app/srv/
+ln -s /app/src/img /app/srv/img
+ln -s /app/src/files /app/srv/files
 
 if test -d /app/src/js ; then
   npx babel /app/src/js --presets @babel/preset-react --watch --copy-files --out-dir /app/srv/js &
