@@ -18,14 +18,14 @@
       ansible.builtin.copy:
         mode: 0644
         dest: /usr/share/keyrings/docker.gpg
-        src: files/docker_keyring.gpg
+        src: docker_keyring.gpg
       register: docker_keyring
 
     - name: Add sources file
       ansible.builtin.template:
         mode: 0644
         dest: /etc/apt/sources.list.d/docker.list
-        src: templates/docker.sources.list
+        src: docker.sources.list
       vars:
         keyring_path: "{{ docker_keyring.dest }}"
         release: "{{ ansible_distribution_release | replace('kali-rolling', 'bullseye') }}"
