@@ -100,8 +100,8 @@ def do_graph(results):
             1800: 'sha512crypt',
             22000: 'WPA-PBKDF2',
     }
-    width = 0.35
     group_size = 2
+    width = (group_size-0.25)/len(DEVICES)
     ind = np.arange(1, len(graph_modes)*group_size, group_size)
     plt.clf()
     fig, ax = plt.subplots()
@@ -132,8 +132,8 @@ def do_value_graph(results):
             1800: 'sha512crypt',
             22000: 'WPA-PBKDF2',
     }
-    width = 0.35
     group_size = 2
+    width = (group_size-0.25)/len(DEVICES)
     ind = np.arange(1, len(graph_modes)*group_size, group_size)
     plt.clf()
     fig, ax = plt.subplots()
