@@ -19,4 +19,4 @@ if test -d /app/src/js ; then
   npx babel /app/src/js --presets @babel/preset-react --watch --copy-files --out-dir /app/srv/js &
 fi
 
-npx http-server /app/srv -p ${PORT:-8080}
+npx http-server /app/srv -p ${PORT:-8080} -c-1
