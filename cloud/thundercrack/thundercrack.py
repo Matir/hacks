@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import argparse
 import binascii
@@ -32,7 +33,7 @@ msg_prefix = {
 
 
 def print_msg(msg, status=STATUS_OK):
-    print('{}{}'.format(msg_prefix[status], msg))
+    print('{}{}'.format(msg_prefix[status], msg), flush=True)
 
 
 def get_driver(account_name=None, json_path=None, project_id=None, zone=None):
@@ -211,8 +212,10 @@ def get_deploy_steps(args):
             "cd /root",
             "sed -i 's/ main/ main contrib non-free/' /etc/apt/sources.list",
             "apt-get update",
-            "apt-get -y install p7zip wget tmux linux-headers-$(uname -r)",
-            "apt-get -t buster-backports -y install nvidia-cuda-dev "
+            "DEBIAN_FRONTEND=noninteractive apt-get -y install p7zip wget tmux "
+                "linux-headers-$(uname -r)",
+            "DEBIAN_FRONTEND=noninteractive apt-get -t buster-backports -y "
+                "install nvidia-cuda-dev "
                 "nvidia-cuda-toolkit nvidia-driver",
             "modprobe nvidia",
             "wget -O /tmp/hashcat.7z {}".format(hashcat_url),
@@ -320,8 +323,11 @@ def main(argv):
     print_msg("Setting up deploy steps...")
     deploy_steps = get_deploy_steps(args)
     print_msg("Starting build...")
-    build_vm(driver, image, size, args.gpu, args.gpus, key,
+    node = build_vm(driver, image, size, args.gpu, args.gpus, key,
              args.disk_size, deploy_steps)
+    print_msg(
+        "Started hashcat.  SSH to instance attach to TMUX to see status/output")
+    print_msg("gcloud compute ssh {}".format(node.name))
 
 
 if __name__ == '__main__':

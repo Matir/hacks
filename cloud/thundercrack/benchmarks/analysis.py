@@ -10,6 +10,7 @@ DEVICES = [
         'nvidia-tesla-t4',
         'nvidia-tesla-p100',
         'nvidia-tesla-v100',
+        'nvidia-tesla-a100',
 ]
 
 PRICES = {
@@ -18,6 +19,7 @@ PRICES = {
         'nvidia-tesla-p4': 0.60,
         'nvidia-tesla-t4': 0.35,
         'nvidia-tesla-v100': 2.48,
+        'nvidia-tesla-a100': 2.93,
 }
 
 MULTIPLIERS = {

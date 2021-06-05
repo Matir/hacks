@@ -1,0 +1,121 @@
+hashcat (v6.2.1) starting in benchmark mode...
+
+[33mBenchmarking uses hand-optimized kernel code by default.[0m
+[33mYou can use it in your cracking session by setting the -O option.[0m
+[33mNote: Using optimized kernel code limits the maximum supported password length.[0m
+[33mTo disable the optimized kernel code in benchmark mode, use the -w option.[0m
+[33m[0m
+CUDA API (CUDA 11.2)
+====================
+* Device #1: A100-SXM4-40GB, 40120/40536 MB, 108MCU
+
+OpenCL API (OpenCL 1.2 CUDA 11.2.162) - Platform #1 [NVIDIA Corporation]
+========================================================================
+* Device #2: A100-SXM4-40GB, skipped
+
+Benchmark relevant options:
+===========================
+* --optimized-kernel-enable
+
+Hashmode: 0 - MD5
+
+Speed.#1.........: 67795.0 MH/s (53.07ms) @ Accel:32 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 100 - SHA1
+
+Speed.#1.........: 21690.7 MH/s (83.16ms) @ Accel:16 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 1400 - SHA2-256
+
+Speed.#1.........:  9444.3 MH/s (95.57ms) @ Accel:8 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 1700 - SHA2-512
+
+Speed.#1.........:  3115.9 MH/s (72.39ms) @ Accel:8 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 22000 - WPA-PBKDF2-PMKID+EAPOL (Iterations: 4095)
+
+Speed.#1.........:  1092.8 kH/s (50.31ms) @ Accel:32 Loops:64 Thr:1024 Vec:1
+
+Hashmode: 1000 - NTLM
+
+Speed.#1.........:   115.3 GH/s (31.12ms) @ Accel:32 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 3000 - LM
+
+Speed.#1.........: 65096.9 MH/s (55.23ms) @ Accel:512 Loops:1024 Thr:64 Vec:1
+
+Hashmode: 5500 - NetNTLMv1 / NetNTLMv1+ESS
+
+Speed.#1.........: 70633.6 MH/s (50.95ms) @ Accel:32 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 5600 - NetNTLMv2
+
+Speed.#1.........:  4954.1 MH/s (91.11ms) @ Accel:16 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 1500 - descrypt, DES (Unix), Traditional DES
+
+Speed.#1.........:  2598.2 MH/s (86.70ms) @ Accel:32 Loops:1024 Thr:64 Vec:1
+
+Hashmode: 500 - md5crypt, MD5 (Unix), Cisco-IOS $1$ (MD5) (Iterations: 1000)
+
+Speed.#1.........: 31505.4 kH/s (54.61ms) @ Accel:32 Loops:500 Thr:1024 Vec:1
+
+Hashmode: 3200 - bcrypt $2*$, Blowfish (Unix) (Iterations: 32)
+
+Speed.#1.........:   135.4 kH/s (15.19ms) @ Accel:1 Loops:16 Thr:40 Vec:1
+
+Hashmode: 1800 - sha512crypt $6$, SHA512 (Unix) (Iterations: 5000)
+
+Speed.#1.........:   535.4 kH/s (81.83ms) @ Accel:8 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 7500 - Kerberos 5, etype 23, AS-REQ Pre-Auth
+
+Speed.#1.........:  1847.4 MH/s (60.96ms) @ Accel:256 Loops:64 Thr:64 Vec:1
+
+Hashmode: 13100 - Kerberos 5, etype 23, TGS-REP
+
+Speed.#1.........:  1796.5 MH/s (62.67ms) @ Accel:256 Loops:64 Thr:64 Vec:1
+
+Hashmode: 15300 - DPAPI masterkey file v1 (Iterations: 23999)
+
+Speed.#1.........:   187.2 kH/s (50.13ms) @ Accel:32 Loops:64 Thr:1024 Vec:1
+
+Hashmode: 15900 - DPAPI masterkey file v2 (Iterations: 12899)
+
+Speed.#1.........:   109.2 kH/s (80.13ms) @ Accel:4 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 7100 - macOS v10.8+ (PBKDF2-SHA512) (Iterations: 1023)
+
+Speed.#1.........:  1357.5 kH/s (78.49ms) @ Accel:32 Loops:31 Thr:1024 Vec:1
+
+Hashmode: 11600 - 7-Zip (Iterations: 16384)
+
+Speed.#1.........:  1120.4 kH/s (90.31ms) @ Accel:4 Loops:4096 Thr:1024 Vec:1
+
+Hashmode: 12500 - RAR3-hp (Iterations: 262144)
+
+Speed.#1.........:   155.4 kH/s (44.29ms) @ Accel:8 Loops:16384 Thr:128 Vec:1
+
+Hashmode: 13000 - RAR5 (Iterations: 32799)
+
+Speed.#1.........:   118.7 kH/s (57.14ms) @ Accel:4 Loops:512 Thr:1024 Vec:1
+
+Hashmode: 6211 - TrueCrypt RIPEMD160 + XTS 512 bit (Iterations: 1999)
+
+Speed.#1.........:   822.4 kH/s (60.26ms) @ Accel:4 Loops:256 Thr:1024 Vec:1
+
+Hashmode: 13400 - KeePass 1 (AES/Twofish) and KeePass 2 (AES) (Iterations: 24569)
+
+Speed.#1.........:   139.0 kH/s (132.36ms) @ Accel:4 Loops:1024 Thr:1024 Vec:1
+
+Hashmode: 6800 - LastPass + LastPass sniffed (Iterations: 499)
+
+Speed.#1.........:  7561.8 kH/s (45.64ms) @ Accel:16 Loops:124 Thr:1024 Vec:1
+
+Hashmode: 11300 - Bitcoin/Litecoin wallet.dat (Iterations: 200459)
+
+Speed.#1.........:    14397 H/s (78.24ms) @ Accel:4 Loops:512 Thr:1024 Vec:1
+
+Started: Sat Jun  5 21:22:53 2021
+[2KStopped: Sat Jun  5 21:25:04 2021
