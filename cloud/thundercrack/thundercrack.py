@@ -91,6 +91,9 @@ def get_args(argv):
             '--benchmark', default=False, action='store_true',
             help='Run benchmarks instead of cracking.')
     parser.add_argument(
+            '--debug_cmd', default=False, action='store_true',
+            help='Debugging command: print hashcat command line only.')
+    parser.add_argument(
             'hashcat_args', nargs='*', default=[],
             help='Extra arguments for hashcat.')
     args, extras = parser.parse_known_args(argv[1:])
@@ -286,6 +289,8 @@ def build_vm(
         ssh_key.write_private_key(tmpf)
         tmpf.flush()
         print_msg("Starting build/deploy steps.")
+        print_msg("Note: this can take several minutes for the instance to "
+                "become ready, hashcat to be deployed, etc.")
         node = driver.deploy_node(
                 name=name,
                 image=image,
@@ -311,6 +316,9 @@ def ensure_file_exists(path, error='Required file missing.'):
 
 def main(argv):
     args = get_args(argv)
+    if args.debug_cmd:
+        print(build_hashcat_command(args))
+        return
     print_msg("Getting driver and setting up...")
     driver = get_driver(
             account_name=args.service_account,
