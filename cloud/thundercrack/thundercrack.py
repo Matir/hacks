@@ -2,7 +2,6 @@
 
 import argparse
 import binascii
-import collections
 import json
 import os
 import requests
@@ -147,7 +146,8 @@ def list_available_choices(driver: base.NodeDriver) -> None:
 
 
 def get_image(
-        driver: base.NodeDriver, basename: str = 'debian-10') -> base.NodeImage:
+        driver: base.NodeDriver,
+        basename: str = 'debian-10') -> base.NodeImage:
     """Find an image that starts with a given name."""
     for image in driver.list_images():
         if image.name.startswith(basename):
@@ -156,7 +156,8 @@ def get_image(
 
 
 def get_size(
-        driver: base.NodeDriver, name: str = 'n1-standard-2') -> base.NodeSize:
+        driver: base.NodeDriver,
+        name: str = 'n1-standard-2') -> base.NodeSize:
     for size in driver.list_sizes():
         if size.name == name:
             return size
@@ -251,11 +252,10 @@ def get_deploy_steps(args: ThunderCrackArgs) -> CheckedMultiStepDeployment:
             "cd /root",
             "sed -i 's/ main/ main contrib non-free/' /etc/apt/sources.list",
             "apt-get update",
-            "DEBIAN_FRONTEND=noninteractive apt-get -y install p7zip wget tmux "
-                "linux-headers-$(uname -r)",
+            "DEBIAN_FRONTEND=noninteractive apt-get -y install p7zip wget "
+            "tmux linux-headers-$(uname -r)",
             "DEBIAN_FRONTEND=noninteractive apt-get -t buster-backports -y "
-                "install nvidia-cuda-dev "
-                "nvidia-cuda-toolkit nvidia-driver",
+            "install nvidia-cuda-dev nvidia-cuda-toolkit nvidia-driver",
             "modprobe nvidia",
             "wget -O /tmp/hashcat.7z {}".format(hashcat_url),
             "7zr x /tmp/hashcat.7z",
@@ -334,7 +334,8 @@ def build_vm(
         ssh_key.write_private_key(tmpf)
         tmpf.flush()
         print_msg("Starting build/deploy steps.")
-        print_msg("Note: this can take several minutes for the instance to "
+        print_msg(
+                "Note: this can take several minutes for the instance to "
                 "become ready, hashcat to be deployed, etc.")
         node = driver.deploy_node(
                 name=name,
@@ -382,10 +383,11 @@ def main(argv: List[str]) -> None:
     print_msg("Setting up deploy steps...")
     deploy_steps = get_deploy_steps(args)
     print_msg("Starting build...")
-    node = build_vm(driver, image, size, args.gpu, args.gpus, key,
-             args.disk_size, deploy_steps)
+    node = build_vm(
+            driver, image, size, args.gpu, args.gpus, key,
+            args.disk_size, deploy_steps)
     print_msg(
-        "Started hashcat.  SSH to instance attach to TMUX to see status/output")
+        "Started hashcat. SSH to instance attach to TMUX to see status/output")
     print_msg("gcloud compute ssh {}".format(node.name))
 
 
