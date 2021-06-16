@@ -49,8 +49,7 @@ class Benchmarks:
         return self.perf()/PRICES[self.name]
 
     def perf(self):
-        tot = sum(self.normalized.values())
-        return tot / len(self.normalized.values())
+        return np.median(list(self.normalized.values()))
 
     @classmethod
     def load_benchmarks(cls, fname):
