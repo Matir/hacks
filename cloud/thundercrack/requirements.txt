@@ -1,3 +1,8 @@
 requests
 apache-libcloud
 paramiko
+
+# Really only needed for development
+types-requests
+types-paramiko
+mypy

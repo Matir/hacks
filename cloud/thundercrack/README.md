@@ -25,6 +25,9 @@ so you *must* specify a GPU type if you want CUDA cracking.
 You will need service account credentials in JSON format for the account to
 launch the GCP instance.
 
+Thanks to [Type Hints](https://www.python.org/dev/peps/pep-0484/), Python >= 3.5
+are supported. `mypy` is used for type checking.
+
 ## Common Flags
 
 * `--credentials`: Path to the JSON credentials for a service account to use to
@@ -60,3 +63,5 @@ python3 ./thundercrack.py --credentials ./thundercrack.json \
 - [ ] Support automatically connecting to remote tmux session.
 - [ ] Support starting another job on an existing instance.
 - [ ] Support uploading rules files.
+- [ ] Switch to [TAP](https://github.com/swansonk14/typed-argument-parser) for
+  arg parsing.

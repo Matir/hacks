@@ -10,11 +10,16 @@ import shlex
 import sys
 import tempfile
 
+from libcloud.compute import base
 from libcloud.compute import deployment
 from libcloud.compute import types
 from libcloud.compute import providers
+from libcloud.compute import ssh
 from paramiko import pkey
 from paramiko import ecdsakey
+
+from typing import (
+        NamedTuple, Sequence, Optional, List, Tuple, Dict, Any, NoReturn)
 
 
 HASHCAT_RELEASES_URL = \
@@ -32,11 +37,15 @@ msg_prefix = {
 }
 
 
-def print_msg(msg, status=STATUS_OK):
+def print_msg(msg: str, status: str = STATUS_OK) -> None:
     print('{}{}'.format(msg_prefix[status], msg), flush=True)
 
 
-def get_driver(account_name=None, json_path=None, project_id=None, zone=None):
+def get_driver(
+        account_name: Optional[str] = None,
+        json_path: str = "",
+        project_id: Optional[str] = None,
+        zone: Optional[str] = None) -> base.NodeDriver:
     """Build a driver instance."""
     if not (account_name and project_id):
         metadata = parse_sa(json_path)
@@ -48,18 +57,39 @@ def get_driver(account_name=None, json_path=None, project_id=None, zone=None):
             datacenter=zone)
 
 
-def parse_sa(json_path):
+class Metadata(NamedTuple):
+    project_id: str
+    account_name: str
+
+
+def parse_sa(json_path: str) -> Metadata:
     """Extract the project ID and account name from the JSON credentials."""
     with open(json_path) as fp:
         data = json.load(fp)
-    metadata = collections.namedtuple(
-            'metadata', ('project_id', 'account_name'))
-    return metadata(
+    return Metadata(
             project_id=data['project_id'],
             account_name=data['client_email'])
 
 
-def get_args(argv):
+class ThunderCrackArgs(argparse.Namespace):
+    """Type for command-line args."""
+    service_account: str
+    credentials: str
+    project: str
+    zone: str
+    size: str
+    gpu: str
+    gpus: int
+    ssh_key: Optional[str]
+    disk_size: int
+    wordlist: Optional[str]
+    hashfile: Optional[str]
+    benchmark: bool
+    debug_cmd: bool
+    hashcat_args: List[str]
+
+
+def get_args(argv: Sequence[str]) -> ThunderCrackArgs:
     parser = argparse.ArgumentParser(
             description='Hashcat on Cloud',
             allow_abbrev=False)
@@ -78,7 +108,8 @@ def get_args(argv):
     parser.add_argument(
             '--gpu', default='nvidia-tesla-v100', help='GPU Type')
     parser.add_argument(
-            '--gpus', default=1, type=int, help='Number of GPUs')
+            '--gpus', default=1, type=int, help='Number of GPUs',
+            metavar='N_GPUS')
     parser.add_argument(
             '--ssh_key', default=None, help='SSH Key Path')
     parser.add_argument(
@@ -96,7 +127,10 @@ def get_args(argv):
     parser.add_argument(
             'hashcat_args', nargs='*', default=[],
             help='Extra arguments for hashcat.')
-    args, extras = parser.parse_known_args(argv[1:])
+    args, extras = parser.parse_known_args(
+            argv[1:],
+            namespace=ThunderCrackArgs())
+    assert isinstance(args, ThunderCrackArgs)  # Help typer with return value
     args.hashcat_args = extras + args.hashcat_args
     if not (args.benchmark or args.hashfile):
         print('Must specify --hashfile or --benchmark!\n', file=sys.stderr)
@@ -105,14 +139,15 @@ def get_args(argv):
     return args
 
 
-def list_available_choices(driver):
+def list_available_choices(driver: base.NodeDriver) -> None:
     for image in driver.list_images():
         print(image)
     for size in driver.list_sizes():
         print(size)
 
 
-def get_image(driver, basename='debian-10'):
+def get_image(
+        driver: base.NodeDriver, basename: str = 'debian-10') -> base.NodeImage:
     """Find an image that starts with a given name."""
     for image in driver.list_images():
         if image.name.startswith(basename):
@@ -120,20 +155,21 @@ def get_image(driver, basename='debian-10'):
     raise ValueError('No image found with basename {}'.format(basename))
 
 
-def get_size(driver, name='n1-standard-2'):
+def get_size(
+        driver: base.NodeDriver, name: str = 'n1-standard-2') -> base.NodeSize:
     for size in driver.list_sizes():
         if size.name == name:
             return size
     raise ValueError('No size found with name {}'.format(name))
 
 
-def get_ssh_key(key_path=None):
+def get_ssh_key(key_path: Optional[str] = None) -> pkey.PKey:
     if key_path:
         return pkey.PKey.from_private_key_file(key_path)
     return ecdsakey.ECDSAKey.generate()
 
 
-def get_instance_name():
+def get_instance_name() -> str:
     uid = binascii.hexlify(os.urandom(6)).decode('ascii')
     return 'thundercrack-{}'.format(uid)
 
@@ -144,7 +180,7 @@ class ScriptFailedError(Exception):
 
 class CheckedMultiStepDeployment(deployment.MultiStepDeployment):
 
-    def run(self, node, client):
+    def run(self, node: base.Node, client: ssh.BaseSSHClient) -> base.Node:
         """
         Run each deployment that has been added.
 
@@ -160,7 +196,7 @@ class CheckedMultiStepDeployment(deployment.MultiStepDeployment):
         return node
 
 
-def split_hashargs(args):
+def split_hashargs(args: List[str]) -> Tuple[List[str], List[str]]:
     """Split any patterns off the end of the hashcat args."""
     patterns = []
     args = args[:]  # Making a copy
@@ -172,7 +208,7 @@ def split_hashargs(args):
     return args, patterns[::-1]
 
 
-def build_hashcat_command(args):
+def build_hashcat_command(args: ThunderCrackArgs) -> str:
     """Build the hashcat command line."""
     if args.benchmark:
         cmd = [
@@ -195,7 +231,7 @@ def build_hashcat_command(args):
     return shlex.join(cmd)
 
 
-def build_tmux_command(args):
+def build_tmux_command(args: ThunderCrackArgs) -> str:
     """Build the tmux line."""
     hashcat_cmd = build_hashcat_command(args)
     print_msg('Hashcat command line: {}'.format(hashcat_cmd))
@@ -208,7 +244,7 @@ def build_tmux_command(args):
     return shlex.join(cmd)
 
 
-def get_deploy_steps(args):
+def get_deploy_steps(args: ThunderCrackArgs) -> CheckedMultiStepDeployment:
     """Get the deployment steps."""
     hashcat_url = get_hashcat_download()
     setup_script_steps = [
@@ -234,13 +270,13 @@ def get_deploy_steps(args):
         ensure_file_exists(
                 args.hashfile, "Hash file {} missing!".format(args.hashfile))
         hash_deployment = deployment.FileDeployment(
-                args.hashfile, PASSWD_FILE_PATH)
+                str(args.hashfile), PASSWD_FILE_PATH)
 
         steps.add(hash_deployment)
 
         if args.wordlist is not None:
             ensure_file_exists(
-                    args.wordlist,
+                    str(args.wordlist),
                     "Wordlist {} missing!".format(args.wordlist))
             wordlist_deployment = deployment.FileDeployment(
                     args.wordlist, WORDLIST_FILE_PATH)
@@ -253,7 +289,7 @@ def get_deploy_steps(args):
     return steps
 
 
-def get_hashcat_download():
+def get_hashcat_download() -> Optional[str]:
     """Get the URL for the hashcat download."""
     resp = requests.get(HASHCAT_RELEASES_URL)
     body = resp.json()
@@ -261,12 +297,20 @@ def get_hashcat_download():
         url = asset['browser_download_url']
         if url.endswith('.7z'):
             return url
+    return None
 
 
 def build_vm(
-        driver, image, size, gpu_type, gpus, ssh_key, disk_size, deploy_steps):
+        driver: base.NodeDriver,
+        image: base.NodeImage,
+        size: base.NodeSize,
+        gpu_type: str,
+        gpus: int,
+        ssh_key: pkey.PKey,
+        disk_size: int,
+        deploy_steps: deployment.Deployment) -> base.Node:
     """Build the VM."""
-    kwargs = dict()
+    kwargs: Dict[str, Any] = dict()
     if gpus:
         kwargs['ex_accelerator_type'] = gpu_type
         kwargs['ex_accelerator_count'] = gpus
@@ -282,7 +326,8 @@ def build_vm(
             }
         ]
     }
-    driver._build_service_accounts_gce_list = lambda *args, **kwargs: []
+    driver._build_service_accounts_gce_list = (  # type: ignore
+            lambda *args, **kwargs: [])
 
     # Write temporary path
     with tempfile.NamedTemporaryFile('w') as tmpf:
@@ -304,7 +349,12 @@ def build_vm(
         return node
 
 
-def ensure_file_exists(path, error='Required file missing.'):
+def ensure_file_exists(
+        path: Optional[str],
+        error: str = 'Required file missing.') -> Optional[NoReturn]:
+    if path is None:
+        print_msg(error, STATUS_ERROR)
+        sys.exit(1)
     try:
         if not os.path.isfile(path):
             print_msg(error, STATUS_ERROR)
@@ -312,9 +362,10 @@ def ensure_file_exists(path, error='Required file missing.'):
     except TypeError:
         print_msg(error, STATUS_ERROR)
         sys.exit(2)
+    return None
 
 
-def main(argv):
+def main(argv: List[str]) -> None:
     args = get_args(argv)
     if args.debug_cmd:
         print(build_hashcat_command(args))
