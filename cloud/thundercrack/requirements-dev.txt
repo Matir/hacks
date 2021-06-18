@@ -1,0 +1,5 @@
+-r requirements.txt
+mypy==0.902
+types-paramiko==0.1.6
+types-requests==0.1.11
+typing-extensions==3.10.0.0

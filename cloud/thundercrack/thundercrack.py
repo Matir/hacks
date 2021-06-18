@@ -199,14 +199,13 @@ class CheckedMultiStepDeployment(deployment.MultiStepDeployment):
 
 def split_hashargs(args: List[str]) -> Tuple[List[str], List[str]]:
     """Split any patterns off the end of the hashcat args."""
-    patterns = []
-    args = args[:]  # Making a copy
-    while args:
-        if args[-1].startswith('?'):
-            patterns.append(args.pop())
-        else:
-            break
-    return args, patterns[::-1]
+    if not args:
+        return [], []
+    for i, arg in enumerate(reversed(args)):
+        if not arg.startswith('?'):
+            return args[:len(args)-i], args[len(args)-i:]
+    # In this case, all args begin with "?"
+    return [], args
 
 
 def build_hashcat_command(args: ThunderCrackArgs) -> str:
