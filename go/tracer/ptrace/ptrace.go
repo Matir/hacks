@@ -1,12 +1,14 @@
 package ptrace
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"runtime"
 	"syscall"
+	"unicode/utf8"
 
 	seccomp "github.com/seccomp/libseccomp-golang"
 	"golang.org/x/sys/unix"
@@ -165,6 +167,19 @@ func (te *TraceEvent) SyscallName() string {
 	} else {
 		return fmt.Sprintf("SYS_%d", te.SyscallNum)
 	}
+}
+
+func (ta TraceArg) String() string {
+	// Attempt to interpret as a utf-8 encoded c-string starting at this point
+	bv := ta.BytesValue
+	if idx := bytes.IndexByte(bv, byte(0)); idx != -1 {
+		bv = bv[:idx]
+	}
+	sv := string(bv)
+	if utf8.ValidString(sv) {
+		return sv
+	}
+	return ""
 }
 
 // TODO: make this architecture-independent
