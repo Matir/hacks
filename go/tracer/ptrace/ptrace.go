@@ -2,13 +2,17 @@ package ptrace
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"syscall"
+	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	seccomp "github.com/seccomp/libseccomp-golang"
 	"golang.org/x/sys/unix"
@@ -30,12 +34,15 @@ type TraceArgs [MAX_SYSCALL_ARGS]TraceArg
 
 type TraceEvent struct {
 	Pid           int
+	Timestamp     time.Time
 	SyscallExit   bool
 	SyscallNum    uint64
 	SyscallReturn uint64
 	PrecallArgs   TraceArgs
 	PostcallArgs  TraceArgs
 	PC            uint64
+	// Special case
+	Argv [][]byte
 }
 
 func TraceProcess(args []string) (<-chan *TraceEvent, error) {
@@ -75,6 +82,8 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 	opts |= syscall.PTRACE_O_TRACECLONE
 	opts |= syscall.PTRACE_O_TRACEFORK
 	opts |= syscall.PTRACE_O_TRACEVFORK
+	opts |= syscall.PTRACE_O_TRACEEXEC
+	opts |= syscall.PTRACE_O_TRACESYSGOOD
 	if err := syscall.PtraceSetOptions(cmd.Process.Pid, opts); err != nil {
 		logger.Printf("Error with PtraceSetOptions: %s", err)
 		cmd.Process.Kill()
@@ -106,8 +115,6 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 			knownProcs[traceePid] = true
 		}
 
-		//logger.Printf("Wait signal, stopped, exited: %s, %v, %v", ws.Signal(), ws.Stopped(), ws.Exited())
-
 		if ws.Exited() {
 			// Don't bother, maybe we should race a trace event at some point in the
 			// future?
@@ -117,6 +124,14 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 				break
 			}
 			traceePid = 0
+			continue
+		}
+
+		// May need to check event type?
+		if ws.StopSignal() != syscall.SIGTRAP|0x80 {
+			// Not a syscall trap, handle specially?
+			//fmt.Printf("Stop sig: %d\n", ws.StopSignal())
+			//fmt.Printf("Trap cause: %d\n", ws.TrapCause())
 			continue
 		}
 
@@ -130,6 +145,7 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 			logger.Printf("Error in PtraceGetRegs[%d]: %s", traceePid, err)
 			break
 		}
+		//fmt.Printf("Regs: %#v\n", regs)
 		tevent := DecodeTraceEvent(traceePid, &regs, pendingSyscall)
 		evts <- tevent
 		if pendingSyscall == nil {
@@ -148,7 +164,6 @@ func (te *TraceEvent) String() string {
 		dir = "<-"
 		rv = fmt.Sprintf(" = %d", te.SyscallReturn)
 	}
-	// TODO: custom formatting per syscall
 	args := fmt.Sprintf(
 		"%#x, %#x, %#x, %#x, %#x, %#x",
 		te.PrecallArgs[0].Value,
@@ -158,6 +173,24 @@ func (te *TraceEvent) String() string {
 		te.PrecallArgs[4].Value,
 		te.PrecallArgs[5].Value,
 	)
+	// Custom formatting for certain syscalls
+	switch te.SyscallNum {
+	case syscall.SYS_EXECVE:
+		argv := make([]string, len(te.Argv))
+		for i := 0; i < len(te.Argv); i++ {
+			arg := te.Argv[i]
+			if pos := bytes.IndexByte(arg, byte(0)); pos != -1 {
+				arg = arg[:pos]
+			}
+			argv[i] = string(arg)
+		}
+		argvStr := strings.Join(argv, ", ")
+		pathName := te.PrecallArgs[0].BytesValue
+		if pos := bytes.IndexByte(pathName, byte(0)); pos != -1 {
+			pathName = pathName[:pos]
+		}
+		args = fmt.Sprintf("%s, [%s]", string(pathName), argvStr)
+	}
 	return fmt.Sprintf("[%d] %s %d %s (%s)%s", te.Pid, dir, te.SyscallNum, te.SyscallName(), args, rv)
 }
 
@@ -185,8 +218,9 @@ func (ta TraceArg) String() string {
 // TODO: make this architecture-independent
 func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *TraceEvent {
 	rv := &TraceEvent{
-		Pid: pid,
-		PC:  regs.Rip,
+		Pid:       pid,
+		PC:        regs.Rip,
+		Timestamp: time.Now(),
 	}
 	if start != nil {
 		rv.SyscallExit = true
@@ -194,9 +228,18 @@ func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *Tra
 		rv.SyscallReturn = regs.Rax
 		extractArgs(pid, regs, &rv.PostcallArgs)
 		rv.PrecallArgs = start.PrecallArgs
+		// TODO: make this more straightforward
+		rv.Argv = start.Argv
 	} else {
 		rv.SyscallNum = regs.Orig_rax
 		extractArgs(pid, regs, &rv.PrecallArgs)
+	}
+	// Special case decoding
+	switch rv.SyscallNum {
+	case syscall.SYS_EXECVE:
+		if !rv.SyscallExit {
+			rv.Argv = readStringArray(pid, uintptr(rv.PrecallArgs[1].Value))
+		}
 	}
 	return rv
 }
@@ -206,22 +249,65 @@ func extractArgs(pid int, regs *syscall.PtraceRegs, args *TraceArgs) {
 		scVal := getSyscallArgByPosition(regs, i)
 		args[i].Value = scVal
 		// Try reading bytes
-		storage := make([]byte, PEEK_BYTES_ARG)
-		if count, err := syscall.PtracePeekData(pid, uintptr(scVal), storage); err == nil {
-			args[i].BytesValue = storage[:count]
+		if storage, err := peekMemoryHelper(pid, uintptr(scVal)); err == nil {
+			args[i].BytesValue = storage
 		} else {
-			// Probably just not a pointer, do we need to do anything?
-			if errno, ok := err.(syscall.Errno); ok {
-				if errno != syscall.EIO {
-					logger.Printf("Error peeking: %s (%d)", err, uint32(errno)) // Just for debugging
-				}
-			} else {
-				logger.Printf("Error peeking: %s", err) // Just for debugging
-			}
 			args[i].BytesValue = nil
 		}
-
 	}
+}
+
+func readStringArray(pid int, addr uintptr) [][]byte {
+	ptrstorage, err := peekMemoryHelper(pid, addr)
+	if err != nil {
+		logger.Printf("Error reading string array pointer: %s", err)
+		return nil
+	}
+	// Extract the list of pointers
+	ptrSize := int(unsafe.Sizeof(addr))
+	res := make([][]byte, 0)
+	buf := bytes.NewBuffer(ptrstorage)
+	for i := 0; i < len(ptrstorage)/ptrSize; i++ {
+		// TODO: make architecture independent
+		var ptr uint64
+		if err := binary.Read(buf, binary.LittleEndian, &ptr); err != nil {
+			logger.Printf("Error getting pointer: %s", err)
+			break
+		}
+		if ptr == 0 {
+			// Null at end of array
+			break
+		}
+		strbuf, err := peekMemoryHelper(pid, uintptr(ptr))
+		if err != nil {
+			break
+		}
+		res = append(res, strbuf)
+	}
+	return res
+}
+
+func peekMemoryHelper(pid int, addr uintptr) ([]byte, error) {
+	if addr == 0 {
+		return nil, nil
+	}
+	storage := make([]byte, PEEK_BYTES_ARG)
+	if count, err := syscall.PtracePeekData(pid, addr, storage); err == nil {
+		return storage[:count], nil
+	} else {
+		// Probably just not a pointer, do we need to do anything?
+		if errno, ok := err.(syscall.Errno); ok {
+			if errno != syscall.EIO {
+				logger.Printf("Error peeking: %s (%d)", err, uint32(errno)) // Just for debugging
+				return nil, err
+			}
+		} else {
+			logger.Printf("Error peeking: %s", err) // Just for debugging
+			return nil, err
+		}
+	}
+	// Nil error when we can't deref
+	return nil, nil
 }
 
 func getSyscallArgByPosition(regs *syscall.PtraceRegs, pos int) uint64 {
@@ -239,7 +325,7 @@ func getSyscallArgByPosition(regs *syscall.PtraceRegs, pos int) uint64 {
 	case 5:
 		return regs.R9
 	default:
-		logger.Fatal("Unsupported syscall arg position: %d", pos)
+		logger.Fatalf("Unsupported syscall arg position: %d", pos)
 	}
 	return 0 // for static analysis
 }
