@@ -140,12 +140,23 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 }
 
 func (te *TraceEvent) String() string {
-	// TODO: custom formatting per syscall
 	dir := "->"
+	rv := ""
 	if te.SyscallExit {
 		dir = "<-"
+		rv = fmt.Sprintf(" = %d", te.SyscallReturn)
 	}
-	return fmt.Sprintf("[%d] %s %d %s", te.Pid, dir, te.SyscallNum, te.SyscallName())
+	// TODO: custom formatting per syscall
+	args := fmt.Sprintf(
+		"%#x, %#x, %#x, %#x, %#x, %#x",
+		te.PrecallArgs[0].Value,
+		te.PrecallArgs[1].Value,
+		te.PrecallArgs[2].Value,
+		te.PrecallArgs[3].Value,
+		te.PrecallArgs[4].Value,
+		te.PrecallArgs[5].Value,
+	)
+	return fmt.Sprintf("[%d] %s %d %s (%s)%s", te.Pid, dir, te.SyscallNum, te.SyscallName(), args, rv)
 }
 
 func (te *TraceEvent) SyscallName() string {
@@ -167,6 +178,7 @@ func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *Tra
 		rv.SyscallNum = start.SyscallNum
 		rv.SyscallReturn = regs.Rax
 		extractArgs(pid, regs, &rv.PostcallArgs)
+		rv.PrecallArgs = start.PrecallArgs
 	} else {
 		rv.SyscallNum = regs.Orig_rax
 		extractArgs(pid, regs, &rv.PrecallArgs)
