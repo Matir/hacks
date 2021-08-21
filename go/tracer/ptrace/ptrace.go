@@ -51,6 +51,7 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	pendingSyscalls := make(map[int]*TraceEvent)
+	knownProcs := make(map[int]bool)
 
 	// Ok, start the real work here
 	cmd := exec.Command(args[0], args[1:]...)
@@ -82,24 +83,40 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 	errs <- nil
 
 	traceePid := cmd.Process.Pid
+	knownProcs[traceePid] = true
 
 	// Now actually trace stuff
 	for {
-		if err := syscall.PtraceSyscall(traceePid, 0); err != nil {
-			logger.Printf("Error in PtraceSyscall: %s", err)
-			break
+		if traceePid != 0 {
+			if err := syscall.PtraceSyscall(traceePid, 0); err != nil {
+				logger.Printf("Error in PtraceSyscall: %s", err)
+				break
+			}
 		}
 
 		// wait for a child signal?
-		if childPid, err := syscall.Wait4(-1, nil, 0, nil); err != nil {
+		var ws syscall.WaitStatus
+		if childPid, err := syscall.Wait4(-1, &ws, 0, nil); err != nil {
 			logger.Printf("Error in Wait4: %s", err)
 			break
 		} else {
 			traceePid = childPid
+			knownProcs[traceePid] = true
 		}
 
-		// TODO, verify the child is stopped and not dead or something
-		// Would need a count of total children...
+		//logger.Printf("Wait signal, stopped, exited: %s, %v, %v", ws.Signal(), ws.Stopped(), ws.Exited())
+
+		if ws.Exited() {
+			// Don't bother, maybe we should race a trace event at some point in the
+			// future?
+			delete(knownProcs, traceePid)
+			if len(knownProcs) == 0 {
+				// Not tracing any more children
+				break
+			}
+			traceePid = 0
+			continue
+		}
 
 		var pendingSyscall *TraceEvent
 		if pend, ok := pendingSyscalls[traceePid]; ok {
@@ -128,7 +145,7 @@ func (te *TraceEvent) String() string {
 	if te.SyscallExit {
 		dir = "<-"
 	}
-	return fmt.Sprintf("%s %d %s", dir, te.SyscallNum, te.SyscallName())
+	return fmt.Sprintf("[%d] %s %d %s", te.Pid, dir, te.SyscallNum, te.SyscallName())
 }
 
 func (te *TraceEvent) SyscallName() string {
