@@ -37,20 +37,21 @@ func main() {
 }
 
 type HostScanner struct {
-	host           string
-	port           uint16
+	Host           string
+	Port           uint16
 	remainingAlgos []string
-	keyData        map[string]string
-	keyFP          map[string]string
+	KeyData        map[string]string
+	KeyFP          map[string]string
+	ServerVersion  string
 }
 
 func NewHostScanner(host string) *HostScanner {
 	return &HostScanner{
 		remainingAlgos: ScanAlgos[:],
-		port:           22,
-		host:           host,
-		keyFP:          make(map[string]string),
-		keyData:        make(map[string]string),
+		Port:           22,
+		Host:           host,
+		KeyFP:          make(map[string]string),
+		KeyData:        make(map[string]string),
 	}
 }
 
@@ -69,8 +70,8 @@ func (hs *HostScanner) hostKeyCallback(hostname string, remote net.Addr, key ssh
 	algo := key.Type()
 	hs.removeAlgo(algo)
 	// Extract key-specific data
-	hs.keyFP[algo] = ssh.FingerprintSHA256(key)
-	hs.keyData[algo] = string(ssh.MarshalAuthorizedKey(key))
+	hs.KeyFP[algo] = ssh.FingerprintSHA256(key)
+	hs.KeyData[algo] = string(ssh.MarshalAuthorizedKey(key))
 	return ErrNextAlgo
 }
 
@@ -80,9 +81,12 @@ func (hs *HostScanner) scanOne() error {
 		Timeout:           ConnectTimeout,
 		HostKeyCallback:   hs.hostKeyCallback,
 	}
-	endpoint := fmt.Sprintf("%s:%d", hs.host, hs.port)
+	endpoint := fmt.Sprintf("%s:%d", hs.Host, hs.Port)
 	client, err := ssh.Dial("tcp", endpoint, &cfg)
 	if err != nil {
+		if client != nil {
+			log.Printf("Client is not nil: %v", client)
+		}
 		if !strings.HasSuffix(err.Error(), ErrNextAlgo.Error()) {
 			return err
 		}
@@ -107,7 +111,7 @@ func (hs *HostScanner) scan() error {
 }
 
 func (hs *HostScanner) VerboseString() string {
-	meta := fmt.Sprintf("%s:%d\n", hs.host, hs.port)
+	meta := fmt.Sprintf("%s:%d\n", hs.Host, hs.Port)
 	builder := new(strings.Builder)
 	builder.WriteString(meta)
 	maxLen := 0
@@ -117,7 +121,7 @@ func (hs *HostScanner) VerboseString() string {
 			maxLen = l
 		}
 	}
-	for t, fp := range hs.keyFP {
+	for t, fp := range hs.KeyFP {
 		builder.WriteString(fmt.Sprintf("    %*s %s\n", maxLen, t, fp))
 	}
 	return builder.String()
