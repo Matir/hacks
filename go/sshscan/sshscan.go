@@ -82,16 +82,22 @@ func (hs *HostScanner) scanOne() error {
 		HostKeyCallback:   hs.hostKeyCallback,
 	}
 	endpoint := fmt.Sprintf("%s:%d", hs.Host, hs.Port)
-	client, err := ssh.Dial("tcp", endpoint, &cfg)
+	conn, err := net.DialTimeout("tcp", endpoint, cfg.Timeout)
 	if err != nil {
-		if client != nil {
-			log.Printf("Client is not nil: %v", client)
-		}
+		return err
+	}
+	connLogger := &ConnLogger{Conn: conn}
+	c, _, _, err := ssh.NewClientConn(connLogger, endpoint, &cfg)
+	if c != nil {
+		defer c.Close()
+	}
+	if hs.ServerVersion == "" {
+		hs.ServerVersion = strings.TrimSpace(string(connLogger.GetFirstLine()))
+	}
+	if err != nil {
 		if !strings.HasSuffix(err.Error(), ErrNextAlgo.Error()) {
 			return err
 		}
-	} else {
-		defer client.Close()
 	}
 	return nil
 }
@@ -114,6 +120,10 @@ func (hs *HostScanner) VerboseString() string {
 	meta := fmt.Sprintf("%s:%d\n", hs.Host, hs.Port)
 	builder := new(strings.Builder)
 	builder.WriteString(meta)
+	if hs.ServerVersion != "" {
+		builder.WriteString(hs.ServerVersion)
+		builder.WriteString("\n")
+	}
 	maxLen := 0
 	for _, t := range ScanAlgos {
 		l := len(t)
