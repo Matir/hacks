@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -12,7 +11,7 @@ import (
 )
 
 const (
-	ConnectTimeout = 30 * time.Second
+	ConnectTimeout = 5 * time.Second
 )
 
 var ScanAlgos = []string{
@@ -26,15 +25,23 @@ var ScanAlgos = []string{
 
 var (
 	ErrNextAlgo = errors.New("Next algorithm please!")
-)
-
-func oldmain() {
-	hs := NewHostScanner("192.168.50.6")
-	if err := hs.Scan(); err != nil {
-		log.Println(err)
+	// Not sure why this is not exported in the ssh package...
+	SupportedCiphers = []string{
+		"aes128-ctr", "aes192-ctr", "aes256-ctr",
+		"aes128-gcm@openssh.com",
+		"chacha20-poly1305@openssh.com",
+		"arcfour256", "arcfour128", "arcfour",
+		"aes128-cbc", "3des-cbc",
 	}
-	fmt.Println(hs.VerboseString())
-}
+	SupportedKexAlgos = []string{
+		"curve25519-sha256@libssh.org",
+		"ecdh-sha2-nistp256",
+		"ecdh-sha2-nistp384",
+		"ecdh-sha2-nistp521",
+		"diffie-hellman-group14-sha1",
+		"diffie-hellman-group1-sha1",
+	}
+)
 
 type HostScanner struct {
 	Host           string
@@ -78,6 +85,10 @@ func (hs *HostScanner) hostKeyCallback(hostname string, remote net.Addr, key ssh
 
 func (hs *HostScanner) scanOne() error {
 	cfg := ssh.ClientConfig{
+		Config: ssh.Config{
+			Ciphers:      SupportedCiphers,
+			KeyExchanges: SupportedKexAlgos,
+		},
 		HostKeyAlgorithms: hs.remainingAlgos[:],
 		Timeout:           ConnectTimeout,
 		HostKeyCallback:   hs.hostKeyCallback,

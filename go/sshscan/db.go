@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"log"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -74,4 +75,18 @@ func (d *ScanDB) InsertResult(hs *HostScanner) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func (d *ScanDB) HasResultForHost(host string) bool {
+	rows, err := d.DB.Query(`SELECT ip FROM hosts WHERE ip=? LIMIT 1`, host)
+	if err != nil {
+		log.Printf("Error querying for host: %s", err)
+		return false
+	}
+	defer rows.Close()
+	return rows.Next()
+}
+
+func (d *ScanDB) Close() error {
+	return d.DB.Close()
 }

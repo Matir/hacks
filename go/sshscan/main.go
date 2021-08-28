@@ -2,28 +2,42 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 const (
-	WORKERS = 4
+	WORKERS                  = 16
+	PrintWorkInterval uint64 = 1000
 )
 
+type WorkCounter struct {
+	count    uint64
+	reported uint64
+	mu       sync.Mutex
+}
+
 func main() {
+	ctr := &WorkCounter{}
 	if len(os.Args) != 3 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <iplist> <db>\n", os.Args[0])
 		os.Exit(1)
 		return
 	}
+
 	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL", os.Args[2])
 	db, err := OpenDB(dsn)
 	if err != nil {
 		panic("Error opening DB: " + err.Error())
 	}
+	defer db.Close()
+
 	ch, err := LoadFromFile(os.Args[1])
 	if err != nil {
 		panic(err)
@@ -32,13 +46,15 @@ func main() {
 	wg.Add(WORKERS)
 	for i := 0; i < WORKERS; i++ {
 		w := Worker{
-			DB:           db,
-			WorkChan:     ch,
-			DoneCallback: wg.Done,
+			DB:               db,
+			WorkChan:         ch,
+			DoneCallback:     wg.Done,
+			WorkDoneCallback: ctr.Add,
 		}
 		go w.Run()
 	}
 	wg.Wait()
+	log.Printf("Scanned %d hosts total...", ctr.count)
 }
 
 func LoadFromFile(filename string) (<-chan string, error) {
@@ -66,5 +82,44 @@ func PlainFileReader(r io.Reader, ch chan<- string) {
 	}
 }
 
+type JSONEntry struct {
+	IP string `json:"ip"`
+}
+
+// Read an array of JSON objects with an "ip" field in each object.
 func JSONFileReader(r io.Reader, ch chan<- string) {
+	dec := json.NewDecoder(r)
+	// Progressive read for large files
+	t, err := dec.Token()
+	if err != nil {
+		log.Printf("Error getting first token: %s", err)
+		return
+	}
+	if _, ok := t.(json.Delim); !ok {
+		log.Printf("Expected json bracket, got %T: %v", t, t)
+		return
+	}
+
+	// Start reading the elements
+	for dec.More() {
+		var e JSONEntry
+		if err := dec.Decode(&e); err != nil {
+			log.Printf("Error getting object: %s", err)
+			return
+		}
+		ch <- e.IP
+	}
+}
+
+func (w *WorkCounter) Add(inc uint64) {
+	if atomic.AddUint64(&w.count, inc) >= (atomic.LoadUint64(&w.reported) + PrintWorkInterval) {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		// Verify it's still greater
+		target := atomic.LoadUint64(&w.reported) + PrintWorkInterval
+		if atomic.LoadUint64(&w.count) >= target {
+			atomic.AddUint64(&w.reported, PrintWorkInterval)
+			log.Printf("Scanned %d hosts...", target)
+		}
+	}
 }
