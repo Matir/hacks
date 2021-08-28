@@ -24,5 +24,6 @@ envsubst '$SERVER_NAME $AUTH_REALM' \
   > /etc/nginx/nginx.conf
 
 mkdir -p /tmp/nginx/bodies && chown -R nginx:nginx /tmp/nginx
+mkdir -p /srv/dav/_public && chown -R nginx:nginx /srv/dav
 
 exec "$@"
