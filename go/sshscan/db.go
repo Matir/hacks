@@ -29,7 +29,7 @@ func (d *ScanDB) MaybeCreateDB() error {
 	stmt := `CREATE TABLE IF NOT EXISTS hosts (
 		ip TEXT PRIMARY KEY,
 		server_version TEXT,
-		scan_timestamp TEXT,
+		scan_timestamp TEXT
 	)`
 	if _, err := d.DB.Exec(stmt); err != nil {
 		return err
@@ -38,7 +38,7 @@ func (d *ScanDB) MaybeCreateDB() error {
 		ip TEXT,
 		key_type TEXT,
 		fingerprint TEXT,
-		key_data TEXT,
+		key_data TEXT
 	)`
 	if _, err := d.DB.Exec(stmt); err != nil {
 		return err

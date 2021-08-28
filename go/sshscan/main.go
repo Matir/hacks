@@ -14,10 +14,15 @@ const (
 )
 
 func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <iplist> <db>\n", os.Args[0])
+		os.Exit(1)
+		return
+	}
 	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL", os.Args[2])
 	db, err := OpenDB(dsn)
 	if err != nil {
-		panic(err)
+		panic("Error opening DB: " + err.Error())
 	}
 	ch, err := LoadFromFile(os.Args[1])
 	if err != nil {
