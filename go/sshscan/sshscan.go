@@ -28,9 +28,9 @@ var (
 	ErrNextAlgo = errors.New("Next algorithm please!")
 )
 
-func main() {
+func oldmain() {
 	hs := NewHostScanner("192.168.50.6")
-	if err := hs.scan(); err != nil {
+	if err := hs.Scan(); err != nil {
 		log.Println(err)
 	}
 	fmt.Println(hs.VerboseString())
@@ -43,6 +43,7 @@ type HostScanner struct {
 	KeyData        map[string]string
 	KeyFP          map[string]string
 	ServerVersion  string
+	ScanStart      time.Time
 }
 
 func NewHostScanner(host string) *HostScanner {
@@ -102,7 +103,8 @@ func (hs *HostScanner) scanOne() error {
 	return nil
 }
 
-func (hs *HostScanner) scan() error {
+func (hs *HostScanner) Scan() error {
+	hs.ScanStart = time.Now().UTC()
 	for len(hs.remainingAlgos) > 0 {
 		if err := hs.scanOne(); err != nil {
 			if strings.Contains(err.Error(), "no common algorithm for host key") {
