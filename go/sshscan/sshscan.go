@@ -98,6 +98,7 @@ func (hs *HostScanner) scanOne() error {
 	if err != nil {
 		return err
 	}
+	conn.SetDeadline(time.Now().Add(cfg.Timeout))
 	connLogger := &ConnLogger{Conn: conn}
 	c, _, _, err := ssh.NewClientConn(connLogger, endpoint, &cfg)
 	if c != nil {
