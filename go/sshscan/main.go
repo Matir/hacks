@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,7 +39,19 @@ func main() {
 	}
 	defer db.Close()
 
-	ch, err := LoadFromFile(os.Args[1])
+	// Handle ctrl+c
+	stopChan := make(chan bool, 1)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	go func() {
+		<-sigChan
+		log.Printf("Received SIGINT, shutting down.  Press CTRL+C again to exit immediately.")
+		stopChan <- true
+		<-sigChan
+		os.Exit(0)
+	}()
+
+	ch, err := LoadFromFile(os.Args[1], stopChan)
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +70,7 @@ func main() {
 	log.Printf("Scanned %d hosts total...", ctr.count)
 }
 
-func LoadFromFile(filename string) (<-chan string, error) {
+func LoadFromFile(filename string, stop <-chan bool) (<-chan string, error) {
 	ch := make(chan string)
 	fp, err := os.Open(filename)
 	if err != nil {
@@ -67,18 +80,23 @@ func LoadFromFile(filename string) (<-chan string, error) {
 		defer fp.Close()
 		defer close(ch)
 		if strings.Contains(filename, ".json") {
-			JSONFileReader(fp, ch)
+			JSONFileReader(fp, ch, stop)
 		} else {
-			PlainFileReader(fp, ch)
+			PlainFileReader(fp, ch, stop)
 		}
 	}()
 	return ch, nil
 }
 
-func PlainFileReader(r io.Reader, ch chan<- string) {
+func PlainFileReader(r io.Reader, ch chan<- string, stop <-chan bool) {
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
-		ch <- strings.TrimSpace(sc.Text())
+		select {
+		case <-stop:
+			return
+		case ch <- strings.TrimSpace(sc.Text()):
+			continue
+		}
 	}
 }
 
@@ -87,7 +105,7 @@ type JSONEntry struct {
 }
 
 // Read an array of JSON objects with an "ip" field in each object.
-func JSONFileReader(r io.Reader, ch chan<- string) {
+func JSONFileReader(r io.Reader, ch chan<- string, stop <-chan bool) {
 	dec := json.NewDecoder(r)
 	// Progressive read for large files
 	t, err := dec.Token()
@@ -107,7 +125,12 @@ func JSONFileReader(r io.Reader, ch chan<- string) {
 			log.Printf("Error getting object: %s", err)
 			return
 		}
-		ch <- e.IP
+		select {
+		case ch <- e.IP:
+			continue
+		case <-stop:
+			return
+		}
 	}
 }
 
