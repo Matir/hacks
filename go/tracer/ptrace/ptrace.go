@@ -33,14 +33,15 @@ type TraceArg struct {
 type TraceArgs [MAX_SYSCALL_ARGS]TraceArg
 
 type TraceEvent struct {
-	Pid           int
-	Timestamp     time.Time
-	SyscallExit   bool
-	SyscallNum    uint64
-	SyscallReturn uint64
-	PrecallArgs   TraceArgs
-	PostcallArgs  TraceArgs
-	PC            uint64
+	Pid               int
+	Timestamp         time.Time
+	SyscallExit       bool
+	SyscallNum        uint64
+	SyscallReturn     uint64
+	SyscallReturnName string
+	PrecallArgs       TraceArgs
+	PostcallArgs      TraceArgs
+	PC                uint64
 	// Special case
 	Argv [][]byte
 }
@@ -163,6 +164,9 @@ func (te *TraceEvent) String() string {
 	if te.SyscallExit {
 		dir = "<-"
 		rv = fmt.Sprintf(" = %d", te.SyscallReturn)
+		if te.SyscallReturnName != "" {
+			rv += fmt.Sprintf(" (%s)", te.SyscallReturnName)
+		}
 	}
 	args := fmt.Sprintf(
 		"%#x, %#x, %#x, %#x, %#x, %#x",
@@ -174,6 +178,7 @@ func (te *TraceEvent) String() string {
 		te.PrecallArgs[5].Value,
 	)
 	// Custom formatting for certain syscalls
+	// TODO: refactor this
 	switch te.SyscallNum {
 	case syscall.SYS_EXECVE:
 		argv := make([]string, len(te.Argv))
@@ -226,6 +231,7 @@ func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *Tra
 		rv.SyscallExit = true
 		rv.SyscallNum = start.SyscallNum
 		rv.SyscallReturn = regs.Rax
+		rv.SyscallReturnName = unix.ErrnoName(syscall.Errno(regs.Rax))
 		extractArgs(pid, regs, &rv.PostcallArgs)
 		rv.PrecallArgs = start.PrecallArgs
 		// TODO: make this more straightforward
@@ -235,11 +241,8 @@ func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *Tra
 		extractArgs(pid, regs, &rv.PrecallArgs)
 	}
 	// Special case decoding
-	switch rv.SyscallNum {
-	case syscall.SYS_EXECVE:
-		if !rv.SyscallExit {
-			rv.Argv = readStringArray(pid, uintptr(rv.PrecallArgs[1].Value))
-		}
+	if handler, ok := SyscallHandlers[rv.SyscallNum]; ok {
+		handler(rv)
 	}
 	return rv
 }
