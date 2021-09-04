@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -21,6 +22,7 @@ import (
 const (
 	PEEK_BYTES_ARG   = 1024
 	MAX_SYSCALL_ARGS = 7
+	ERRNO_MAX        = 4095
 )
 
 var logger = log.New(os.Stderr, "", log.LstdFlags)
@@ -38,6 +40,7 @@ type TraceEvent struct {
 	SyscallExit       bool
 	SyscallNum        uint64
 	SyscallReturn     uint64
+	SyscallErrno      syscall.Errno
 	SyscallReturnName string
 	PrecallArgs       TraceArgs
 	PostcallArgs      TraceArgs
@@ -222,6 +225,13 @@ func (ta TraceArg) String() string {
 
 // TODO: make this architecture-independent
 func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *TraceEvent {
+	getErrno := func(p uint64) int {
+		eMin := uint64(math.MaxUint64 - ERRNO_MAX)
+		if uint64(p) < eMin {
+			return 0
+		}
+		return -int(p)
+	}
 	rv := &TraceEvent{
 		Pid:       pid,
 		PC:        regs.Rip,
@@ -230,8 +240,12 @@ func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *Tra
 	if start != nil {
 		rv.SyscallExit = true
 		rv.SyscallNum = start.SyscallNum
-		rv.SyscallReturn = regs.Rax
-		rv.SyscallReturnName = unix.ErrnoName(syscall.Errno(regs.Rax))
+		if en := getErrno(regs.Rax); en == 0 {
+			rv.SyscallReturn = regs.Rax
+		} else {
+			rv.SyscallErrno = syscall.Errno(en)
+			rv.SyscallReturnName = unix.ErrnoName(syscall.Errno(en))
+		}
 		extractArgs(pid, regs, &rv.PostcallArgs)
 		rv.PrecallArgs = start.PrecallArgs
 		// TODO: make this more straightforward
