@@ -166,9 +166,9 @@ func (te *TraceEvent) String() string {
 	rv := ""
 	if te.SyscallExit {
 		dir = "<-"
-		rv = fmt.Sprintf(" = %d", te.SyscallReturn)
+		rv = fmt.Sprintf(" = %#x", te.SyscallReturn)
 		if te.SyscallReturnName != "" {
-			rv += fmt.Sprintf(" (%s)", te.SyscallReturnName)
+			rv = fmt.Sprintf(" = -1 (%s)", te.SyscallReturnName)
 		}
 	}
 	args := fmt.Sprintf(
