@@ -303,6 +303,7 @@ func peekMemoryHelper(pid int, addr uintptr) ([]byte, error) {
 	return nil, nil
 }
 
+// TODO: move to platform-specific files
 func getSyscallArgByPosition(regs *syscall.PtraceRegs, pos int) uint64 {
 	switch pos {
 	case 0:
