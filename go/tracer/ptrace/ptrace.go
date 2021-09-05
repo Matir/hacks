@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -171,30 +170,10 @@ func (te *TraceEvent) String() string {
 			rv = fmt.Sprintf(" = -1 (%s)", te.SyscallReturnName)
 		}
 	}
-	meta := GetMeta(int(te.SyscallNum))
-	argv := make([]string, meta.NumArgs)
-	for i := 0; i < meta.NumArgs; i++ {
-		argv[i] = fmt.Sprintf("%#x", te.PrecallArgs[i].Value)
-	}
-	args := strings.Join(argv, ", ")
+	args := defaultArgStringer(te)
 	// Custom formatting for certain syscalls
-	// TODO: refactor this
-	switch te.SyscallNum {
-	case syscall.SYS_EXECVE:
-		argv := make([]string, len(te.Argv))
-		for i := 0; i < len(te.Argv); i++ {
-			arg := te.Argv[i]
-			if pos := bytes.IndexByte(arg, byte(0)); pos != -1 {
-				arg = arg[:pos]
-			}
-			argv[i] = string(arg)
-		}
-		argvStr := strings.Join(argv, ", ")
-		pathName := te.PrecallArgs[0].BytesValue
-		if pos := bytes.IndexByte(pathName, byte(0)); pos != -1 {
-			pathName = pathName[:pos]
-		}
-		args = fmt.Sprintf("%s, [%s]", string(pathName), argvStr)
+	if stringer, ok := SyscallArgStringers[te.SyscallNum]; ok {
+		args = stringer(te)
 	}
 	return fmt.Sprintf("[%d] %s %d %s (%s)%s", te.Pid, dir, te.SyscallNum, te.SyscallName(), args, rv)
 }
