@@ -16,6 +16,7 @@ fi
 while read line ; do
   #echo ${line}
   NUMARGS="$(echo $line | sed 's/SYSCALL_DEFINE\([0-9]*\).*/\1/')"
-  NAME="SYS_$(echo $line | sed 's/.*(\([a-z0-9_]\+\),.*/\1/' | tr '[:lower:]' '[:upper:]')"
-  echo "$NAME: $NUMARGS"
+  NAME="SYS_$(echo $line | sed 's/.*(\([a-z0-9_]\+\)[,)].*/\1/' | tr '[:lower:]' '[:upper:]')"
+  ARGS="$(echo $line | sed 's/[^,]*, \(.*\))/\1/')"
+  echo "$NAME: $NUMARGS $ARGS"
 done < syscalls.txt
