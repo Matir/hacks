@@ -171,15 +171,12 @@ func (te *TraceEvent) String() string {
 			rv = fmt.Sprintf(" = -1 (%s)", te.SyscallReturnName)
 		}
 	}
-	args := fmt.Sprintf(
-		"%#x, %#x, %#x, %#x, %#x, %#x",
-		te.PrecallArgs[0].Value,
-		te.PrecallArgs[1].Value,
-		te.PrecallArgs[2].Value,
-		te.PrecallArgs[3].Value,
-		te.PrecallArgs[4].Value,
-		te.PrecallArgs[5].Value,
-	)
+	meta := GetMeta(int(te.SyscallNum))
+	argv := make([]string, meta.NumArgs)
+	for i := 0; i < meta.NumArgs; i++ {
+		argv[i] = fmt.Sprintf("%#x", te.PrecallArgs[i].Value)
+	}
+	args := strings.Join(argv, ", ")
 	// Custom formatting for certain syscalls
 	// TODO: refactor this
 	switch te.SyscallNum {
