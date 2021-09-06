@@ -26,6 +26,11 @@ const (
 
 var logger = log.New(os.Stderr, "", log.LstdFlags)
 
+type TraceOptionSet struct {
+}
+
+type TraceOpt func(*TraceOptionSet) error
+
 type TraceArg struct {
 	Value      uint64
 	BytesValue []byte
@@ -51,13 +56,29 @@ type TraceEvent struct {
 func TraceProcess(args []string) (<-chan *TraceEvent, error) {
 	errChan := make(chan error)
 	resChan := make(chan *TraceEvent, 10) //Arbitrary capacity
+	opts := &TraceOptionSet{}
 
-	go traceProcessInternal(args, resChan, errChan)
+	go traceProcessInternal(args, opts, resChan, errChan)
 
 	return resChan, <-errChan
 }
 
-func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- error) {
+func TraceProcessWithOptions(args []string, traceOpts ...TraceOpt) (<-chan *TraceEvent, error) {
+	opts := &TraceOptionSet{}
+	for _, o := range traceOpts {
+		if err := o(opts); err != nil {
+			return nil, err
+		}
+	}
+	errChan := make(chan error)
+	resChan := make(chan *TraceEvent, 10)
+
+	go traceProcessInternal(args, opts, resChan, errChan)
+
+	return resChan, <-errChan
+}
+
+func traceProcessInternal(args []string, opts *TraceOptionSet, evts chan<- *TraceEvent, errs chan<- error) {
 	defer close(errs)
 	defer close(evts)
 	runtime.LockOSThread()
@@ -81,13 +102,13 @@ func traceProcessInternal(args []string, evts chan<- *TraceEvent, errs chan<- er
 	// Wait for started, this is *not* the process being done
 	cmd.Wait()
 
-	opts := unix.PTRACE_O_EXITKILL
-	opts |= syscall.PTRACE_O_TRACECLONE
-	opts |= syscall.PTRACE_O_TRACEFORK
-	opts |= syscall.PTRACE_O_TRACEVFORK
-	opts |= syscall.PTRACE_O_TRACEEXEC
-	opts |= syscall.PTRACE_O_TRACESYSGOOD
-	if err := syscall.PtraceSetOptions(cmd.Process.Pid, opts); err != nil {
+	ptops := unix.PTRACE_O_EXITKILL
+	ptops |= syscall.PTRACE_O_TRACECLONE
+	ptops |= syscall.PTRACE_O_TRACEFORK
+	ptops |= syscall.PTRACE_O_TRACEVFORK
+	ptops |= syscall.PTRACE_O_TRACEEXEC
+	ptops |= syscall.PTRACE_O_TRACESYSGOOD
+	if err := syscall.PtraceSetOptions(cmd.Process.Pid, ptops); err != nil {
 		logger.Printf("Error with PtraceSetOptions: %s", err)
 		cmd.Process.Kill()
 		errs <- err
