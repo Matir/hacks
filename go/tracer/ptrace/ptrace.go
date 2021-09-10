@@ -26,7 +26,11 @@ const (
 
 var logger = log.New(os.Stderr, "", log.LstdFlags)
 
+type TraceEventCallback func(*TraceEvent)
+
 type TraceOptionSet struct {
+	CloseStdio          bool
+	TraceEventCallbacks []TraceEventCallback
 }
 
 type TraceOpt func(*TraceOptionSet) error
@@ -88,9 +92,15 @@ func traceProcessInternal(args []string, opts *TraceOptionSet, evts chan<- *Trac
 
 	// Ok, start the real work here
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if opts.CloseStdio {
+		cmd.Stdin = nil
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	} else {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Ptrace: true,
 	}
@@ -323,4 +333,18 @@ func peekMemoryHelper(pid int, addr uintptr) ([]byte, error) {
 	}
 	// Nil error when we can't deref
 	return nil, nil
+}
+
+// Specify to close STDIO instead of using defaults
+func WithCloseStdio(tos *TraceOptionSet) error {
+	tos.CloseStdio = true
+	return nil
+}
+
+// With callback
+func WithCallback(f TraceEventCallback) TraceOpt {
+	return func(tos *TraceOptionSet) error {
+		tos.TraceEventCallbacks = append(tos.TraceEventCallbacks, f)
+		return nil
+	}
 }
