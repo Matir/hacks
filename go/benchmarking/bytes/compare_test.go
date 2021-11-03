@@ -51,6 +51,17 @@ func BenchmarkBytesEqualMasked(bn *testing.B) {
 	}
 }
 
+func BenchmarkBytesEqualMaskedPartial(bn *testing.B) {
+	f := func() func([]byte) bool {
+		return func(tgt []byte) bool {
+			return BytesEqualMasked(a, tgt, mask)
+		}
+	}()
+	for n := 0; n < bn.N; n++ {
+		f(b)
+	}
+}
+
 func BenchmarkBase64Encode(bn *testing.B) {
 	tmpbuf := make([]byte, len(a)*2)
 	for n := 0; n < bn.N; n++ {
