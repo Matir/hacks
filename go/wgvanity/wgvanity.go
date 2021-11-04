@@ -5,17 +5,15 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
 )
 
 type pubKeyTest func([]byte) bool
-
-const (
-	DoProfile = true
-)
 
 func BytesEqualMasked(a, b, mask []byte) bool {
 	if len(a) != len(b) || len(a) != len(mask) {
@@ -120,30 +118,54 @@ func FindAPair(vanity string) {
 }
 
 func BenchmarkKeyTest() {
-	t := time.NewTimer(10 * time.Second)
+	bmsec := 10
 	tfunc := MakeVanityTestFunction("aaaa")
 	ct := 0
-	tf := func(pkey []byte) bool {
-		tfunc(pkey)
-		select {
-		case <-t.C:
-			return true
-		default:
-			ct++
-			return false
-		}
+	ncpu := runtime.NumCPU()
+	fmt.Printf("Benchmarking on %d CPUs.\n", ncpu)
+	wg := sync.WaitGroup{}
+	wg.Add(ncpu)
+	mu := sync.Mutex{}
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			lct := 0
+			defer wg.Done()
+			t := time.NewTimer(time.Duration(bmsec) * time.Second)
+			tf := func(pkey []byte) bool {
+				tfunc(pkey)
+				select {
+				case <-t.C:
+					return true
+				default:
+					lct++
+					return false
+				}
+			}
+			FindKeyForTest(tf)
+			mu.Lock()
+			defer mu.Unlock()
+			ct += lct
+		}()
 	}
-	FindKeyForTest(tf)
-	fmt.Printf("10s count: %d\n", ct)
+	wg.Wait()
+	fmt.Printf("%d keys/sec\n", ct/bmsec)
 }
 
 func main() {
-	if DoProfile {
+	if len(os.Args) < 2 {
+		fmt.Printf("Usage: wgvanity <-profile|-bench|prefix>\n")
+		return
+	}
+	if os.Args[1] == "-profile" {
 		fp, _ := os.Create("wgvanity.prof")
 		pprof.StartCPUProfile(fp)
 		defer pprof.StopCPUProfile()
 		BenchmarkKeyTest()
 		return
 	}
-	//FindAPair("aaaa")
+	if os.Args[1] == "-bench" {
+		BenchmarkKeyTest()
+		return
+	}
+	FindAPair(os.Args[1])
 }
