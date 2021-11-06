@@ -17,7 +17,7 @@ VNCUSER=${1:-}
 if test -z "${VNCUSER}" ; then
   read -p "user to run vnc as: " VNCUSER
 fi
-GEOMETRY=${GEOMETRY:-1024x768}
+GEOMETRY=${GEOMETRY:-1440x900}
 NOVNCPORT=${NOVNCPORT:-5959}
 NOVNCHOST=${NOVNCHOST:-0.0.0.0}
 NOVNCWEB=${NOVNCWEB:-/usr/share/novnc/}
