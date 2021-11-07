@@ -1,0 +1,63 @@
+# Points to local storage, hardcoded password, just for testing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ctfd-deployment
+  labels:
+    app: ctfd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ctfd
+  template:
+    metadata:
+      labels:
+        app: ctfd
+    spec:
+      containers:
+      - name: ctfd
+        image: ctfd/ctfd:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SECRET_KEY
+          value: this-is-not-really-secret
+        - name: UPLOAD_FOLDER
+          value: /var/uploads
+        - name: LOG_FOLDER
+          value: /var/log/CTFd
+        - name: DATABASE_URL
+          value: mysql+pymysql://ctfd:ctfd@mariadb.default.svc.cluster.local/ctfd
+        - name: REDIS_URL
+          value: redis://redis.default.svc.cluster.local:6379
+        - name: WORKERS
+          value: "4"
+        volumeMounts:
+        - name: ctfd-data
+          mountPath: /var/uploads
+        - name: ctfd-logs
+          mountPath: /var/log/CTFd
+      volumes:
+      - name: ctfd-data
+        hostPath:
+          path: /data/ctfd-uploads/
+          type: DirectoryOrCreate
+      - name: ctfd-logs
+        hostPath:
+          path: /data/ctfd-logs/
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ctfd
+  labels:
+    app: ctfd
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8000
+      protocol: TCP
+  selector:
+    app: ctfd
