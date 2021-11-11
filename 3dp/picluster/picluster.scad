@@ -1,4 +1,5 @@
 use <../library/rounded.scad>;
+use <../library/hex.scad>;
 
 // Curve setups
 $fs = 0.1;
@@ -6,15 +7,21 @@ $fa = 5;
 
 // Common variables
 default_plate_thickness = 2.5;
+pi_plate_width = 70;
+cluster_frame_width = 90;
+cluster_frame_height = 110;
+cluster_frame_thickness = 8;
+tab_screw_height = 4;
+tab_width = 7;
+side_plate_width = 100;
 
 // Useful functions
 function cat(L1, L2) = [for(L=[L1, L2], a=L) a];
 
-module switch_backplate(plate_thickness=default_plate_thickness) {
+module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
   // main plate
   switch_width = 94.2;
   switch_depth = 89.1;
-  plate_width = 100;
   plate_depth = 100;
   standoff_mm = 4;
   standoff_hole = 3;
@@ -66,9 +73,13 @@ module switch_backplate(plate_thickness=default_plate_thickness) {
   };
 };
 
-module pi_plate(plate_thickness=default_plate_thickness) {
+module pi_plate(
+  pi_plate_width,
+  tab_screw_height,
+  tab_width,
+  plate_thickness=default_plate_thickness) {
   // Pi plate, oriented in long direction on x.
-  plate_depth = 70;
+  plate_depth = pi_plate_width;
   plate_width = 90;
   pi_depth = 56;
   pi_width = 85;
@@ -87,12 +98,10 @@ module pi_plate(plate_thickness=default_plate_thickness) {
   pi_standoff_peg_dia = 2.5;
   pi_standoff_peg_len = 3;
   pi_standoff_screw_dia = 3;
-  pi_standoff_len = 4;
+  pi_standoff_len = 2.5;
 
-  tab_width = 7;
   tab_thick = plate_thickness;
   tab_screw_dia = 3;
-  tab_screw_height = 4;
 
   corner_roundoff = 3;
 
@@ -174,5 +183,105 @@ module pi_plate(plate_thickness=default_plate_thickness) {
   };
 };
 
-//switch_backplate();
-pi_plate();
+module cluster_frame(
+  frame_width,
+  frame_height,
+  frame_thickness,
+  plate_width,
+  tab_screw_height,
+  tab_width,
+  side_slot_length,
+  plate_thickness=default_plate_thickness) {
+
+  pi_module_spacing = 24;
+  pi_module_count = 4;
+  slot_width = tab_width;
+  slot_clearance = 3;
+
+  difference() {
+    union() {
+      cube([frame_width, frame_height, frame_thickness]);
+    };
+
+    // All the Space for pis
+    pi_cutout_width = plate_width - 2*slot_width;
+    pi_cutout_height = pi_module_spacing * pi_module_count + slot_clearance;
+    cutout_x = (frame_width - pi_cutout_width)/2;
+    cutout_y = (frame_height - pi_cutout_height)/2;
+    translate([cutout_x, cutout_y, -frame_thickness]) {
+      cube([pi_cutout_width, pi_cutout_height, frame_thickness*3]);
+      for(i = [0:pi_module_count-1]) {
+        // Each slot
+        translate([-slot_width, i*pi_module_spacing+slot_clearance, 0])
+          cube([plate_width, plate_thickness+0.2, frame_thickness*3]);
+        // Screw holes
+        tab_screw_dia = 3;
+        for(x = [-tab_width/2, plate_width-3*tab_width/2]) {
+          translate([x,
+            i*pi_module_spacing + plate_thickness + tab_screw_height + slot_clearance,
+            0])
+            cylinder(d=3, h=frame_thickness*3);
+        };
+      };
+    };
+
+    // Other slots (power/switch support)
+    slot_inset = 2;
+    slot_hold_width = 5;
+    for (x = [0, 1]) {
+      translate([
+        slot_inset + (frame_width - 2 * slot_inset) * x,
+        (frame_height - side_slot_length)/2,
+        -frame_thickness + (x*frame_thickness*3)])
+        rotate([0, x*-180, 0])
+          union() {
+            cube([plate_thickness+0.2, side_slot_length, frame_thickness*3]);
+            translate([-2*slot_inset, slot_hold_width, 0])
+              cube([
+                slot_inset*3,
+                side_slot_length-2*slot_hold_width,
+                frame_thickness*3]);
+          };
+    };
+
+    // Slot inset screws
+    // TODO
+
+    // Mounting screws to top/bottom
+    hex_depth = 3;
+    hex_across = 5;
+    mnt_hole_dia = 3;
+    mnt_hole_spacing = plate_width-4*slot_width;
+    mnt_hole_len = (frame_height-pi_cutout_height)/2;
+    for (x = [-1, 1]) {
+      for (y = [0, 1]) {
+        translate([
+          frame_width/2 + x * mnt_hole_spacing/2,
+          (y*frame_height-mnt_hole_len)+mnt_hole_len,
+          frame_thickness/2]) {
+          rotate([90+180*y, 0, 0]) {
+            translate([0, 0, -(mnt_hole_len+0.1)])
+            union() {
+              cylinder(d=mnt_hole_dia, h=mnt_hole_len*2);
+              rotate([0, 0, 90])
+                hexagon3d(hex_across/2, hex_depth);
+            };
+          };
+        };
+      };
+    };
+  };
+};
+
+switch_backplate(side_plate_width);
+
+//pi_plate(pi_plate_width, tab_screw_height, tab_width);
+
+/*cluster_frame(
+  cluster_frame_width,
+  cluster_frame_height,
+  cluster_frame_thickness,
+  pi_plate_width,
+  tab_screw_height,
+  tab_width,
+  side_plate_width);*/

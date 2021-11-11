@@ -10,6 +10,11 @@ module hexagon(r){
                 [0,-(r*(2/sqrt(3)))],
                 [r,-(r*(tan(30)))]
     ]);
+};
+
+module hexagon3d(r, h) {
+  linear_extrude(height=h)
+    hexagon(r);
 }
 
 // Repeat something on each side
