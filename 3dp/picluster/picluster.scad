@@ -21,21 +21,21 @@ function cat(L1, L2) = [for(L=[L1, L2], a=L) a];
 module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
   // main plate
   switch_width = 94.2;
-  switch_depth = 89.1;
+  switch_depth = 89.0;
   plate_depth = 100;
-  standoff_mm = 4;
+  standoff_mm = 3;
   standoff_hole = 3;
   pcb_thickness = 1.6;
 
   standoffs_5mm_base_dia = 8;
   standoffs_5mm_dia = 4.8;
-  standoffs_5mm = [[7, 10.2], [7, switch_depth-17]];
+  standoffs_5mm = [[7, 11.1], [7, switch_depth-17]];
   standoffs_3mm_base_dia = 6;
-  standoffs_3mm = [[switch_width-33.5, 4.4], [switch_width-7, switch_depth-16.8]];
+  standoffs_3mm = [[switch_width-34.0, 4.4], [switch_width-7, switch_depth-16.8]];
 
   difference() {
     union() {
-      cube([plate_width, plate_depth, plate_thickness], center=false);
+      rounded_flat_cube([plate_width, plate_depth, plate_thickness], 2);
       // Standoffs
       translate([
         (plate_width - switch_width)/2,
@@ -56,7 +56,14 @@ module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
         };
       };
     };
+
     // Cutout
+    cutout_width = 60;
+    cutout_depth = 60;
+    translate([(plate_width-cutout_width)/2, (plate_depth-cutout_depth)/2, -plate_thickness]) {
+      rounded_flat_cube([cutout_width, cutout_depth, plate_thickness*3], 4);
+    };
+
     // Screwholes
     translate([
       (plate_width - switch_width)/2,
@@ -227,7 +234,7 @@ module cluster_frame(
 
     // Other slots (power/switch support)
     slot_inset = 2;
-    slot_hold_width = 5;
+    slot_hold_width = 2.5;
     for (x = [0, 1]) {
       translate([
         slot_inset + (frame_width - 2 * slot_inset) * x,
@@ -245,11 +252,28 @@ module cluster_frame(
     };
 
     // Slot inset screws
-    // TODO
+    hex_side_depth = 10;
+    hex_across = 5;
+    side_hole_dia = 3;
+    side_hole_len = 22;
+    side_hole_inset = (frame_height - side_slot_length)/2;
+    for (x = [0, 1]) {
+      for (y = [0, 1]) {
+        translate([
+          x*(frame_width-side_hole_len*1.9)+side_hole_len*0.95,
+          side_hole_inset + y*(frame_height-side_hole_inset*2),
+          frame_thickness/2])
+        rotate([0, -90+90*x*2, 0])
+          #union() {
+            cylinder(d=side_hole_dia, h=side_hole_len);
+            rotate([0, 0, 90])
+              hexagon3d(hex_across/2, hex_side_depth);
+          };
+      };
+    };
 
     // Mounting screws to top/bottom
     hex_depth = 3;
-    hex_across = 5;
     mnt_hole_dia = 3;
     mnt_hole_spacing = plate_width-4*slot_width;
     mnt_hole_len = (frame_height-pi_cutout_height)/2;
@@ -273,15 +297,15 @@ module cluster_frame(
   };
 };
 
-switch_backplate(side_plate_width);
+//switch_backplate(side_plate_width);
 
 //pi_plate(pi_plate_width, tab_screw_height, tab_width);
 
-/*cluster_frame(
+cluster_frame(
   cluster_frame_width,
   cluster_frame_height,
   cluster_frame_thickness,
   pi_plate_width,
   tab_screw_height,
   tab_width,
-  side_plate_width);*/
+  side_plate_width);
