@@ -10,10 +10,12 @@ default_plate_thickness = 2.5;
 pi_plate_width = 70;
 cluster_frame_width = 90;
 cluster_frame_height = 110;
-cluster_frame_thickness = 8;
+cluster_frame_thickness = 10;
 tab_screw_height = 4;
 tab_width = 7;
 side_plate_width = 100;
+$m3_hex_width = 6;
+$m3_screw_dia = 3.30;
 
 // Useful functions
 function cat(L1, L2) = [for(L=[L1, L2], a=L) a];
@@ -24,7 +26,7 @@ module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
   switch_depth = 89.0;
   plate_depth = 100;
   standoff_mm = 3;
-  standoff_hole = 3;
+  standoff_hole = $m3_screw_dia;
   pcb_thickness = 1.6;
 
   standoffs_5mm_base_dia = 8;
@@ -204,6 +206,7 @@ module cluster_frame(
   pi_module_count = 4;
   slot_width = tab_width;
   slot_clearance = 3;
+  slot_extra = 0.5;
 
   difference() {
     union() {
@@ -219,15 +222,15 @@ module cluster_frame(
       cube([pi_cutout_width, pi_cutout_height, frame_thickness*3]);
       for(i = [0:pi_module_count-1]) {
         // Each slot
-        translate([-slot_width, i*pi_module_spacing+slot_clearance, 0])
-          cube([plate_width, plate_thickness+0.2, frame_thickness*3]);
+        translate([-(slot_width+slot_extra), i*pi_module_spacing+slot_clearance-slot_extra, 0])
+          cube([plate_width+2*slot_extra, plate_thickness+2*slot_extra, frame_thickness*3]);
         // Screw holes
         tab_screw_dia = 3;
         for(x = [-tab_width/2, plate_width-3*tab_width/2]) {
           translate([x,
             i*pi_module_spacing + plate_thickness + tab_screw_height + slot_clearance,
             0])
-            cylinder(d=3, h=frame_thickness*3);
+            cylinder(d=$m3_screw_dia, h=frame_thickness*3);
         };
       };
     };
@@ -238,11 +241,11 @@ module cluster_frame(
     for (x = [0, 1]) {
       translate([
         slot_inset + (frame_width - 2 * slot_inset) * x,
-        (frame_height - side_slot_length)/2,
+        (frame_height - side_slot_length)/2 - slot_extra,
         -frame_thickness + (x*frame_thickness*3)])
         rotate([0, x*-180, 0])
           union() {
-            cube([plate_thickness+0.2, side_slot_length, frame_thickness*3]);
+            cube([plate_thickness+slot_extra, side_slot_length+2*slot_extra, frame_thickness*3]);
             translate([-2*slot_inset, slot_hold_width, 0])
               cube([
                 slot_inset*3,
@@ -253,8 +256,7 @@ module cluster_frame(
 
     // Slot inset screws
     hex_side_depth = 10;
-    hex_across = 5;
-    side_hole_dia = 3;
+    side_hole_dia = $m3_screw_dia;
     side_hole_len = 22;
     side_hole_inset = (frame_height - side_slot_length)/2;
     for (x = [0, 1]) {
@@ -264,17 +266,17 @@ module cluster_frame(
           side_hole_inset + y*(frame_height-side_hole_inset*2),
           frame_thickness/2])
         rotate([0, -90+90*x*2, 0])
-          #union() {
+          union() {
             cylinder(d=side_hole_dia, h=side_hole_len);
             rotate([0, 0, 90])
-              hexagon3d(hex_across/2, hex_side_depth);
+              hexagon3d($m3_hex_width/2, hex_side_depth);
           };
       };
     };
 
     // Mounting screws to top/bottom
     hex_depth = 3;
-    mnt_hole_dia = 3;
+    mnt_hole_dia = $m3_screw_dia;
     mnt_hole_spacing = plate_width-4*slot_width;
     mnt_hole_len = (frame_height-pi_cutout_height)/2;
     for (x = [-1, 1]) {
@@ -288,7 +290,7 @@ module cluster_frame(
             union() {
               cylinder(d=mnt_hole_dia, h=mnt_hole_len*2);
               rotate([0, 0, 90])
-                hexagon3d(hex_across/2, hex_depth);
+                hexagon3d($m3_hex_width/2, hex_depth);
             };
           };
         };
@@ -301,11 +303,14 @@ module cluster_frame(
 
 //pi_plate(pi_plate_width, tab_screw_height, tab_width);
 
-cluster_frame(
-  cluster_frame_width,
-  cluster_frame_height,
-  cluster_frame_thickness,
-  pi_plate_width,
-  tab_screw_height,
-  tab_width,
-  side_plate_width);
+intersection() {
+  cube([120, 30, 50]);
+  cluster_frame(
+    cluster_frame_width,
+    cluster_frame_height,
+    cluster_frame_thickness,
+    pi_plate_width,
+    tab_screw_height,
+    tab_width,
+    side_plate_width);
+};
