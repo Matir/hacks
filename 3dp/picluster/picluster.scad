@@ -323,11 +323,24 @@ module top_panel(
       translate([panel_width/2, panel_length/2, 0]) {
         for(x = [-screw_spacing_width/2, screw_spacing_width/2]) {
           for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
-            translate([x, y, 0])
-              linear_extrude(height=plate_thickness*3, scale=0.75)
-                hexagon($m3_head_dia*0.9);
+            translate([x, y, plate_thickness/2])
+              linear_extrude(height=plate_thickness*3.2, scale=0.75)
+                rotate([0, 0, 90])
+                  hexagon($m3_head_dia*0.9);
           };
         };
+      };
+      // Reinforcement ribs -- longways
+      rib_width=$m3_head_dia*0.8;
+      for (x = [-1, 1]) {
+        translate([
+          x * screw_spacing_width/2 + panel_width/2,
+          (panel_length-screw_spacing_length)/2,
+          plate_thickness]) {
+            linear_extrude(height=plate_thickness*1.2, scale=[0.5, 1])
+              translate([-rib_width/2, 0, 0])
+                square([rib_width, screw_spacing_length]);
+          };
       };
     };
 
@@ -352,7 +365,7 @@ module top_panel(
         (airflow_slot_width*2)) * airflow_slot_width*2;
     // TODO: round to even number of slots
     airflow_margin_y = (panel_length - airflow_area_y)/2;
-    airflow_area_x = screw_spacing_width - airflow_slot_width;
+    airflow_area_x = screw_spacing_width - airflow_slot_width*3;
     airflow_slot_spacing = airflow_slot_width * 2;
     airflow_margin_x = (panel_width - airflow_area_x)/2;
     for(o = [0:airflow_slot_spacing:airflow_area_y]) {
