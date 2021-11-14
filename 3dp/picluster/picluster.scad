@@ -11,11 +11,17 @@ pi_plate_width = 70;
 cluster_frame_width = 90;
 cluster_frame_height = 110;
 cluster_frame_thickness = 10;
+// Between front and back supports, on centers
+cluster_piece_spacing = 75;
+// Spacing between mounting screws top/bottom
+mnt_screw_spacing = 42;
 tab_screw_height = 4;
 tab_width = 7;
 side_plate_width = 100;
 $m3_hex_width = 6;
 $m3_screw_dia = 3.30;
+$m3_head_dia = 6;
+$m3_head_depth = 3;
 
 // Useful functions
 function cat(L1, L2) = [for(L=[L1, L2], a=L) a];
@@ -200,6 +206,7 @@ module cluster_frame(
   tab_screw_height,
   tab_width,
   side_slot_length,
+  mnt_screw_spacing,
   plate_thickness=default_plate_thickness) {
 
   pi_module_spacing = 24;
@@ -277,7 +284,8 @@ module cluster_frame(
     // Mounting screws to top/bottom
     hex_depth = 3;
     mnt_hole_dia = $m3_screw_dia;
-    mnt_hole_spacing = plate_width-4*slot_width;
+    //mnt_hole_spacing = plate_width-4*slot_width;
+    mnt_hole_spacing = mnt_screw_spacing;
     mnt_hole_len = (frame_height-pi_cutout_height)/2;
     for (x = [-1, 1]) {
       for (y = [0, 1]) {
@@ -299,18 +307,89 @@ module cluster_frame(
   };
 };
 
+module top_panel(
+  panel_width,
+  panel_length,
+  screw_spacing_length,
+  screw_spacing_width,
+  plate_thickness=default_plate_thickness) {
+
+  // Width in x, length in y, supports at front/back
+
+  difference() {
+    union() {
+      cube([panel_width, panel_length, plate_thickness]);
+      // Screw supports
+      translate([panel_width/2, panel_length/2, 0]) {
+        for(x = [-screw_spacing_width/2, screw_spacing_width/2]) {
+          for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
+            translate([x, y, 0])
+              linear_extrude(height=plate_thickness*3, scale=0.75)
+                hexagon($m3_head_dia);
+          };
+        };
+      };
+    };
+
+    // screw holes
+    translate([panel_width/2, panel_length/2, 0]) {
+      for(x = [-screw_spacing_width/2, screw_spacing_width/2]) {
+        for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
+          translate([x, y, -plate_thickness]) {
+            cylinder(d=$m3_screw_dia, h=plate_thickness*6);
+            translate([0, 0, plate_thickness*3]) {
+              cylinder(d=$m3_head_dia, h=$m3_head_depth*2);
+            };
+          };
+        };
+      };
+    };
+
+    // Airflow slots
+    airflow_slot_width = 3;
+    airflow_area_y = floor(
+      (screw_spacing_length - $m3_head_dia*2 - airflow_slot_width*2)/
+        (airflow_slot_width*2)) * airflow_slot_width*2;
+    // TODO: round to even number of slots
+    airflow_margin_y = (panel_length - airflow_area_y)/2;
+    airflow_area_x = screw_spacing_width - airflow_slot_width;
+    airflow_slot_spacing = airflow_slot_width * 2;
+    airflow_margin_x = (panel_width - airflow_area_x)/2;
+    for(o = [0:airflow_slot_spacing:airflow_area_y]) {
+      translate([
+        airflow_margin_x,
+        airflow_margin_y + o,
+        -plate_thickness]) {
+          union() {
+            cylinder(d=airflow_slot_width, h=plate_thickness*3);
+            translate([0, -airflow_slot_width/2, 0])
+              cube([airflow_area_x, airflow_slot_width, plate_thickness*3]);
+            translate([airflow_area_x, 0, 0])
+              cylinder(d=airflow_slot_width, h=plate_thickness*3);
+          };
+      };
+    };
+  };
+};
+
 //switch_backplate(side_plate_width);
 
 //pi_plate(pi_plate_width, tab_screw_height, tab_width);
 
-intersection() {
-  cube([120, 30, 50]);
-  cluster_frame(
-    cluster_frame_width,
-    cluster_frame_height,
-    cluster_frame_thickness,
-    pi_plate_width,
-    tab_screw_height,
-    tab_width,
-    side_plate_width);
-};
+/*
+cluster_frame(
+  cluster_frame_width,
+  cluster_frame_height,
+  cluster_frame_thickness,
+  pi_plate_width,
+  tab_screw_height,
+  tab_width,
+  side_plate_width,
+  mnt_screw_spacing);
+*/
+
+top_panel(
+  cluster_piece_spacing+12,
+  cluster_frame_width,
+  cluster_piece_spacing,
+  mnt_screw_spacing);
