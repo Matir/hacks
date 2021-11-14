@@ -325,7 +325,7 @@ module top_panel(
           for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
             translate([x, y, 0])
               linear_extrude(height=plate_thickness*3, scale=0.75)
-                hexagon($m3_head_dia);
+                hexagon($m3_head_dia*0.9);
           };
         };
       };
@@ -336,7 +336,7 @@ module top_panel(
       for(x = [-screw_spacing_width/2, screw_spacing_width/2]) {
         for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
           translate([x, y, -plate_thickness]) {
-            cylinder(d=$m3_screw_dia, h=plate_thickness*6);
+            cylinder(d=$m3_screw_dia+0.3, h=plate_thickness*6);
             translate([0, 0, plate_thickness*3]) {
               cylinder(d=$m3_head_dia, h=$m3_head_depth*2);
             };
@@ -389,7 +389,7 @@ cluster_frame(
 */
 
 top_panel(
-  cluster_piece_spacing+12,
   cluster_frame_width,
+  cluster_piece_spacing+12,
   cluster_piece_spacing,
   mnt_screw_spacing);
