@@ -7,9 +7,9 @@ $fa = 5;
 
 // Common variables
 default_plate_thickness = 2.5;
-pi_plate_width = 70;
-cluster_frame_width = 90;
-cluster_frame_height = 110;
+pi_plate_width = 76;
+cluster_frame_width = 100;
+cluster_frame_height = 115;
 cluster_frame_thickness = 10;
 // Between front and back supports, on centers
 cluster_piece_spacing = 75;
@@ -139,6 +139,7 @@ module pi_plate(
   pi_depth = 56;
   pi_width = 85;
   pi_shift_x = 0;
+  pi_shift_y = 1.5;
 
   pi_standoff_pos = [
     [3.5, 3.5],
@@ -182,7 +183,7 @@ module pi_plate(
       // Standoffs
       translate([
         (plate_width - pi_width)/2 + pi_shift_x,
-        (plate_depth - pi_depth)/2,
+        (plate_depth - pi_depth)/2 + pi_shift_y,
         plate_thickness]) {
         for (pos=pi_standoff_pos) {
           translate([pos[0], pos[1], 0])
@@ -215,7 +216,7 @@ module pi_plate(
     };
     translate([
       (plate_width - pi_width)/2 + pi_shift_x,
-      (plate_depth - pi_depth)/2,
+      (plate_depth - pi_depth)/2 + pi_shift_y,
       0]) {
       // Screw holes
       for (pos=pi_standoff_screw) {
@@ -231,7 +232,7 @@ module pi_plate(
     // Thermal opening
     translate([
       (plate_width - thermal_width)/2 + pi_shift_x,
-      (plate_depth - thermal_depth)/2,
+      (plate_depth - thermal_depth)/2 + pi_shift_y,
       -plate_thickness]) {
         rounded_flat_cube([thermal_width, thermal_depth, plate_thickness*3], 3);
       }
@@ -284,7 +285,7 @@ module cluster_frame(
 
     // Other slots (power/switch support)
     slot_inset = 2;
-    slot_hold_width = 2.5;
+    slot_hold_width = 3;
     for (x = [0, 1]) {
       translate([
         slot_inset + (frame_width - 2 * slot_inset) * x,
@@ -292,10 +293,13 @@ module cluster_frame(
         -frame_thickness + (x*frame_thickness*3)])
         rotate([0, x*-180, 0])
           union() {
-            cube([plate_thickness+slot_extra, side_slot_length+2*slot_extra, frame_thickness*3]);
+            cube([
+              plate_thickness+slot_extra,
+              side_slot_length+2*slot_extra,
+              frame_thickness*3]);
             translate([-2*slot_inset, slot_hold_width, 0])
               cube([
-                slot_inset*3,
+                slot_inset*4.5,
                 side_slot_length-2*slot_hold_width,
                 frame_thickness*3]);
           };
@@ -539,7 +543,7 @@ switch_backplate(
 
 //pi_plate(pi_plate_width, tab_screw_height, tab_width);
 
-/*
+
 cluster_frame(
   cluster_frame_width,
   cluster_frame_height,
@@ -549,7 +553,7 @@ cluster_frame(
   tab_width,
   side_plate_width,
   mnt_screw_spacing);
-*/
+
 
 /*
 top_panel(
@@ -569,4 +573,4 @@ switch_plate_cover(
 );
 */
 
-_slot_filled_angle([50, 20, 4], 3, 8);
+//_slot_filled_angle([50, 20, 4], 3, 8);
