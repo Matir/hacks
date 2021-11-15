@@ -425,6 +425,41 @@ module top_panel(
   };
 };
 
+module _rounded_line(dims) {
+  union() {
+    translate([dims[1]/2, dims[1]/2, 0])
+      cylinder(d=dims[1], h=dims[2]);
+    translate([dims[0]-dims[1]/2, dims[1]/2, 0])
+      cylinder(d=dims[1], h=dims[2]);
+    translate([dims[1]/2, 0, 0])
+      cube([dims[0]-dims[1], dims[1], dims[2]]);
+  };
+};
+
+module _slot_filled_angle(dims, slot_width, slot_spacing) {
+  if (dims[0] < dims[1]) {
+    ang = atan(dims[1]/dims[0]);
+    for (x = [slot_spacing:slot_spacing:dims[0]]) {
+      slot_len = x/cos(ang);
+      translate([dims[0]-x, 0, 0]) {
+        rotate([0, 0, ang]) {
+          _rounded_line([slot_len, slot_width, dims[2]]);
+        };
+      };
+    };
+  } else {
+    ang = atan(dims[0]/dims[1]);
+    for (x = [slot_spacing:slot_spacing:dims[0]]) {
+      slot_len = x/cos(ang);
+      translate([dims[0]-x, 0, 0]) {
+        rotate([0, 0, ang]) {
+          _rounded_line([slot_len, slot_width, dims[2]]);
+        };
+      };
+    };
+  };
+};
+
 module switch_plate_cover(
   frame_height,
   frame_depth,
@@ -524,6 +559,7 @@ top_panel(
   mnt_screw_spacing);
 */
 
+/*
 switch_plate_cover(
   cluster_frame_height,
   cluster_piece_spacing+cluster_frame_thickness,
@@ -531,3 +567,6 @@ switch_plate_cover(
   cluster_piece_spacing,
   side_plate_width-4
 );
+*/
+
+_slot_filled_angle([50, 20, 4], 3, 8);
