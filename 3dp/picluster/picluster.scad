@@ -26,8 +26,13 @@ $m3_head_depth = 3;
 // Useful functions
 function cat(L1, L2) = [for(L=[L1, L2], a=L) a];
 
-module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
+module switch_backplate(
+  plate_width,
+  mount_spacing,
+  tab_offset,
+  plate_thickness=default_plate_thickness) {
   // main plate
+  // bottom is along the y-axis
   switch_width = 94.2;
   switch_depth = 89.0;
   plate_depth = 100;
@@ -63,6 +68,18 @@ module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
           };
         };
       };
+      // Depth blocks
+      blocker_y = plate_depth - (plate_depth - mount_spacing)/2 + tab_offset;
+      translate([0, blocker_y, plate_thickness/2]) {
+        rotate([90, 0, 0]) {
+          for (x = [0, 1]) {
+            blocker_width = 5;
+            translate([x*(plate_width-blocker_width), 0, -plate_thickness]) {
+              cube([blocker_width, standoff_mm, plate_thickness]);
+            };
+          };
+        };
+      };
     };
 
     // Cutout
@@ -85,6 +102,29 @@ module switch_backplate(plate_width, plate_thickness=default_plate_thickness) {
         };
       };
     };
+
+    // Mount locks
+    translate([
+      0,
+      plate_depth/2,
+      0]) {
+        for (y = [-1, 1]) {
+          for(x = [0, 1]) {
+            ypos = y * mount_spacing/2;
+            xpos = x * plate_width;
+            translate([xpos, ypos, -plate_thickness]) {
+              rotate([0, 0, x*180+90]) {
+                union() {
+                  translate([-$m3_screw_dia/2, -$m3_screw_dia, 0])
+                    cube([$m3_screw_dia, $m3_screw_dia*2, plate_thickness*3]);
+                  translate([0, -$m3_screw_dia, 0])
+                    cylinder(d=$m3_screw_dia, h=plate_thickness*3);
+                };
+              };
+            };
+          };
+        };
+    }; // end mount locks
   };
 };
 
@@ -385,7 +425,10 @@ module top_panel(
   };
 };
 
-//switch_backplate(side_plate_width);
+switch_backplate(
+  side_plate_width,
+  cluster_piece_spacing,
+  cluster_frame_thickness/2);
 
 //pi_plate(pi_plate_width, tab_screw_height, tab_width);
 
@@ -401,8 +444,10 @@ cluster_frame(
   mnt_screw_spacing);
 */
 
+/*
 top_panel(
   cluster_frame_width,
   cluster_piece_spacing+12,
   cluster_piece_spacing,
   mnt_screw_spacing);
+*/
