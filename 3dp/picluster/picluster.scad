@@ -425,10 +425,82 @@ module top_panel(
   };
 };
 
+module switch_plate_cover(
+  frame_height,
+  frame_depth,
+  screw_distance_vertical_from_edge,
+  screw_distance_horizontal,
+  opening_width,
+  plate_thickness=default_plate_thickness,
+) {
+  // Supports parallel to y axis, along x axis
+  // y dimension is vertical
+  cover_thickness=20;
+  difference() {
+    union() {
+      cube([frame_depth, frame_height, cover_thickness]);
+    };
+
+    // Front to back cutout
+    cutout_extra = 4;
+    translate([
+      -cutout_extra/2,
+      (frame_height-opening_width)/2,
+      -plate_thickness]) {
+      cube([
+        frame_depth+cutout_extra,
+        opening_width,
+        cover_thickness]);
+    };
+
+    // Widening cutout
+    screw_edge_dist_hz = (frame_depth - screw_distance_horizontal)/2;
+    opening_more_wide = 104;
+    translate([
+      screw_edge_dist_hz*2,
+      (frame_height-opening_more_wide)/2,
+      -plate_thickness]) {
+      cube([
+        frame_depth-screw_edge_dist_hz*4,
+        opening_more_wide,
+        cover_thickness]);
+    };
+
+    // Mount holes
+    #for (x=[-1, 1]) {
+      for (y=[-1, 1]) {
+        translate([
+          x*(screw_distance_horizontal/2)+frame_depth/2,
+          y*(frame_height/2-screw_distance_vertical_from_edge)+frame_height/2,
+          -0.1]) {
+            cylinder(d=$m3_screw_dia, h=cover_thickness*2);
+            translate([0, 0, 6])
+              cylinder(d=$m3_head_dia+1, h=cover_thickness);
+        };
+      };
+    };
+
+    // Cooling slots
+    for (q = [0, 1, 2, 3]) {
+      translate([
+        frame_depth/2,
+        frame_height/2,
+        cover_thickness-plate_thickness*2]) {
+        rotate([0, 0, 90*q]) {
+          // Fill parallel lines at an angle
+          // TODO
+        };
+      };
+    };
+  };
+};
+
+/*
 switch_backplate(
   side_plate_width,
   cluster_piece_spacing,
   cluster_frame_thickness/2);
+*/
 
 //pi_plate(pi_plate_width, tab_screw_height, tab_width);
 
@@ -451,3 +523,11 @@ top_panel(
   cluster_piece_spacing,
   mnt_screw_spacing);
 */
+
+switch_plate_cover(
+  cluster_frame_height,
+  cluster_piece_spacing+cluster_frame_thickness,
+  (cluster_frame_height-side_plate_width)/2,
+  cluster_piece_spacing,
+  side_plate_width-4
+);
