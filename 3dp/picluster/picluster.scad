@@ -7,18 +7,19 @@ $fa = 5;
 
 // Common variables
 default_plate_thickness = 2.5;
-pi_plate_width = 76;
-cluster_frame_width = 100;
+pi_plate_width = 78;
+cluster_frame_width = 104;
 cluster_frame_height = 115;
 cluster_frame_thickness = 10;
 // Between front and back supports, on centers
 cluster_piece_spacing = 75;
 // Spacing between mounting screws top/bottom
 mnt_screw_spacing = 42;
-tab_screw_height = 4;
-tab_width = 7;
+tab_screw_height = 5;
+tab_width = 8;
 side_plate_width = 100;
 $m3_hex_width = 6;
+$m3_hex_depth = 3;
 $m3_screw_dia = 3.30;
 $m3_head_dia = 6;
 $m3_head_depth = 3;
@@ -227,8 +228,14 @@ module pi_plate(
       };
     };
     // Notch for SD card
-    translate([-sd_notch_width, (plate_depth-sd_notch_depth)/2, -plate_thickness])
-      rounded_flat_cube([sd_notch_width*2, sd_notch_depth, plate_thickness*3], 2);
+    translate([
+      -sd_notch_width,
+      (plate_depth-sd_notch_depth)/2+pi_shift_y,
+      -plate_thickness])
+      rounded_flat_cube([
+        sd_notch_width*2,
+        sd_notch_depth,
+        plate_thickness*3], 2);
     // Thermal opening
     translate([
       (plate_width - thermal_width)/2 + pi_shift_x,
@@ -278,7 +285,13 @@ module cluster_frame(
           translate([x,
             i*pi_module_spacing + plate_thickness + tab_screw_height + slot_clearance,
             0])
-            cylinder(d=$m3_screw_dia, h=frame_thickness*3);
+            union() {
+              cylinder(d=$m3_screw_dia, h=frame_thickness*3);
+              // Hex for nuts
+              translate([0, 0, 2*frame_thickness-$m3_hex_depth])
+                rotate([0, 0, 90])
+                  hexagon3d($m3_hex_width/2, $m3_hex_depth*2);
+            };
         };
       };
     };
@@ -293,11 +306,13 @@ module cluster_frame(
         -frame_thickness + (x*frame_thickness*3)])
         rotate([0, x*-180, 0])
           union() {
+            // Holding slot (backplate edges)
             cube([
               plate_thickness+slot_extra,
               side_slot_length+2*slot_extra,
               frame_thickness*3]);
-            translate([-2*slot_inset, slot_hold_width, 0])
+            // Cutout
+            translate([-2*slot_inset, slot_hold_width+slot_extra, 0])
               cube([
                 slot_inset*4.5,
                 side_slot_length-2*slot_hold_width,
@@ -307,18 +322,18 @@ module cluster_frame(
 
     // Slot inset screws
     hex_side_depth = 10;
-    side_hole_dia = $m3_screw_dia;
-    side_hole_len = 22;
+    side_hole_dia = $m3_screw_dia+0.2;
+    side_hole_len = 23;
     side_hole_inset = (frame_height - side_slot_length)/2;
-    for (x = [0, 1]) {
+    for (x = [-1, 1]) {
       for (y = [0, 1]) {
         translate([
-          x*(frame_width-side_hole_len*1.9)+side_hole_len*0.95,
+          x*(frame_width/2-side_hole_len)+frame_width/2,
           side_hole_inset + y*(frame_height-side_hole_inset*2),
           frame_thickness/2])
-        rotate([0, -90+90*x*2, 0])
+        rotate([0, 90*x, 0])
           union() {
-            cylinder(d=side_hole_dia, h=side_hole_len);
+            cylinder(d=side_hole_dia, h=side_hole_len+2);
             rotate([0, 0, 90])
               hexagon3d($m3_hex_width/2, hex_side_depth);
           };
@@ -345,6 +360,23 @@ module cluster_frame(
                 hexagon3d($m3_hex_width/2, hex_depth);
             };
           };
+        };
+      };
+    };
+
+    // 80mm fan mounting screws?
+    fan_screw_shift = 5;
+    translate([
+      frame_width/2,
+      frame_height/2 + fan_screw_shift,
+      -frame_thickness]) {
+      //cube([80, 80, 10], center=true);
+      fan_screw_centers = 71.5; // from specs
+      fan_screw_hole = 5.5; // from specs, though different specs differ
+      for (x = [-1, 1]) {
+        for (y = [-1, 1]) {
+          translate([x * fan_screw_centers/2, y * fan_screw_centers/2, 0])
+            cylinder(d=fan_screw_hole, h=frame_thickness*3);
         };
       };
     };
