@@ -397,6 +397,17 @@ module top_panel(
   feet_pos_x = [-panel_width/2 + $m3_head_dia*1.25, panel_width/2 - $m3_head_dia*1.25];
   screw_feet_x = (is_top == 1) ? screw_pos_x : cat(screw_pos_x, feet_pos_x);
 
+
+  module rounded_slot (slot_width, slot_length) {
+    union() {
+      cylinder(d=slot_width, h=plate_thickness*3);
+      translate([0, -slot_width/2, 0])
+        cube([slot_length, slot_width, plate_thickness*3]);
+      translate([slot_length, 0, 0])
+        cylinder(d=slot_width, h=plate_thickness*3);
+    };
+  };
+
   difference() {
     union() {
       cube([panel_width, panel_length, plate_thickness]);
@@ -449,18 +460,21 @@ module top_panel(
     airflow_area_x = screw_spacing_width - airflow_slot_width*3;
     airflow_slot_spacing = airflow_slot_width * 2;
     airflow_margin_x = (panel_width - airflow_area_x)/2;
+    // additional slots
+    airflow_side_length = airflow_margin_x/2;
+    airflow_side_x = [airflow_margin_x/4, panel_width - 3*airflow_margin_x/4];
+
     for(o = [0:airflow_slot_spacing:airflow_area_y]) {
       translate([
         airflow_margin_x,
         airflow_margin_y + o,
         -plate_thickness]) {
-          union() {
-            cylinder(d=airflow_slot_width, h=plate_thickness*3);
-            translate([0, -airflow_slot_width/2, 0])
-              cube([airflow_area_x, airflow_slot_width, plate_thickness*3]);
-            translate([airflow_area_x, 0, 0])
-              cylinder(d=airflow_slot_width, h=plate_thickness*3);
-          };
+        rounded_slot(airflow_slot_width, airflow_area_x);
+      };
+      for (x = airflow_side_x) {
+        translate([x, airflow_margin_y + o, -plate_thickness]) {
+          rounded_slot(airflow_slot_width, airflow_side_length);
+        };
       };
     };
   };
@@ -571,7 +585,7 @@ module switch_plate_cover(
   };
 };
 
-build_target = "top";
+build_target = "bottom";
 
 if (build_target == "switchplate") {
   switch_backplate(
