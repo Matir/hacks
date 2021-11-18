@@ -388,16 +388,21 @@ module top_panel(
   panel_length,
   screw_spacing_length,
   screw_spacing_width,
+  is_top=0,
   plate_thickness=default_plate_thickness) {
 
   // Width in x, length in y, supports at front/back
 
+  screw_pos_x = [-screw_spacing_width/2, screw_spacing_width/2];
+  feet_pos_x = [-panel_width/2 + $m3_head_dia*1.25, panel_width/2 - $m3_head_dia*1.25];
+  screw_feet_x = (is_top == 1) ? screw_pos_x : cat(screw_pos_x, feet_pos_x);
+
   difference() {
     union() {
       cube([panel_width, panel_length, plate_thickness]);
-      // Screw supports
+      // Screw supports, feet
       translate([panel_width/2, panel_length/2, 0]) {
-        for(x = [-screw_spacing_width/2, screw_spacing_width/2]) {
+        for(x = screw_feet_x) {
           for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
             translate([x, y, plate_thickness/2])
               linear_extrude(height=plate_thickness*3.2, scale=0.75)
@@ -566,43 +571,46 @@ module switch_plate_cover(
   };
 };
 
-/*
-switch_backplate(
-  side_plate_width,
-  cluster_piece_spacing,
-  cluster_frame_thickness/2);
-*/
+build_target = "top";
 
-//pi_plate(pi_plate_width, tab_screw_height, tab_width);
-
-
-cluster_frame(
-  cluster_frame_width,
-  cluster_frame_height,
-  cluster_frame_thickness,
-  pi_plate_width,
-  tab_screw_height,
-  tab_width,
-  side_plate_width,
-  mnt_screw_spacing);
-
-
-/*
-top_panel(
-  cluster_frame_width,
-  cluster_piece_spacing+12,
-  cluster_piece_spacing,
-  mnt_screw_spacing);
-*/
-
-/*
-switch_plate_cover(
-  cluster_frame_height,
-  cluster_piece_spacing+cluster_frame_thickness,
-  (cluster_frame_height-side_plate_width)/2,
-  cluster_piece_spacing,
-  side_plate_width-4
-);
-*/
+if (build_target == "switchplate") {
+  switch_backplate(
+    side_plate_width,
+    cluster_piece_spacing,
+    cluster_frame_thickness/2);
+} else if (build_target == "piplate") {
+  pi_plate(pi_plate_width, tab_screw_height, tab_width);
+} else if (build_target == "frame") {
+  cluster_frame(
+    cluster_frame_width,
+    cluster_frame_height,
+    cluster_frame_thickness,
+    pi_plate_width,
+    tab_screw_height,
+    tab_width,
+    side_plate_width,
+    mnt_screw_spacing);
+} else if (build_target == "top") {
+  top_panel(
+    cluster_frame_width,
+    cluster_piece_spacing+12,
+    cluster_piece_spacing,
+    mnt_screw_spacing,
+    is_top=1);
+} else if (build_target == "bottom") {
+  top_panel(
+    cluster_frame_width,
+    cluster_piece_spacing+12,
+    cluster_piece_spacing,
+    mnt_screw_spacing);
+} else if (build_target == "switchcover") {
+  switch_plate_cover(
+    cluster_frame_height,
+    cluster_piece_spacing+cluster_frame_thickness,
+    (cluster_frame_height-side_plate_width)/2,
+    cluster_piece_spacing,
+    side_plate_width-4
+  );
+}
 
 //_slot_filled_angle([50, 20, 4], 3, 8);
