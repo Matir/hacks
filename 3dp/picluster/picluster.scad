@@ -567,7 +567,7 @@ module switch_plate_cover(
     };
 
     // Mount holes
-    #for (x=[-1, 1]) {
+    for (x=[-1, 1]) {
       for (y=[-1, 1]) {
         translate([
           x*(screw_distance_horizontal/2)+frame_depth/2,
@@ -588,14 +588,21 @@ module switch_plate_cover(
         cover_thickness-plate_thickness*2]) {
         rotate([0, 0, 90*q]) {
           // Fill parallel lines at an angle
-          // TODO
+          slot_sz = min(frame_depth, frame_height) * 3/8;
+          translate([frame_depth/32, frame_height/32, 0])
+          _slot_filled_angle([
+            slot_sz,
+            slot_sz,
+            plate_thickness*3],
+              3, 8);
         };
       };
     };
   };
 };
 
-build_target = "piplate";
+build_target = "switchcover";
+//build_target = "demo";
 
 if (build_target == "switchplate") {
   switch_backplate(
@@ -635,6 +642,7 @@ if (build_target == "switchplate") {
     cluster_piece_spacing,
     side_plate_width-4
   );
+} else if (build_target == "demo") {
+  _slot_filled_angle([50, 20, 4], 3, 8);
 }
 
-//_slot_filled_angle([50, 20, 4], 3, 8);
