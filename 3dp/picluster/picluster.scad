@@ -12,7 +12,7 @@ cluster_frame_width = 104;
 cluster_frame_height = 115;
 cluster_frame_thickness = 10;
 // Between front and back supports, on centers
-cluster_piece_spacing = 75;
+cluster_piece_spacing = 83;
 // Spacing between mounting screws top/bottom
 mnt_screw_spacing = 42;
 tab_screw_height = 5;
@@ -416,7 +416,8 @@ module top_panel(
         for(x = screw_feet_x) {
           for(y = [-screw_spacing_length/2, screw_spacing_length/2]) {
             translate([x, y, plate_thickness/2])
-              linear_extrude(height=plate_thickness*3.2, scale=0.75)
+              linear_extrude(
+                height=(is_top == 1) ? plate_thickness*2.2 : plate_thickness*3.2, scale=0.75)
                 rotate([0, 0, 90])
                   hexagon($m3_head_dia*0.9);
           };
@@ -585,7 +586,7 @@ module switch_plate_cover(
   };
 };
 
-build_target = "bottom";
+build_target = "top";
 
 if (build_target == "switchplate") {
   switch_backplate(

@@ -1,0 +1,17 @@
+- Clearance for ports on side of pi!
+  - Requires frame fix
+  - Requires piplate fix
+  + 3mm for clearance?
+  + 6mm total, shift 2mm to right?
+    - adds 5mm and 1mm on each side
+- Openings for Side Mount Screws
+  - Test width/clearance
+  - Maybe make *slightly* taller?
+- No clearance for screws on bottom of switch plate
+  - Requires frame fix
+- Add 80mm fan mounts?
+  - or maybe 92mm?
+- Add feet on side covers for stability?
+- Add 8mm depth instead of 5 for usb clearance?
+  - Check type C
+  - Cable routing?
