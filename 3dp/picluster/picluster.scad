@@ -161,6 +161,7 @@ module pi_plate(
   tab_screw_dia = 3;
 
   corner_roundoff = 3;
+  front_tab_depth = 5;
 
   sd_notch_depth = 16;
   sd_notch_width = 10;
@@ -168,13 +169,21 @@ module pi_plate(
   thermal_width = 50;
   thermal_depth = 30;
 
+  translate([front_tab_depth, 0, 0])
   difference() {
     union() {
       translate([corner_roundoff, 0, 0])
         cube([plate_width-corner_roundoff, plate_depth, plate_thickness], center=false);
-      for(y = [corner_roundoff, plate_depth-corner_roundoff]) {
-        translate([corner_roundoff, y, 0])
-          cylinder(r=corner_roundoff, h=plate_thickness);
+      for(y = [0, 1]) {
+        hull() {
+          roundoff_round = corner_roundoff + y * (plate_depth - 2 * corner_roundoff);
+          translate([corner_roundoff-front_tab_depth, roundoff_round, 0])
+            cylinder(r=corner_roundoff, h=plate_thickness);
+          translate([corner_roundoff, (plate_depth - 1)/2, 0])
+            cube([1, 1, plate_thickness]);
+          translate([corner_roundoff, y*(plate_depth - 1), 0])
+            cube([1, 1, plate_thickness]);
+        };
       }
       translate([0, corner_roundoff, 0])
         cube([
@@ -586,7 +595,7 @@ module switch_plate_cover(
   };
 };
 
-build_target = "top";
+build_target = "piplate";
 
 if (build_target == "switchplate") {
   switch_backplate(
