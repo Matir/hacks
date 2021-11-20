@@ -601,7 +601,113 @@ module switch_plate_cover(
   };
 };
 
-build_target = "switchcover";
+module powerplate(
+  plate_width,
+  mount_spacing,
+  tab_offset,
+  frame_thickness,
+  plate_thickness=default_plate_thickness) {
+
+  // Oriented with usb ports at x=0, input at x=100
+
+  plate_depth = 100;
+  blocker_depth = 3;
+  back_support_depth = frame_thickness;
+  power_cutout_height = 84;
+  power_cutout_width = 40; // min 18!!
+  power_cutout_base = 7;
+
+  power_block_thickness = 26;
+  power_block_length = 88;
+  power_block_height = 60;
+  power_block_lift = 20;
+
+  support_length = power_block_length-frame_thickness;
+
+  difference() {
+    union() {
+      rounded_flat_cube([plate_width, plate_depth, plate_thickness], 2);
+      // Blockers
+      blocker_y = plate_depth - (plate_depth - mount_spacing)/2 + tab_offset;
+      translate([0, blocker_y, plate_thickness/2]) {
+        rotate([90, 0, 0]) {
+          for (x = [0, 1]) {
+            blocker_width = 5;
+            translate([x*(plate_width-blocker_width), 0, -plate_thickness]) {
+              cube([blocker_width, blocker_depth, plate_thickness]);
+            };
+          };
+        };
+      };
+
+      // Front supports
+      translate([power_cutout_base, plate_depth-support_length, 0]) {
+        cube([power_block_height, frame_thickness, power_block_lift]);
+      };
+
+      // Back supports
+      translate([power_cutout_base, plate_depth-frame_thickness, 0]) {
+        cube([power_block_height, frame_thickness, power_block_lift]);
+      };
+
+      // Base shelf
+      translate([power_cutout_base-plate_thickness, plate_depth-support_length, 0]) {
+        cube([
+          plate_thickness,
+          support_length,
+          power_block_lift+power_block_thickness+plate_thickness]);
+        translate([0, 0, power_block_lift+power_block_thickness])
+          cube([
+            power_block_height/2,
+            support_length,
+            plate_thickness]);
+      };
+
+    }; // end union
+
+    // Main cutout
+    translate([power_cutout_base, plate_depth-back_support_depth-power_cutout_width, -plate_thickness])
+      rounded_flat_cube([power_cutout_height, power_cutout_width, plate_thickness*3], 2);
+
+    // Front cable cutout
+    translate([power_cutout_base, -frame_thickness, -plate_thickness])
+      rounded_flat_cube([power_block_height, frame_thickness*3, plate_thickness*3], 2);
+
+    // Shelf cutout
+    shelf_cutout_width = support_length - 2*frame_thickness;
+    translate([
+      power_cutout_base+plate_thickness*2,
+      plate_depth-support_length+(support_length - shelf_cutout_width)/2,
+      power_block_lift+power_block_thickness-plate_thickness]) {
+      rounded_flat_cube([power_block_height/2, shelf_cutout_width, plate_thickness*3], 2);
+    };
+
+    // Mount locks
+    translate([
+      0,
+      plate_depth/2,
+      0]) {
+        for (y = [-1, 1]) {
+          for(x = [0, 1]) {
+            ypos = y * mount_spacing/2;
+            xpos = x * plate_width;
+            translate([xpos, ypos, -plate_thickness]) {
+              rotate([0, 0, x*180+90]) {
+                union() {
+                  translate([-$m3_screw_dia/2, -$m3_screw_dia, 0])
+                    cube([$m3_screw_dia, $m3_screw_dia*2, plate_thickness*3]);
+                  translate([0, -$m3_screw_dia, 0])
+                    cylinder(d=$m3_screw_dia, h=plate_thickness*3);
+                };
+              };
+            };
+          };
+        };
+    }; // end mount locks
+  };
+};
+
+build_target = "powerplate";
 //build_target = "demo";
 
 if (build_target == "switchplate") {
@@ -642,6 +748,12 @@ if (build_target == "switchplate") {
     cluster_piece_spacing,
     side_plate_width-4
   );
+} else if (build_target == "powerplate") {
+  powerplate(
+    side_plate_width,
+    cluster_piece_spacing,
+    cluster_frame_thickness/2,
+    cluster_frame_thickness);
 } else if (build_target == "demo") {
   _slot_filled_angle([50, 20, 4], 3, 8);
 }

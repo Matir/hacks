@@ -1,4 +1,4 @@
-BUILDS = switchplate piplate frame top bottom switchcover
+BUILDS = switchplate piplate frame top bottom switchcover powerplate
 SRC_FILE = picluster.scad
 DEPS = ../library/hex.scad ../library/rounded.scad
 OUT_PREFIX = picluster_
