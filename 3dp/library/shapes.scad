@@ -1,3 +1,4 @@
+// Truncated 4-sided pyramid
 module truncated_pyramid(bottom=[2,2], top=[1,1], height=1) {
   delta_x = (bottom[0]-top[0])/2;
   delta_y = (bottom[1]-top[1])/2;

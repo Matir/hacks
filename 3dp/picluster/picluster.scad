@@ -617,12 +617,12 @@ module powerplate(
   power_cutout_width = 40; // min 18!!
   power_cutout_base = 7;
 
-  power_block_thickness = 26;
+  power_block_thickness = 27;
   power_block_length = 88;
   power_block_height = 60;
-  power_block_lift = 20;
+  power_block_lift = 5;
 
-  support_length = power_block_length-frame_thickness;
+  support_length = power_block_length-2*frame_thickness;
 
   difference() {
     union() {
@@ -642,12 +642,22 @@ module powerplate(
 
       // Front supports
       translate([power_cutout_base, plate_depth-support_length, 0]) {
-        cube([power_block_height, frame_thickness, power_block_lift]);
+        difference() {
+          cube([power_block_height, frame_thickness, power_block_lift]);
+          translate([power_block_height, -frame_thickness, 0])
+            rotate([0, -60, 0])
+              cube([frame_thickness, frame_thickness*3, frame_thickness]);
+        };
       };
 
       // Back supports
       translate([power_cutout_base, plate_depth-frame_thickness, 0]) {
-        cube([power_block_height, frame_thickness, power_block_lift]);
+        difference() {
+          cube([power_block_height, frame_thickness, power_block_lift]);
+          translate([power_block_height, -frame_thickness, 0])
+            rotate([0, -60, 0])
+              cube([frame_thickness, frame_thickness*3, frame_thickness]);
+        };
       };
 
       // Base shelf
@@ -670,8 +680,8 @@ module powerplate(
       rounded_flat_cube([power_cutout_height, power_cutout_width, plate_thickness*3], 2);
 
     // Front cable cutout
-    translate([power_cutout_base, -frame_thickness, -plate_thickness])
-      rounded_flat_cube([power_block_height, frame_thickness*3, plate_thickness*3], 2);
+    translate([power_cutout_base*2, -frame_thickness, -plate_thickness])
+      rounded_flat_cube([power_block_height, frame_thickness*4, plate_thickness*3], 2);
 
     // Shelf cutout
     shelf_cutout_width = support_length - 2*frame_thickness;
