@@ -1,0 +1,74 @@
+# Points to local storage, hardcoded password, just for testing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ctfd-deployment
+  labels:
+    app: ctfd
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ctfd
+  template:
+    metadata:
+      labels:
+        app: ctfd
+    spec:
+      serviceAccountName: dbksa
+      containers:
+      - name: ctfd
+        image: ctfd/ctfd:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: UPLOAD_PROVIDER
+          value: s3
+        - name: AWS_ACCESS_KEY_ID
+          value: REPLACEME
+        - name: AWS_SECRET_ACCESS_KEY
+          value: REPLACEME
+        - name: AWS_S3_ENDPOINT_URL
+          value: https://storage.googleapis.com
+        - name: AWS_S3_BUCKET
+          value: some-bucket-name
+        - name: SECRET_KEY
+          value: this-is-not-really-secret
+        # TODO: can we sync these to a bucket somehow?
+        - name: LOG_FOLDER
+          value: /tmp/ctfd
+        - name: DATABASE_URL
+          value: mysql+pymysql://ctfd:password@127.0.0.1/ctfd
+        - name: REDIS_URL
+          value: redis://redis.default.svc.cluster.local:6379
+        - name: WORKERS
+          value: "4"
+        resources:
+          requests:
+            memory: "0.25Gi"
+            cpu: "0.25"
+      - name: mysql-sidecar
+        image: gcr.io/cloudsql-docker/gce-proxy:1.17
+        command:
+          - "/cloud_sql_proxy"
+          - "-instances=rt-gcp-test-2021:us-central1:dbtest=tcp:3306"
+        securityContext:
+          runAsNonRoot: true
+        resources:
+          requests:
+            memory: "0.25Gi"
+            cpu: "0.25"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ctfd
+  labels:
+    app: ctfd
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8000
+      protocol: TCP
+  selector:
+    app: ctfd
