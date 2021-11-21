@@ -8,9 +8,15 @@ RUN http_proxy=${apt_http_proxy} apt-get -yy update && \
         python3-pip \
         pipenv \
         procps \
-        strace
+        strace \
+        python3-dev \
+        build-essential \
+        default-libmysqlclient-dev
 
-RUN pip install jupyterlab
+RUN pip install \
+        jupyterlab \
+        pandas \
+        mysqlclient
 
 RUN useradd -m jovian
 
