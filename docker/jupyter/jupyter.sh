@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ue
+
 if test -n "${JUPYTER_PASSWORD}" ; then
   FN="$(mktemp)"
   cat <<EOF
@@ -17,4 +19,5 @@ exec /usr/local/bin/jupyter lab \
   --port "${PORT:-9999}" \
   --ip 0.0.0.0 \
   --no-browser \
+  --log-level INFO \
   --notebook-dir "${NOTEBOOK_DIR}"
