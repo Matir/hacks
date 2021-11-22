@@ -535,23 +535,30 @@ module switch_plate_cover(
 ) {
   // Supports parallel to y axis, along x axis
   // y dimension is vertical
-  cover_thickness=20;
+  cover_thickness=19;
   difference() {
     union() {
-      cube([frame_depth, frame_height, cover_thickness]);
+      cube([frame_depth, frame_height+plate_thickness, cover_thickness]);
     };
 
-    // Front to back cutout
+    // Front cutout
     cutout_extra = 4;
     translate([
-      -cutout_extra/2,
+      -cutout_extra,
       (frame_height-opening_width)/2,
       -plate_thickness]) {
       cube([
-        frame_depth+cutout_extra,
+        frame_depth+cutout_extra-plate_thickness,
         opening_width,
         cover_thickness]);
     };
+
+    // Back cutout, just for power plug
+    power_opening_base = 75;
+    power_opening_height = 20;
+    power_opening_depth = 17;
+    translate([frame_depth-plate_thickness*2, power_opening_base, -1])
+      cube([plate_thickness*3, power_opening_height, power_opening_depth]);
 
     // Widening cutout
     screw_edge_dist_hz = (frame_depth - screw_distance_horizontal)/2;
@@ -573,8 +580,8 @@ module switch_plate_cover(
           x*(screw_distance_horizontal/2)+frame_depth/2,
           y*(frame_height/2-screw_distance_vertical_from_edge)+frame_height/2,
           -0.1]) {
-            cylinder(d=$m3_screw_dia, h=cover_thickness*2);
-            translate([0, 0, 6])
+            cylinder(d=$m3_screw_dia+0.1, h=cover_thickness*2);
+            translate([0, 0, 3])
               cylinder(d=$m3_head_dia+1, h=cover_thickness);
         };
       };
@@ -717,7 +724,7 @@ module powerplate(
   };
 };
 
-build_target = "powerplate";
+build_target = "switchcover";
 //build_target = "demo";
 
 if (build_target == "switchplate") {
