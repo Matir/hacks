@@ -724,7 +724,100 @@ module powerplate(
   };
 };
 
-build_target = "switchcover";
+module power_cover(
+  frame_height,
+  frame_depth,
+  screw_distance_vertical_from_edge,
+  screw_distance_horizontal,
+  plate_thickness=default_plate_thickness,
+) {
+  // Supports parallel to y axis, along x axis
+  // y dimension is vertical
+  power_block_thickness = 27;
+  power_block_length = 88;
+  power_block_height = 60;
+  power_block_lift = 5;
+
+  cover_thickness = power_block_thickness+power_block_lift+plate_thickness;
+
+  union() {
+    difference() {
+      union() {
+        cube([frame_depth, frame_height+plate_thickness, cover_thickness]);
+      };
+
+      // Front cutout
+      cutout_extra = 4;
+      translate([
+        cutout_extra,
+        9,
+        -plate_thickness]) {
+        cube([
+          frame_depth+cutout_extra-plate_thickness,
+          power_block_height+10,
+          cover_thickness]);
+      };
+
+      // Back cutout, just for power plug
+      power_opening_base = 9; // help
+      power_opening_height = power_block_height+3*plate_thickness;
+      power_opening_depth = power_block_thickness+power_block_lift;
+      translate([-plate_thickness, power_opening_base, -1])
+        cube([plate_thickness*3, power_opening_height, power_opening_depth]);
+
+      // Widening cutout
+      screw_edge_dist_hz = (frame_depth - screw_distance_horizontal)/2;
+      opening_more_wide = 104;
+      translate([
+        screw_edge_dist_hz*2,
+        (frame_height-opening_more_wide)/2,
+        -plate_thickness]) {
+        cube([
+          frame_depth-screw_edge_dist_hz*4,
+          opening_more_wide,
+          cover_thickness]);
+      };
+
+      // Mount holes
+      for (x=[-1, 1]) {
+        for (y=[-1, 1]) {
+          translate([
+            x*(screw_distance_horizontal/2)+frame_depth/2,
+            y*(frame_height/2-screw_distance_vertical_from_edge)+frame_height/2,
+            -0.1]) {
+              cylinder(d=$m3_screw_dia+0.1, h=cover_thickness*2);
+              translate([0, 0, 3])
+                cylinder(d=$m3_head_dia+1, h=cover_thickness);
+          };
+        };
+      };
+
+      // Cooling slots
+      for (q = [0, 1, 2, 3]) {
+        translate([
+          frame_depth/2,
+          frame_height/2,
+          cover_thickness-plate_thickness*2]) {
+          rotate([0, 0, 90*q]) {
+            // Fill parallel lines at an angle
+            slot_sz = min(frame_depth, frame_height) * 3/8;
+            translate([frame_depth/32, frame_height/32, 0])
+            _slot_filled_angle([
+              slot_sz,
+              slot_sz,
+              plate_thickness*3],
+                3, 8);
+          };
+        };
+      };
+    }; // end difference block
+    #translate([power_block_length, power_block_height-5, power_block_thickness]) {
+      cube([3, 10, cover_thickness-power_block_thickness]);
+    };
+  };
+};
+
+build_target = "powercover";
 //build_target = "demo";
 
 if (build_target == "switchplate") {
@@ -771,7 +864,22 @@ if (build_target == "switchplate") {
     cluster_piece_spacing,
     cluster_frame_thickness/2,
     cluster_frame_thickness);
+} else if (build_target == "powercover") {
+  power_cover(
+    cluster_frame_height,
+    cluster_piece_spacing+cluster_frame_thickness,
+    (cluster_frame_height-side_plate_width)/2,
+    cluster_piece_spacing
+  );
 } else if (build_target == "demo") {
-  _slot_filled_angle([50, 20, 4], 3, 8);
+  intersection() {
+    power_cover(
+      cluster_frame_height,
+      cluster_piece_spacing+cluster_frame_thickness,
+      (cluster_frame_height-side_plate_width)/2,
+      cluster_piece_spacing
+    );
+    cube([100, 30, 100]);
+  };
 }
 
