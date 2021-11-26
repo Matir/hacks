@@ -1,0 +1,171 @@
+# See https://wiki.debian.org/RaspberryPi3 for known issues and more details.
+
+steps:
+  - mkimg: "{{ output }}"
+    size: 1500M
+
+  - mklabel: msdos
+    device: "{{ output }}"
+
+  - mkpart: primary
+    fs-type: 'fat32'
+    device: "{{ output }}"
+    start: 4MiB
+    end: 20%
+    tag: /boot
+
+  - mkpart: primary
+    device: "{{ output }}"
+    start: 20%
+    end: 100%
+    tag: /
+
+  - kpartx: "{{ output }}"
+
+  - mkfs: vfat
+    partition: /boot
+    label: RASPIFIRM
+
+  - mkfs: ext4
+    partition: /
+    label: RASPIROOT
+
+  - mount: /
+
+  - mount: /boot
+    mount-on: /
+    dirname: '/boot/firmware'
+
+  - unpack-rootfs: /
+
+  - qemu-debootstrap: buster
+    mirror: http://deb.debian.org/debian
+    target: /
+    arch: arm64
+    components:
+    - main
+    - contrib
+    - non-free
+    unless: rootfs_unpacked
+
+  - create-file: /etc/apt/sources.list
+    trailing-newline: '1'
+    contents: |
+      deb http://deb.debian.org/debian buster main contrib non-free
+      deb http://security.debian.org/debian-security buster/updates main contrib non-free
+      # Backports are _not_ enabled by default.
+      # Enable them by uncommenting the following line:
+      # deb http://deb.debian.org/debian buster-backports main contrib non-free
+      deb http://deb.debian.org/debian/ buster-backports main contrib non-free # raspi 4 needs a kernel and raspi-firmware newer than buster's
+    unless: rootfs_unpacked
+
+  - copy-file: /etc/initramfs-tools/hooks/rpi-resizerootfs
+    src: rootfs/etc/initramfs-tools/hooks/rpi-resizerootfs
+    perm: 0755
+    unless: rootfs_unpacked
+
+  - copy-file: /etc/initramfs-tools/scripts/local-bottom/rpi-resizerootfs
+    src: rootfs/etc/initramfs-tools/scripts/local-bottom/rpi-resizerootfs
+    perm: 0755
+    unless: rootfs_unpacked
+
+  - chroot: /
+    shell: |
+      echo 'APT::Default-Release "buster";' > /etc/apt/apt.conf
+      apt-get update
+    unless: rootfs_unpacked
+
+  - apt: install
+    packages:
+    - ca-certificates
+    - dosfstools
+    - iw
+    - parted
+    - ssh
+    - wpasupplicant
+    - raspi-firmware/buster-backports
+    - linux-image-arm64/buster-backports
+    - firmware-brcm80211/buster-backports
+    tag: /
+    unless: rootfs_unpacked
+
+  - cache-rootfs: /
+    unless: rootfs_unpacked
+
+  - shell: |
+      echo "rpi4-$(date +%Y%m%d)" > "${ROOT?}/etc/hostname"
+
+      # Allow root logins locally with no password
+      sed -i 's,root:[^:]*:,root::,' "${ROOT?}/etc/shadow"
+
+      install -m 644 -o root -g root rootfs/etc/fstab "${ROOT?}/etc/fstab"
+
+      install -m 644 -o root -g root rootfs/etc/network/interfaces.d/eth0 "${ROOT?}/etc/network/interfaces.d/eth0"
+      install -m 600 -o root -g root rootfs/etc/network/interfaces.d/wlan0 "${ROOT?}/etc/network/interfaces.d/wlan0"
+
+      install -m 755 -o root -g root rootfs/usr/local/sbin/rpi-set-sysconf "${ROOT?}/usr/local/sbin/rpi-set-sysconf"
+      install -m 644 -o root -g root rootfs/etc/systemd/system/rpi-set-sysconf.service "${ROOT?}/etc/systemd/system/"
+      install -m 644 -o root -g root rootfs/boot/firmware/sysconf.txt "${ROOT?}/boot/firmware/sysconf.txt"
+      mkdir -p "${ROOT?}/etc/systemd/system/basic.target.requires/"
+      ln -s /etc/systemd/system/rpi-set-sysconf.service "${ROOT?}/etc/systemd/system/basic.target.requires/rpi-set-sysconf.service"
+
+      # Resize script is now in the initrd for first boot; no need to ship it.
+      rm -f "${ROOT?}/etc/initramfs-tools/hooks/rpi-resizerootfs"
+      rm -f "${ROOT?}/etc/initramfs-tools/scripts/local-bottom/rpi-resizerootfs"
+
+      install -m 644 -o root -g root rootfs/etc/systemd/system/rpi-reconfigure-raspi-firmware.service "${ROOT?}/etc/systemd/system/"
+      mkdir -p "${ROOT?}/etc/systemd/system/multi-user.target.requires/"
+      ln -s /etc/systemd/system/rpi-reconfigure-raspi-firmware.service "${ROOT?}/etc/systemd/system/multi-user.target.requires/rpi-reconfigure-raspi-firmware.service"
+      sed -i s#raspi-firmware#raspi-firmware/buster-backports# ${ROOT?}/etc/systemd/system/rpi-reconfigure-raspi-firmware.service
+
+      install -m 644 -o root -g root rootfs/etc/systemd/system/rpi-generate-ssh-host-keys.service "${ROOT?}/etc/systemd/system/"
+      ln -s /etc/systemd/system/rpi-generate-ssh-host-keys.service "${ROOT?}/etc/systemd/system/multi-user.target.requires/rpi-generate-ssh-host-keys.service"
+      rm -f "${ROOT?}"/etc/ssh/ssh_host_*_key*
+
+    root-fs: /
+
+  # Copy the relevant device tree files to the boot partition
+  - chroot: /
+    shell: |
+      install -m 644 -o root -g root /usr/lib/linux-image-*-arm64/broadcom/bcm*rpi*.dtb /boot/firmware/
+
+  # Clean up archive cache (likely not useful) and lists (likely outdated) to
+  # reduce image size by several hundred megabytes.
+  - chroot: /
+    shell: |
+      apt-get clean
+      rm -rf /var/lib/apt/lists
+
+  # Modify the kernel commandline we take from the firmware to boot from
+  # the partition labeled raspiroot instead of forcing it to mmcblk0p2
+  #
+  # These changes will be overwritten after the hardware is probed
+  # after dpkg reconfigures raspi-firmware (upon first boot).
+  - chroot: /
+    shell: |
+      sed -i 's/^/console=ttyS1,115200 /' /boot/firmware/cmdline.txt
+      sed -i 's/.dev.mmcblk0p2/LABEL=RASPIROOT/' /boot/firmware/cmdline.txt
+      sed -i 's/cma=64M //' /boot/firmware/cmdline.txt
+      sed -i 's/cma=$CMA //' /etc/kernel/postinst.d/z50-raspi-firmware
+
+  # TODO(https://github.com/larswirzenius/vmdb2/issues/24): remove once vmdb
+  # clears /etc/resolv.conf on its own.
+  - shell: |
+      rm "${ROOT?}/etc/resolv.conf"
+    root-fs: /
+
+  # Clear /etc/machine-id and /var/lib/dbus/machine-id, as both should
+  # be auto-generated upon first boot. From the manpage
+  # (machine-id(5)):
+  #
+  #   For normal operating system installations, where a custom image is
+  #   created for a specific machine, /etc/machine-id should be
+  #   populated during installation.
+  #
+  # Note this will also trigger ConditionFirstBoot=yes for systemd.
+  # On Buster, /etc/machine-id should be an emtpy file, not an absent file
+  # On Bullseye, /etc/machine-id should not exist in an image
+  - chroot: /
+    shell: |
+      rm -f /etc/machine-id /var/lib/dbus/machine-id
+      touch /etc/machine-id
