@@ -2,17 +2,21 @@
 
 set -ue
 
+mkdir -p "${NOTEBOOK_DIR}"
+
 if test -n "${JUPYTER_PASSWORD}" ; then
   FN="$(mktemp)"
-  cat <<EOF
+  cat >"${FN}" <<EOF
 from jupyter_server.auth.security import set_password
 import sys
 set_password(sys.stdin.read().strip())
+print('Password set!')
 EOF
   python3 "${FN}" <<EOF
 ${JUPYTER_PASSWORD}
 EOF
   rm "${FN}"
+  unset JUPYTER_PASSWORD
 fi
 
 exec /usr/local/bin/jupyter lab \
