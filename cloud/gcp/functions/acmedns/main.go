@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"google.golang.org/api/idtoken"
 )
@@ -17,6 +19,7 @@ type domainAuthzMap map[string][]string
 const (
 	userAuthContext = acmeDnsContextKey("user")
 	DomainAuthzVar  = "DOMAIN_AUTHZ"
+	acmeSubdomain   = "_acme-challenge"
 )
 
 var domainAuthzConfig domainAuthzMap
@@ -83,8 +86,20 @@ func getDomain(r *http.Request) (string, error) {
 	return "", ErrorNoDomain
 }
 
+// Main entry point for DNS Handler
 func AcmeDNS(w http.ResponseWriter, r *http.Request) {
-	if user, err := getAuthorizedUser(r); err != nil {
+	if authz, err := getDomainAuthzConfig(); err != nil {
+		log.Printf("Error loading Authz config: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	} else {
+		acmeDNSInternal(w, r, getAuthorizedUser, authz)
+	}
+}
+
+// Entrypoint with injected providers for testing
+func acmeDNSInternal(w http.ResponseWriter, r *http.Request, userLookup func(r *http.Request) (string, error), authz domainAuthzMap) {
+	if user, err := userLookup(r); err != nil {
 		// 401, auth failed
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -99,6 +114,17 @@ func AcmeDNS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Check authz map
+		if allowedPatterns, ok := authz[user]; !ok {
+			log.Printf("No patterns configured for user %v, denying!", user)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		} else {
+			if !isDomainAllowed(domain, allowedPatterns) {
+				log.Printf("User %v not allowed access to domain %v. (Allowed Patterns: %v)", user, domain, allowedPatterns)
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+		}
 
 		// Dispatch to method
 		switch r.Method {
@@ -124,21 +150,103 @@ func acmeDNSUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request, 
 func acmeDNSDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string) {
 }
 
+func parseDomainAuthzConfig(cfgstr string) (domainAuthzMap, error) {
+	result := make(domainAuthzMap)
+	for _, entry := range strings.Split(cfgstr, ";") {
+		if entry == "" {
+			continue
+		}
+		pieces := strings.SplitN(entry, "=", 2)
+		if len(pieces) != 2 {
+			return nil, fmt.Errorf("Missing = in authz entry: %s", entry)
+		}
+		key := strings.TrimSpace(pieces[0])
+		if _, ok := result[key]; ok {
+			return nil, fmt.Errorf("Duplicate key for authz entry: %s", entry)
+		}
+		result[key] = trimStringSlice(strings.Split(pieces[1], ","))
+	}
+	return result, nil
+}
+
 func getDomainAuthzConfig() (domainAuthzMap, error) {
 	domainAuthzLock.Lock()
 	defer domainAuthzLock.Unlock()
 	if domainAuthzConfig == nil {
-		domainAuthzConfig = make(domainAuthzMap)
-		for _, entry := range strings.Split(os.GetEnv(DomainAuthzVar), ";") {
-			pieces := strings.SplitN(entry, "=", 2)
-			if len(pieces) != 2 {
-				return nil, fmt.Errorf("Missing = in authz entry: %s", entry)
-			}
-			if _, ok := domainAuthzConfig[pieces[0]]; ok {
-				return nil, fmt.Errorf("Duplicate key for authz entry: %s", entry)
-			}
-			domainAuthzConfig[pieces[0]] = strings.Split(pieces[1], ",")
+		if res, err := parseDomainAuthzConfig(os.Getenv(DomainAuthzVar)); err != nil {
+			return nil, err
+		} else {
+			domainAuthzConfig = res
 		}
 	}
 	return domainAuthzConfig, nil
+}
+
+func trimStringSlice(items []string) []string {
+	results := make([]string, len(items))
+	for i, v := range items {
+		results[i] = strings.TrimSpace(v)
+	}
+	return results
+}
+
+// Authz tests
+func isDomainAllowed(domain string, allowlist []string) bool {
+	for _, pattern := range allowlist {
+		if domainMatches(domain, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// Check if domain matches pattern.
+// Pattern permits wildcards as follows:
+// * -> match any name in this spot (exactly 1)
+// ** -> match any name in this spot and all subdomains (0 or more)
+// Wildcard is only permitted as the leftmost element and *must* be the entire
+// element
+func domainMatches(domain, pattern string) bool {
+	domain = normalizeDomain(domain)
+	pattern = normalizeDomain(pattern)
+	// short circuit simple cases
+	if domain == pattern {
+		return true
+	}
+
+	slicesMatch := func(a, b []string) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for i := 0; i < len(a); i++ {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	domainPieces := strings.Split(domain, ".")
+	patternPieces := strings.Split(pattern, ".")
+	switch patternPieces[0] {
+	case "**":
+		// is remaining pattern the domain suffix?
+		patternPieces = patternPieces[1:]
+		domainPieces = domainPieces[len(domainPieces)-len(patternPieces):]
+		return slicesMatch(patternPieces, domainPieces)
+	case "*":
+		// is remaining pattern the domain suffix with same number of elements?
+		if len(domainPieces) != len(patternPieces) {
+			return false
+		}
+		return slicesMatch(patternPieces[1:], domainPieces[1:])
+	default:
+		// No wildcards, should have matched exact match
+		return false
+	}
+}
+
+// Normalize a domain by removing a trailing . and a leading _acme-challenge.
+func normalizeDomain(domain string) string {
+	return strings.ToLower(strings.Trim(strings.TrimPrefix(domain, acmeSubdomain+"."), "."))
 }
