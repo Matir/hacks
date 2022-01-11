@@ -2,6 +2,7 @@ package acmedns
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +16,12 @@ import (
 
 type acmeDnsContextKey string
 type domainAuthzMap map[string][]string
+
+type DNSProvider interface {
+	GetTXT(string) (string, error)
+	SetTXT(string, string) (string, error)
+	DeleteTXT(string) error
+}
 
 const (
 	userAuthContext = acmeDnsContextKey("user")
@@ -93,12 +100,18 @@ func AcmeDNS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	} else {
-		acmeDNSInternal(w, r, getAuthorizedUser, authz)
+		provider, err := NewGCPDNSProvider(r.Context())
+		if err != nil {
+			log.Printf("Error getting GCP DNS Provider: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		acmeDNSInternal(w, r, getAuthorizedUser, authz, provider)
 	}
 }
 
 // Entrypoint with injected providers for testing
-func acmeDNSInternal(w http.ResponseWriter, r *http.Request, userLookup func(r *http.Request) (string, error), authz domainAuthzMap) {
+func acmeDNSInternal(w http.ResponseWriter, r *http.Request, userLookup func(r *http.Request) (string, error), authz domainAuthzMap, provider DNSProvider) {
 	if user, err := userLookup(r); err != nil {
 		// 401, auth failed
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -126,14 +139,21 @@ func acmeDNSInternal(w http.ResponseWriter, r *http.Request, userLookup func(r *
 			}
 		}
 
+		if !strings.HasPrefix(domain, acmeSubdomain+".") {
+			domain = acmeSubdomain + "." + domain
+		}
+
 		// Dispatch to method
 		switch r.Method {
 		case http.MethodGet:
-			acmeDNSLookup(ctx, w, r, domain)
+			log.Printf("Lookup for domain %v, user %v.", domain, user)
+			acmeDNSLookup(ctx, w, r, domain, provider)
 		case http.MethodPost:
-			acmeDNSUpdate(ctx, w, r, domain)
+			log.Printf("Update for domain %v, user %v.", domain, user)
+			acmeDNSUpdate(ctx, w, r, domain, provider)
 		case http.MethodDelete:
-			acmeDNSDelete(ctx, w, r, domain)
+			log.Printf("Delete for domain %v, user %v.", domain, user)
+			acmeDNSDelete(ctx, w, r, domain, provider)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -141,13 +161,78 @@ func acmeDNSInternal(w http.ResponseWriter, r *http.Request, userLookup func(r *
 	}
 }
 
-func acmeDNSLookup(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string) {
+// Lookup the record here
+func acmeDNSLookup(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string, provider DNSProvider) {
+	// Expects no body.  Will return *just* the value as a string *unless*
+	// application/json is in the Accept header.
+	result, err := provider.GetTXT(domain)
+	if err != nil {
+		log.Printf("Failed doing lookup for TXT record: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	// Nothing found
+	if result == "" {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	writeResult(w, r, domain, result)
 }
 
-func acmeDNSUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string) {
+func acmeDNSUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string, provider DNSProvider) {
+	var record string
+	if strings.HasPrefix(r.Header.Get("Content-type"), "application/json") {
+		// read data from JSON
+		data := struct {
+			Value string `json:"value"`
+		}{}
+		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+			log.Printf("Error reading JSON: %v", err)
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		record = data.Value
+	} else {
+		// read from form data
+		record = r.FormValue("value")
+	}
+	if record == "" {
+		log.Printf("Empty body for domain update: %v", domain)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	log.Printf("Updating domain %v to %v", domain, record)
+	if result, err := provider.SetTXT(domain, record); err != nil {
+		log.Printf("Error updating text record (domain %v, record %v): %v", domain, record, err)
+		// TODO: detect error type and give appropriate code
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	} else {
+		writeResult(w, r, domain, result)
+	}
 }
 
-func acmeDNSDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string) {
+func acmeDNSDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string, provider DNSProvider) {
+}
+
+func writeResult(w http.ResponseWriter, r *http.Request, domain, result string) {
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-type", "application/json")
+		e := json.NewEncoder(w)
+		data := struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		}{
+			Name:  domain,
+			Value: result,
+		}
+		if err := e.Encode(data); err != nil {
+			log.Printf("Error writing JSON data: %v", err)
+		}
+		return
+	}
+	w.Header().Set("Content-type", "text/plain")
+	fmt.Fprintf(w, "%s", result)
 }
 
 func parseDomainAuthzConfig(cfgstr string) (domainAuthzMap, error) {
