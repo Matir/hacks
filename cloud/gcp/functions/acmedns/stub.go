@@ -13,6 +13,12 @@ var stubProvider = StubDNSProvider{
 	data: make(map[string]string),
 }
 
+func NewStubDNSProvider() *StubDNSProvider {
+	return &StubDNSProvider{
+		data: make(map[string]string),
+	}
+}
+
 func (s *StubDNSProvider) GetTXT(name string) (string, error) {
 	if v, ok := s.data[name]; ok {
 		return v, nil

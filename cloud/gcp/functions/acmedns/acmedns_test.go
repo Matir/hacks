@@ -1,6 +1,13 @@
 package acmedns
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 )
@@ -56,5 +63,93 @@ func TestDomainMatches(t *testing.T) {
 		if res != tc.result {
 			t.Errorf("For domain %s, pattern %s, got %v, expected %v.", tc.domain, tc.pattern, res, tc.result)
 		}
+	}
+}
+
+func TestAcmeDNSInternal_Update_JSON(t *testing.T) {
+	userLookup := func(r *http.Request) (string, error) {
+		return "test@example.com", nil
+	}
+	buf := bytes.Buffer{}
+	domain := "foo.bar.example.com"
+	token := "abcdefghi"
+	json.NewEncoder(&buf).Encode(struct {
+		Value string `json:"value"`
+	}{
+		Value: token,
+	})
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/%s", domain), &buf)
+	rec := httptest.NewRecorder()
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-type", "application/json")
+	provider := NewStubDNSProvider()
+	acmeDNSInternal(rec, req, userLookup, getTestDomainAuthzMap(), provider)
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected OK, got %v", resp.StatusCode)
+	}
+	respData := struct {
+		Value string `json:"value"`
+		Name  string `json:"name"`
+	}{}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		t.Fatalf("Error reading JSON response: %v", err)
+	}
+	if respData.Value != token {
+		t.Fatalf("Expected token %v, got %v", token, respData.Value)
+	}
+	acmeDomain := fmt.Sprintf("_acme-challenge.%s", domain)
+	if respData.Name != acmeDomain {
+		t.Fatalf("Expected name %v, got %v", acmeDomain, respData.Name)
+	}
+	if v, ok := provider.data[acmeDomain]; !ok {
+		t.Fatalf("Value not stored in provider!")
+	} else {
+		if v != token {
+			t.Fatalf("Expected stored token %v, got %v", token, v)
+		}
+	}
+}
+
+func TestAcmeDNSInternal_Update_URLEncoded(t *testing.T) {
+	userLookup := func(r *http.Request) (string, error) {
+		return "test@example.com", nil
+	}
+	buf := bytes.Buffer{}
+	domain := "foo.bar.example.com"
+	token := "abcdefghi"
+	vals := url.Values{}
+	vals.Add("value", token)
+	fmt.Fprintf(&buf, "%s", vals.Encode())
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/%s", domain), &buf)
+	rec := httptest.NewRecorder()
+	req.Header.Set("Content-type", "application/x-www-form-urlencoded")
+	provider := NewStubDNSProvider()
+	acmeDNSInternal(rec, req, userLookup, getTestDomainAuthzMap(), provider)
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected OK, got %v", resp.StatusCode)
+	}
+	if respBuf, err := ioutil.ReadAll(resp.Body); err != nil {
+		t.Fatalf("Error reading body: %v", err)
+	} else {
+		if string(respBuf) != token {
+			t.Fatalf("Expected token %v, got %v", token, string(respBuf))
+		}
+	}
+	acmeDomain := fmt.Sprintf("_acme-challenge.%s", domain)
+	if v, ok := provider.data[acmeDomain]; !ok {
+		t.Fatalf("Value not stored in provider!")
+	} else {
+		if v != token {
+			t.Fatalf("Expected stored token %v, got %v", token, v)
+		}
+	}
+}
+
+func getTestDomainAuthzMap() domainAuthzMap {
+	return domainAuthzMap{
+		"test@example.com":  []string{"**.example.com"},
+		"test2@example.com": []string{"test2.example.com"},
 	}
 }
