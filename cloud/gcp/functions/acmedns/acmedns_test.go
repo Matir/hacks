@@ -147,6 +147,62 @@ func TestAcmeDNSInternal_Update_URLEncoded(t *testing.T) {
 	}
 }
 
+func TestAcmeDNSInternal_Update_NoUser(t *testing.T) {
+	userLookup := func(r *http.Request) (string, error) {
+		return "", fmt.Errorf("Failed to find user!")
+	}
+	buf := bytes.Buffer{}
+	domain := "foo.bar.example.com"
+	token := "abcdefghi"
+	vals := url.Values{}
+	vals.Add("value", token)
+	fmt.Fprintf(&buf, "%s", vals.Encode())
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/%s", domain), &buf)
+	rec := httptest.NewRecorder()
+	req.Header.Set("Content-type", "application/x-www-form-urlencoded")
+	provider := NewStubDNSProvider()
+	acmeDNSInternal(rec, req, userLookup, getTestDomainAuthzMap(), provider)
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("Expected Unauthorized Status (%v), got %v", http.StatusUnauthorized, resp.StatusCode)
+	}
+	acmeDomain := fmt.Sprintf("_acme-challenge.%s", domain)
+	if _, ok := provider.data[acmeDomain]; ok {
+		t.Fatalf("Record updated when no record expected!")
+	}
+	if len(provider.data) != 0 {
+		t.Fatalf("Record updated when no record expected: %v", provider.data)
+	}
+}
+
+func TestAcmeDNSInternal_Update_BadDomain(t *testing.T) {
+	userLookup := func(r *http.Request) (string, error) {
+		return "test2@example.com", nil
+	}
+	buf := bytes.Buffer{}
+	domain := "foo.bar.example.com"
+	token := "abcdefghi"
+	vals := url.Values{}
+	vals.Add("value", token)
+	fmt.Fprintf(&buf, "%s", vals.Encode())
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/%s", domain), &buf)
+	rec := httptest.NewRecorder()
+	req.Header.Set("Content-type", "application/x-www-form-urlencoded")
+	provider := NewStubDNSProvider()
+	acmeDNSInternal(rec, req, userLookup, getTestDomainAuthzMap(), provider)
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Expected Forbidden Status (%v), got %v", http.StatusForbidden, resp.StatusCode)
+	}
+	acmeDomain := fmt.Sprintf("_acme-challenge.%s", domain)
+	if _, ok := provider.data[acmeDomain]; ok {
+		t.Fatalf("Record updated when no record expected!")
+	}
+	if len(provider.data) != 0 {
+		t.Fatalf("Record updated when no record expected: %v", provider.data)
+	}
+}
+
 func getTestDomainAuthzMap() domainAuthzMap {
 	return domainAuthzMap{
 		"test@example.com":  []string{"**.example.com"},
