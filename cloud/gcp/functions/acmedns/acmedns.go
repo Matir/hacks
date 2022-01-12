@@ -23,6 +23,10 @@ type DNSProvider interface {
 	DeleteTXT(string) error
 }
 
+type AuthValidator interface {
+	Validate(ctx context.Context, idToken string, audience string) (*idtoken.Payload, error)
+}
+
 const (
 	userAuthContext = acmeDnsContextKey("user")
 	DomainAuthzVar  = "DOMAIN_AUTHZ"
@@ -31,6 +35,7 @@ const (
 
 var domainAuthzConfig domainAuthzMap
 var domainAuthzLock sync.RWMutex
+var defaultAuthValidator AuthValidator
 
 var (
 	ErrorMissingHeader      = errors.New("Missing Authorization Header")
@@ -39,59 +44,6 @@ var (
 	ErrorNoDomain           = errors.New("No domain")
 	ErrorAuthzFailed        = errors.New("Authorization failed")
 )
-
-func getExpectedAudience(r *http.Request) string {
-	proto := "https"
-	if r.Header.Get("X-Forwarded-Proto") == "http" {
-		proto = "http"
-	}
-	return fmt.Sprintf("%s://%s/%s", proto, r.Host, os.Getenv("FUNCTION_TARGET"))
-}
-
-func getTokenFromRequest(r *http.Request) (string, error) {
-	authz := r.Header.Get("Authorization")
-	if authz == "" {
-		return "", ErrorMissingHeader
-	}
-	pieces := strings.Split(authz, " ")
-	if len(pieces) != 2 {
-		return "", ErrorWrongAuthorization
-	}
-	if !strings.EqualFold("bearer", pieces[0]) {
-		return "", ErrorWrongAuthorization
-	}
-	return pieces[1], nil
-}
-
-func getValidatedToken(ctx context.Context, r *http.Request) (*idtoken.Payload, error) {
-	if tok, err := getTokenFromRequest(r); err != nil {
-		return nil, err
-	} else {
-		return idtoken.Validate(ctx, tok, getExpectedAudience(r))
-	}
-}
-
-func getAuthorizedUser(r *http.Request) (string, error) {
-	if token, err := getValidatedToken(r.Context(), r); err != nil {
-		return "", err
-	} else {
-		if user, ok := token.Claims["email"]; ok {
-			if email, ok := user.(string); ok {
-				return email, nil
-			}
-		}
-		return "", ErrorNoUserInJWT
-	}
-}
-
-func getDomain(r *http.Request) (string, error) {
-	for _, piece := range strings.Split(r.URL.Path, "/") {
-		if piece != "" {
-			return piece, nil
-		}
-	}
-	return "", ErrorNoDomain
-}
 
 // Main entry point for DNS Handler
 func AcmeDNS(w http.ResponseWriter, r *http.Request) {
@@ -235,6 +187,59 @@ func writeResult(w http.ResponseWriter, r *http.Request, domain, result string) 
 	fmt.Fprintf(w, "%s", result)
 }
 
+func getExpectedAudience(r *http.Request) string {
+	proto := "https"
+	if r.Header.Get("X-Forwarded-Proto") == "http" {
+		proto = "http"
+	}
+	return fmt.Sprintf("%s://%s/%s", proto, r.Host, os.Getenv("FUNCTION_TARGET"))
+}
+
+func getTokenFromRequest(r *http.Request) (string, error) {
+	authz := r.Header.Get("Authorization")
+	if authz == "" {
+		return "", ErrorMissingHeader
+	}
+	pieces := strings.Split(authz, " ")
+	if len(pieces) != 2 {
+		return "", ErrorWrongAuthorization
+	}
+	if !strings.EqualFold("bearer", pieces[0]) {
+		return "", ErrorWrongAuthorization
+	}
+	return pieces[1], nil
+}
+
+func getValidatedToken(ctx context.Context, r *http.Request) (*idtoken.Payload, error) {
+	if tok, err := getTokenFromRequest(r); err != nil {
+		return nil, err
+	} else {
+		return defaultAuthValidator.Validate(ctx, tok, getExpectedAudience(r))
+	}
+}
+
+func getAuthorizedUser(r *http.Request) (string, error) {
+	if token, err := getValidatedToken(r.Context(), r); err != nil {
+		return "", err
+	} else {
+		if user, ok := token.Claims["email"]; ok {
+			if email, ok := user.(string); ok {
+				return email, nil
+			}
+		}
+		return "", ErrorNoUserInJWT
+	}
+}
+
+func getDomain(r *http.Request) (string, error) {
+	for _, piece := range strings.Split(r.URL.Path, "/") {
+		if piece != "" {
+			return piece, nil
+		}
+	}
+	return "", ErrorNoDomain
+}
+
 func parseDomainAuthzConfig(cfgstr string) (domainAuthzMap, error) {
 	result := make(domainAuthzMap)
 	for _, entry := range strings.Split(cfgstr, ";") {
@@ -317,6 +322,9 @@ func domainMatches(domain, pattern string) bool {
 	case "**":
 		// is remaining pattern the domain suffix?
 		patternPieces = patternPieces[1:]
+		if len(patternPieces) > len(domainPieces) {
+			return false
+		}
 		domainPieces = domainPieces[len(domainPieces)-len(patternPieces):]
 		return slicesMatch(patternPieces, domainPieces)
 	case "*":
@@ -334,4 +342,12 @@ func domainMatches(domain, pattern string) bool {
 // Normalize a domain by removing a trailing . and a leading _acme-challenge.
 func normalizeDomain(domain string) string {
 	return strings.ToLower(strings.Trim(strings.TrimPrefix(domain, acmeSubdomain+"."), "."))
+}
+
+func init() {
+	val, err := idtoken.NewValidator(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	defaultAuthValidator = val
 }
