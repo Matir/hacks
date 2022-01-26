@@ -1,0 +1,53 @@
+- name: Manage Users & SSH Keys
+  hosts: all
+  become: yes
+  vars:
+    ssh_src_dir: "ssh-keys/"
+    ssh_key_files: "{{ query('fileglob', ssh_src_dir + '/*') }}"
+    ssh_user_names: "{{ ssh_key_files | map('basename') | list }}"
+    ansible_python_interpreter: /usr/bin/python3
+    sudo_nopasswd_grp: "sudo-nopasswd"
+  tasks:
+    - name: SSH Key Files
+      debug:
+        var: ssh_key_files
+    - name: SSH Users
+      debug:
+        var: ssh_user_names
+    - name: Ensure sudo-nopasswd group exists
+      ansible.builtin.group:
+        name: "{{ sudo_nopasswd_grp }}"
+    - name: Add Users
+      ansible.builtin.user:
+        name: "{{item}}"
+        state: present
+        append: yes
+        create_home: yes
+        update_password: on_create
+        groups:
+          - sudo-nopasswd
+      loop: "{{ ssh_user_names }}"
+    - name: Ensure group is configured in sudo
+      ansible.builtin.lineinfile:
+        line: "{{ sudo_nopasswd_grp }} ALL = (ALL:ALL) NOPASSWD: ALL"
+        path: "/etc/sudoers"
+    - name: Get user passwd facts
+      ansible.builtin.getent:
+        database: passwd
+    - name: Create .ssh directories
+      ansible.builtin.file:
+        path: "{{ ansible_facts.getent_passwd[item][4] }}/.ssh"
+        state: directory
+        mode: 0700
+        owner: "{{ item }}"
+        group: "{{ item }}"
+      loop: "{{ ssh_user_names }}"
+    - name: Add contents of SSH files
+      ansible.builtin.blockinfile:
+        path: "{{ ansible_facts.getent_passwd[item][4] }}/.ssh/authorized_keys"
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: 0600
+        create: yes
+        block: "{{ lookup('file', ssh_src_dir + '/' + item) }}"
+      loop: "{{ ssh_user_names }}"
