@@ -1,7 +1,7 @@
 FROM debian:buster-slim
 
 RUN apt-get update && \
-    apt-get -yyf install nginx-full libnginx-mod-http-fancyindex openssl gettext-base unzip && \
+    apt-get -yyf install nginx-full openssl gettext-base unzip && \
     rm -rf /var/lib/apt/lists/*
 
 RUN openssl req -x509 -newkey rsa:2048 -keyout /etc/nginx/webdav.key -nodes \

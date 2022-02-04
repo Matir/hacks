@@ -5,7 +5,6 @@ error_log  /var/log/nginx/error.log warn;
 pid        /var/run/nginx.pid;
 
 load_module /usr/lib/nginx/modules/ngx_http_dav_ext_module.so;
-load_module /usr/lib/nginx/modules/ngx_http_fancyindex_module.so;
 
 events {
     worker_connections  1024;
@@ -41,10 +40,6 @@ http {
 
         root                    /srv/dav;
 
-        fancyindex              on;
-        fancyindex_exact_size   off;
-        fancyindex_header       /_webdav-js/header.html;
-
         dav_methods             PUT DELETE MKCOL COPY MOVE;
         dav_ext_methods         PROPFIND OPTIONS;
         dav_access              user:rw;
@@ -77,5 +72,16 @@ http {
           dav_methods           off;
           alias                 /srv/webdav-js/;
         }
+
+        # if is evil, but these should be safe according to the wiki
+        location ~ /$ {
+          if (!-d $request_filename) {
+            return 404;
+          }
+          if ($request_method ~ "^GET|HEAD$") {
+              rewrite /$ /_webdav-js/header.html last;
+          }
+        }
+
     }
 }
