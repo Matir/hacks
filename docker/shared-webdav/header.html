@@ -1,3 +1,21 @@
 <!DOCTYPE html>
-  <script type="text/javascript">["/_webdav-js/assets/css/style-min.css","/_webdav-js/src/webdav-min.js"].forEach((function(e,s){/css$/.test(e)?((s=document.createElement("link")).href=e,s.rel="stylesheet"):(s=document.createElement("script")).src=e,document.head.appendChild(s)}));
+<h1 id='idx'></h1>
+<script type="text/javascript">
+    ["/_webdav-js/assets/css/style-min.css","/_webdav-js/src/webdav-min.js"].forEach(
+          (function(e,s){
+                /css$/.test(e)?((s=document.createElement("link")).href=e,s.rel="stylesheet"):(s=document.createElement("script")).src=e,document.head.appendChild(s);
+              })
+        ); // end forEach
+  const setTitle = function(path) {
+    path = path || document.location.pathname;
+    document.getElementById('idx').textContent = (
+        'Index of ' + path);
+    };
+  setTitle();
+  // This is a hack.
+  const _pushState = window.history.pushState.bind(window.history);
+  window.history.pushState = function(state, title, path) {
+      setTitle(path);
+      return _pushState(state, title, path);
+  };
 </script>
