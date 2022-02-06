@@ -1,6 +1,8 @@
 // Tool to compute DHCP 121 options
 // Output format is octet separated by colons
 // prefixlen:prefix_octets:router IP
+// This should match RFC 3442:
+// https://datatracker.ietf.org/doc/html/rfc3442
 
 package main
 
@@ -26,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 	res := formatDHCP(ipnet, rtr)
-	fmt.Printf("DHCP 121 Option: %s", res)
+	fmt.Printf("DHCP 121 Option: %s\n", res)
 }
 
 func formatDHCP(ipnet *net.IPNet, rtr net.IP) string {
