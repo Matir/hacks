@@ -26,7 +26,7 @@ func TestDHCPRoutes(t *testing.T) {
 		if rtr == nil {
 			t.Fatalf("Bad test data: %v does not parse!", tcase.router)
 		}
-		result := formatDHCP(ipnet, rtr)
+		result := formatDHCP(&RouteInfo{ipnet, rtr})
 		if result != tcase.option {
 			t.Errorf("%s->%s, got %s, expected %s", tcase.subnet, tcase.router, result, tcase.option)
 		}
