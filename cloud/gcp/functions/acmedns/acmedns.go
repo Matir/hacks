@@ -167,7 +167,12 @@ func acmeDNSUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request, 
 }
 
 func acmeDNSDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string, provider DNSProvider) {
-	// TODO: implement me!
+	if err := provider.DeleteTXT(domain); err != nil {
+		log.Printf("Error deleting record for domain %s: %v", domain, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	writeResult(w, r, domain, "")
 }
 
 func writeResult(w http.ResponseWriter, r *http.Request, domain, result string) {
