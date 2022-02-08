@@ -1,1 +1,0 @@
-curl -H "Authorization: bearer $(gcloud auth print-identity-token 'dnsclient1@rt-gcp-test-2021.iam.gserviceaccount.com' --audiences='https://us-central1-rt-gcp-test-2021.cloudfunctions.net/AuthzLookup')" https://us-central1-rt-gcp-test-2021.cloudfunctions.net/AuthzLookup
