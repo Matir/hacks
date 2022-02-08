@@ -135,7 +135,7 @@ func (p *GCPDNSProvider) findManagedZone(name string) (string, error) {
 	var bestZone *dns.ManagedZone
 	for _, zone := range zoneResp.ManagedZones {
 		zoneName := zone.DnsName
-		if l := dnsMatch(zoneName, name); l > bestMatch {
+		if l := dnsZoneMatch(zoneName, name); l > bestMatch {
 			bestMatch = l
 			bestZone = zone
 		}
@@ -145,23 +145,29 @@ func (p *GCPDNSProvider) findManagedZone(name string) (string, error) {
 		return "", ErrorNoZone
 	}
 	zoneName := bestZone.Name
-	log.Printf("Found zone %v for name %v", zoneName, name)
+	log.Printf("Found zone %v for name %v (match length: %d)", zoneName, name, bestMatch)
+	if bestMatch < 2 {
+		log.Printf("Match of only 1 segment is TLD only!")
+		return "", ErrorNoZone
+	}
 	return zoneName, nil
 }
 
-func dnsMatch(a, b string) int {
-	aPieces := strings.Split(a, ".")
-	bPieces := strings.Split(b, ".")
+// The zone must be a suffix of the target domain
+func dnsZoneMatch(zone, target string) int {
+	aPieces := strings.Split(zone, ".")
+	bPieces := strings.Split(target, ".")
 	l := len(aPieces)
+	// Is target shorter than zone
 	if len(bPieces) < l {
-		l = len(bPieces)
+		return 0
 	}
 	if l == 0 {
 		return 0
 	}
 	for i := 1; i <= l; i++ {
 		if aPieces[len(aPieces)-i] != bPieces[len(bPieces)-i] {
-			return i - 1
+			return 0
 		}
 	}
 	return l

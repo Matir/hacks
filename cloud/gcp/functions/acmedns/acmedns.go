@@ -36,6 +36,8 @@ const (
 var domainAuthzConfig domainAuthzMap
 var domainAuthzLock sync.RWMutex
 var defaultAuthValidator AuthValidator
+var onFirstRequest sync.Once
+var defaultAuthValidatorOnce sync.Once
 
 var (
 	ErrorMissingHeader      = errors.New("Missing Authorization Header")
@@ -165,6 +167,7 @@ func acmeDNSUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request, 
 }
 
 func acmeDNSDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, domain string, provider DNSProvider) {
+	// TODO: implement me!
 }
 
 func writeResult(w http.ResponseWriter, r *http.Request, domain, result string) {
@@ -214,6 +217,22 @@ func getValidatedToken(ctx context.Context, r *http.Request) (*idtoken.Payload, 
 	if tok, err := getTokenFromRequest(r); err != nil {
 		return nil, err
 	} else {
+		defaultAuthValidatorOnce.Do(func() {
+			if defaultAuthValidator != nil {
+				// Maybe injected for a test
+				return
+			}
+			val, err := idtoken.NewValidator(context.Background())
+			if err != nil {
+				log.Printf("Error setting up validator: %v", err)
+				// TODO: pass error in better way
+				panic(err)
+			}
+			defaultAuthValidator = val
+		})
+		if defaultAuthValidator == nil {
+			return nil, fmt.Errorf("Did not have a validator to use!")
+		}
 		return defaultAuthValidator.Validate(ctx, tok, getExpectedAudience(r))
 	}
 }
@@ -342,12 +361,4 @@ func domainMatches(domain, pattern string) bool {
 // Normalize a domain by removing a trailing . and a leading _acme-challenge.
 func normalizeDomain(domain string) string {
 	return strings.ToLower(strings.Trim(strings.TrimPrefix(domain, acmeSubdomain+"."), "."))
-}
-
-func init() {
-	val, err := idtoken.NewValidator(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	defaultAuthValidator = val
 }

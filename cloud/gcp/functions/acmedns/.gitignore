@@ -1,2 +1,4 @@
 *.json
 coverage.out
+testing.txt
+local/local
