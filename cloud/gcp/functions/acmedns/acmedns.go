@@ -31,6 +31,7 @@ const (
 	userAuthContext = acmeDnsContextKey("user")
 	DomainAuthzVar  = "DOMAIN_AUTHZ"
 	acmeSubdomain   = "_acme-challenge"
+	TokenValueVar   = "value"
 )
 
 var domainAuthzConfig domainAuthzMap
@@ -148,7 +149,7 @@ func acmeDNSUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request, 
 		record = data.Value
 	} else {
 		// read from form data
-		record = r.FormValue("value")
+		record = r.FormValue(TokenValueVar)
 	}
 	if record == "" {
 		log.Printf("Empty body for domain update: %v", domain)
@@ -234,11 +235,16 @@ func getValidatedToken(ctx context.Context, r *http.Request) (*idtoken.Payload, 
 				panic(err)
 			}
 			defaultAuthValidator = val
+			log.Printf("Expected audience: %v", getExpectedAudience(r))
 		})
 		if defaultAuthValidator == nil {
 			return nil, fmt.Errorf("Did not have a validator to use!")
 		}
-		return defaultAuthValidator.Validate(ctx, tok, getExpectedAudience(r))
+		payload, err := defaultAuthValidator.Validate(ctx, tok, getExpectedAudience(r))
+		if err != nil {
+			log.Printf("Error validating user: %v", err)
+		}
+		return payload, err
 	}
 }
 
