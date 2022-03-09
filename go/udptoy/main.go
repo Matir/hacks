@@ -20,6 +20,9 @@ var (
 	listenAddrFlag = flag.String("listen", "0.0.0.0:9999", "Address on which to listen.")
 	destAddrFlag   = flag.String("dest", "", "Destination to which datagrams should be forwarded.")
 	maxDgramSize   = flag.Int("maxsize", 65535, "Maximum datagram size.")
+	dropPctFlag    = flag.Int("drop", 0, "Percent of datagrams to drop.")
+	swapPctFlag    = flag.Int("swappy", 0, "Percent odds of datagrams delivered out of order.")
+	maxDelayFlag   = flag.Duration("maxdelay", 1*time.Second, "Maximum delay for held packets.")
 )
 
 type ListenMux struct {
