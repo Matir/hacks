@@ -33,6 +33,7 @@ type ListenMux struct {
 
 type UDPConnWorker struct {
 	peer         *net.UDPAddr
+	dest         *net.UDPAddr
 	conn         *net.UDPConn
 	incoming     chan []byte
 	responses    chan []byte
@@ -136,6 +137,7 @@ func NewUDPConnWorker(peer, dest *net.UDPAddr, bufSize int) (*UDPConnWorker, err
 	}
 	rv := &UDPConnWorker{
 		peer:         peer,
+		dest:         dest,
 		conn:         conn,
 		incoming:     make(chan []byte, 16),
 		responses:    make(chan []byte),
@@ -165,16 +167,23 @@ func (w *UDPConnWorker) DispatchIncoming(dgram []byte) {
 }
 
 func (w *UDPConnWorker) ClientToDestLoop() {
-	w.dgramsToSocket(w.incoming, w.conn)
+	w.dgramsToSocket(w.incoming, w.dest, w.conn)
 }
 
-func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, sock *net.UDPConn) {
+func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, sock *net.UDPConn) {
 	w.wg.Add(1)
 	defer w.wg.Done()
 	for dgram := range dgrams {
 		// TODO: reorder/drop
-		log.Printf("Sending %d bytes to %s", len(dgram), sock.RemoteAddr())
-		if n, err := sock.Write(dgram); err != nil {
+		log.Printf("Sending %d bytes to %s", len(dgram), peer)
+		var n int
+		var err error
+		if sock.RemoteAddr() == nil {
+			n, err = sock.WriteTo(dgram, peer)
+		} else {
+			n, err = sock.Write(dgram)
+		}
+		if err != nil {
 			log.Printf("Error writing on socket: %v", err)
 		} else if n != len(dgram) {
 			log.Printf("Short write on socket: %d written, %d buffer.", n, len(dgram))
@@ -190,7 +199,7 @@ func (w *UDPConnWorker) DestToClientLoop(listenSock *net.UDPConn) {
 	defer func() {
 		close(w.responses)
 	}()
-	go w.dgramsToSocket(w.responses, listenSock)
+	go w.dgramsToSocket(w.responses, w.peer, listenSock)
 	for {
 		buf := make([]byte, w.bufSize)
 		w.conn.SetReadDeadline(time.Now().Add(ReceiveTimeout))
