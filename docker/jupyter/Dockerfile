@@ -11,12 +11,17 @@ RUN http_proxy=${apt_http_proxy} apt-get -yy update && \
         strace \
         python3-dev \
         build-essential \
-        default-libmysqlclient-dev
+        default-libmysqlclient-dev \
+        git
 
 RUN pip install \
         jupyterlab \
+        jupyterlab-vim \
+        jupyterlab-git \
+        jupyterlab_theme_solarized_dark \
         pandas \
-        mysqlclient
+        mysqlclient \
+        pwntools
 
 RUN useradd -m jovian
 
