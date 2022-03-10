@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"log"
+	insecureRand "math/rand"
 	"net"
 	"os"
 	"sync"
@@ -52,7 +53,6 @@ type UDPConnWorker struct {
 	bufSize      int
 	shutdownChan chan bool
 	lock         sync.Mutex
-	shuffler     [][]byte // Packets held for shuffle
 	maxDelay     time.Duration
 	dropPct      float32
 	swapPct      float32
@@ -147,6 +147,7 @@ func (m *ListenMux) Run() {
 
 func (m *ListenMux) GCLoop(done <-chan bool) {
 	ticker := time.NewTicker(GCInterval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -242,24 +243,65 @@ func (w *UDPConnWorker) ClientToDestLoop() {
 
 func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, sock *net.UDPConn) {
 	w.wg.Add(1)
-	defer w.wg.Done()
-	for dgram := range dgrams {
-		// TODO: reorder/drop
-		log.Printf("Sending %d bytes to %s", len(dgram), peer)
-		var n int
-		var err error
-		if sock.RemoteAddr() == nil {
-			n, err = sock.WriteTo(dgram, peer)
-		} else {
-			n, err = sock.Write(dgram)
+	shuffler := make([][]byte, 0)
+	ticker := time.NewTicker(w.maxDelay)
+	flush := func() {
+		if len(shuffler) == 0 {
+			return
 		}
-		if err != nil {
-			log.Printf("Error writing on socket: %v", err)
-		} else if n != len(dgram) {
-			log.Printf("Short write on socket: %d written, %d buffer.", n, len(dgram))
-		} else {
-			w.UpdateLastActivity()
+		for _, n := range insecureRand.Perm(len(shuffler)) {
+			w.sendDgram(shuffler[n], peer, sock)
 		}
+		shuffler = shuffler[:0]
+	}
+	defer func() {
+		ticker.Stop()
+		flush()
+		w.wg.Done()
+	}()
+	for {
+		select {
+		case dgram, ok := <-dgrams:
+			if !ok {
+				// closed channel
+				return
+			}
+			// Handle swapping/shuffling
+			if RandPercentCheck(w.dropPct) {
+				log.Printf("Dropping %d bytes", len(dgram))
+				continue
+			}
+			if RandPercentCheck(w.swapPct) {
+				log.Printf("Storing %d bytes for swapping", len(dgram))
+				// store
+				shuffler = append(shuffler, dgram)
+				ticker.Reset(w.maxDelay)
+				continue
+			}
+			w.sendDgram(dgram, peer, sock)
+			flush()
+		case <-ticker.C:
+			// timeout, send and clear buffer
+			flush()
+		}
+	}
+}
+
+func (w *UDPConnWorker) sendDgram(dgram []byte, peer *net.UDPAddr, sock *net.UDPConn) {
+	log.Printf("Sending %d bytes to %s", len(dgram), peer)
+	var n int
+	var err error
+	if sock.RemoteAddr() == nil {
+		n, err = sock.WriteTo(dgram, peer)
+	} else {
+		n, err = sock.Write(dgram)
+	}
+	if err != nil {
+		log.Printf("Error writing on socket: %v", err)
+	} else if n != len(dgram) {
+		log.Printf("Short write on socket: %d written, %d buffer.", n, len(dgram))
+	} else {
+		w.UpdateLastActivity()
 	}
 }
 
@@ -300,6 +342,18 @@ func (w *UDPConnWorker) Shutdown() {
 	w.shutdownChan <- true
 	close(w.shutdownChan)
 	w.wg.Wait()
+}
+
+// Returns true approximately pct of the time.
+func RandPercentCheck(pct float32) bool {
+	// special case edges for floating point error
+	if pct < 0.0001 {
+		return false
+	}
+	if pct > 0.9999 {
+		return true
+	}
+	return insecureRand.Float32() <= pct
 }
 
 func main() {
