@@ -11,19 +11,23 @@ import (
 )
 
 const (
-	ReceiveTimeout = 1 * time.Second
-	GCInterval     = 5 * time.Minute
-	GCDelay        = 1 * time.Hour
+	ReceiveTimeout  = 1 * time.Second
+	GCInterval      = 5 * time.Minute
+	GCDelay         = 1 * time.Hour
+	DefaultBufSize  = 65535
+	DefaultMaxDelay = 1 * time.Second
 )
 
 var (
 	listenAddrFlag = flag.String("listen", "0.0.0.0:9999", "Address on which to listen.")
 	destAddrFlag   = flag.String("dest", "", "Destination to which datagrams should be forwarded.")
-	maxDgramSize   = flag.Int("maxsize", 65535, "Maximum datagram size.")
+	maxDgramSize   = flag.Int("maxsize", DefaultBufSize, "Maximum datagram size.")
 	dropPctFlag    = flag.Int("drop", 0, "Percent of datagrams to drop.")
 	swapPctFlag    = flag.Int("swappy", 0, "Percent odds of datagrams delivered out of order.")
-	maxDelayFlag   = flag.Duration("maxdelay", 1*time.Second, "Maximum delay for held packets.")
+	maxDelayFlag   = flag.Duration("maxdelay", DefaultMaxDelay, "Maximum delay for held packets.")
 )
+
+type ListenMuxOption func(*ListenMux) error
 
 type ListenMux struct {
 	listenAddr *net.UDPAddr
@@ -32,6 +36,9 @@ type ListenMux struct {
 	mapLock    sync.Mutex
 	workers    map[string]*UDPConnWorker
 	bufSize    int
+	maxDelay   time.Duration
+	dropPct    float32
+	swapPct    float32
 }
 
 type UDPConnWorker struct {
@@ -45,20 +52,75 @@ type UDPConnWorker struct {
 	bufSize      int
 	shutdownChan chan bool
 	lock         sync.Mutex
+	shuffler     [][]byte // Packets held for shuffle
+	maxDelay     time.Duration
+	dropPct      float32
+	swapPct      float32
 }
 
-func NewListenMux(laddr, dest *net.UDPAddr, bufSize int) (*ListenMux, error) {
+func NewListenMux(laddr, dest *net.UDPAddr, opts ...ListenMuxOption) (*ListenMux, error) {
 	conn, err := net.ListenUDP("udp", laddr)
 	if err != nil {
 		return nil, err
 	}
-	return &ListenMux{
+	rv := &ListenMux{
 		listenAddr: laddr,
 		listenSock: conn,
 		destAddr:   dest,
 		workers:    make(map[string]*UDPConnWorker),
-		bufSize:    bufSize,
-	}, nil
+		bufSize:    DefaultBufSize,
+		maxDelay:   DefaultMaxDelay,
+	}
+	for _, opt := range opts {
+		if err := opt(rv); err != nil {
+			return nil, err
+		}
+	}
+	return rv, nil
+}
+
+func WithBufSize(bufSize int) ListenMuxOption {
+	return func(mux *ListenMux) error {
+		if bufSize < 1 || bufSize > 65535 {
+			return errors.New("Buf size must be 1-65535")
+		}
+		mux.bufSize = bufSize
+		return nil
+	}
+}
+
+func WithMaxDelay(delay time.Duration) ListenMuxOption {
+	return func(mux *ListenMux) error {
+		mux.maxDelay = delay
+		return nil
+	}
+}
+
+func WithDropPercent(dropPct float32) ListenMuxOption {
+	return func(mux *ListenMux) error {
+		if err := validatePercentage(dropPct); err != nil {
+			return err
+		}
+		mux.dropPct = dropPct
+		return nil
+	}
+}
+
+func WithSwapPercent(swapPct float32) ListenMuxOption {
+	return func(mux *ListenMux) error {
+		if err := validatePercentage(swapPct); err != nil {
+			return err
+		}
+		mux.swapPct = swapPct
+		return nil
+	}
+}
+
+func validatePercentage(pct float32) error {
+	if pct < 0.0 || pct > 1.0 {
+		return errors.New("Percentage must be 0.0-1.0")
+	}
+	return nil
 }
 
 func (m *ListenMux) Run() {
@@ -124,16 +186,21 @@ func (m *ListenMux) GetWorker(peer *net.UDPAddr) (*UDPConnWorker, error) {
 	if rv, ok := m.workers[key]; ok {
 		return rv, nil
 	}
-	rv, err := NewUDPConnWorker(peer, m.destAddr, m.bufSize)
+	rv, err := NewUDPConnWorker(peer, m.destAddr)
 	if err != nil {
 		return nil, err
 	}
+	// TODO: should this copying be done elsewhere?
+	rv.bufSize = m.bufSize
+	rv.dropPct = m.dropPct
+	rv.swapPct = m.swapPct
+	rv.maxDelay = m.maxDelay
 	rv.Start(m.listenSock)
 	m.workers[key] = rv
 	return rv, nil
 }
 
-func NewUDPConnWorker(peer, dest *net.UDPAddr, bufSize int) (*UDPConnWorker, error) {
+func NewUDPConnWorker(peer, dest *net.UDPAddr) (*UDPConnWorker, error) {
 	conn, err := net.DialUDP("udp", nil, dest)
 	if err != nil {
 		return nil, err
@@ -145,7 +212,7 @@ func NewUDPConnWorker(peer, dest *net.UDPAddr, bufSize int) (*UDPConnWorker, err
 		incoming:     make(chan []byte, 16),
 		responses:    make(chan []byte),
 		lastActivity: time.Now(),
-		bufSize:      bufSize,
+		bufSize:      DefaultBufSize,
 		shutdownChan: make(chan bool),
 	}
 	return rv, nil
@@ -252,8 +319,27 @@ func main() {
 		log.Fatalf("Error parsing dest address: %v", err)
 	}
 
+	opts := []ListenMuxOption{
+		WithBufSize(*maxDgramSize),
+		WithMaxDelay(*maxDelayFlag),
+	}
+
+	if *dropPctFlag != 0 {
+		if *dropPctFlag < 0 || *dropPctFlag > 100 {
+			log.Fatalf("Drop percent must be 0-100, not %d", *dropPctFlag)
+		}
+		opts = append(opts, WithDropPercent(float32(*dropPctFlag)/100))
+	}
+
+	if *swapPctFlag != 0 {
+		if *swapPctFlag < 0 || *swapPctFlag > 100 {
+			log.Fatalf("Swap percent must be 0-100, not %d", *swapPctFlag)
+		}
+		opts = append(opts, WithSwapPercent(float32(*swapPctFlag)/100))
+	}
+
 	log.Printf("Starting listen mux on %s to %s", listenAddr, destAddr)
-	mux, err := NewListenMux(listenAddr, destAddr, *maxDgramSize)
+	mux, err := NewListenMux(listenAddr, destAddr, opts...)
 	if err != nil {
 		log.Fatalf("Error starting listener: %v", err)
 	}
