@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"sync"
 	"syscall"
 	"time"
@@ -30,6 +31,7 @@ var (
 	dropPctFlag    = flag.Int("drop", 0, "Percent of datagrams to drop.")
 	swapPctFlag    = flag.Int("swappy", 0, "Percent odds of datagrams delivered out of order.")
 	maxDelayFlag   = flag.Duration("maxdelay", DefaultMaxDelay, "Maximum delay for held packets.")
+	cpuProfileFlag = flag.String("cpuprofile", "", "Profile the app")
 )
 
 type ListenMuxOption func(*ListenMux) error
@@ -153,7 +155,9 @@ func (m *ListenMux) Run() {
 		buf := make([]byte, m.bufSize)
 		// TODO: add timeout support
 		if n, peer, err := m.listenSock.ReadFromUDP(buf); err != nil {
-			log.Printf("Error in reading from listen socket: %v", err)
+			if !errors.Is(err, net.ErrClosed) {
+				log.Printf("Error in reading from listen socket: %v", err)
+			}
 		} else {
 			worker, err := m.GetWorker(peer)
 			if err != nil {
@@ -425,6 +429,21 @@ func RandPercentCheck(pct float32) bool {
 func main() {
 	flag.Parse()
 
+	if *cpuProfileFlag != "" {
+		f, err := os.Create(*cpuProfileFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal(err)
+		}
+		defer func() {
+			log.Printf("Stopping profiling.")
+			pprof.StopCPUProfile()
+			f.Close()
+		}()
+	}
+
 	listenAddr, err := net.ResolveUDPAddr("udp", *listenAddrFlag)
 	if err != nil {
 		log.Fatalf("Error parsing listen addr: %v", err)
@@ -476,6 +495,7 @@ func main() {
 				log.Printf("%v received, shutting down.", sig)
 				mux.Shutdown()
 				mux.LogStats()
+				return
 			case syscall.SIGUSR1:
 				mux.LogStats()
 			default:
@@ -485,5 +505,7 @@ func main() {
 	}()
 
 	mux.Run()
+	log.Printf("Post mux!")
 	<-doneChan
+	log.Printf("Done!")
 }

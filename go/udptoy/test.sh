@@ -7,12 +7,13 @@ OUTFILE=${TMPDIR}/output
 DESTPORT=9185
 PROXYPORT=19185
 
-dd if=/dev/urandom of="${INFILE}" bs=1024 count=1024
+dd if=/dev/urandom of="${INFILE}" bs=1024 count=102400
 
 socat -u UDP4-RECV:${DESTPORT} CREATE:"${OUTFILE}" &
 SOCAT_PID=$!
 
 setsid -w go run . \
+  -cpuprofile udptoy.pprof \
   -dest localhost:${DESTPORT} \
   -listen localhost:${PROXYPORT} \
   &
@@ -29,3 +30,4 @@ kill -- -$UDPTOY_PID
 kill $SOCAT_PID
 
 md5sum "${TMPDIR}"/*
+sleep 3
