@@ -7,7 +7,9 @@ import (
 	insecureRand "math/rand"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -31,31 +33,41 @@ var (
 type ListenMuxOption func(*ListenMux) error
 
 type ListenMux struct {
-	listenAddr *net.UDPAddr
-	listenSock *net.UDPConn
-	destAddr   *net.UDPAddr
-	mapLock    sync.Mutex
-	workers    map[string]*UDPConnWorker
-	bufSize    int
-	maxDelay   time.Duration
-	dropPct    float32
-	swapPct    float32
+	listenAddr       *net.UDPAddr
+	listenSock       *net.UDPConn
+	destAddr         *net.UDPAddr
+	mapLock          sync.Mutex
+	workers          map[string]*UDPConnWorker
+	bufSize          int
+	maxDelay         time.Duration
+	dropPct          float32
+	swapPct          float32
+	totalListenBytes int64
+	clientBytesIn    int64 // from client
+	clientBytesOut   int64 // to client
+	destBytesIn      int64 // from dest
+	destBytesOut     int64 // to dest
+	doneChan         chan bool
 }
 
 type UDPConnWorker struct {
-	peer         *net.UDPAddr
-	dest         *net.UDPAddr
-	conn         *net.UDPConn
-	incoming     chan []byte
-	responses    chan []byte
-	wg           sync.WaitGroup
-	lastActivity time.Time
-	bufSize      int
-	shutdownChan chan bool
-	lock         sync.Mutex
-	maxDelay     time.Duration
-	dropPct      float32
-	swapPct      float32
+	peer           *net.UDPAddr
+	dest           *net.UDPAddr
+	conn           *net.UDPConn
+	incoming       chan []byte
+	responses      chan []byte
+	wg             sync.WaitGroup
+	lastActivity   time.Time
+	bufSize        int
+	shutdownChan   chan bool
+	lock           sync.Mutex
+	maxDelay       time.Duration
+	dropPct        float32
+	swapPct        float32
+	clientBytesIn  int64 // from client
+	clientBytesOut int64 // to client
+	destBytesIn    int64 // from dest
+	destBytesOut   int64 // to dest
 }
 
 func NewListenMux(laddr, dest *net.UDPAddr, opts ...ListenMuxOption) (*ListenMux, error) {
@@ -70,6 +82,7 @@ func NewListenMux(laddr, dest *net.UDPAddr, opts ...ListenMuxOption) (*ListenMux
 		workers:    make(map[string]*UDPConnWorker),
 		bufSize:    DefaultBufSize,
 		maxDelay:   DefaultMaxDelay,
+		doneChan:   make(chan bool, 1),
 	}
 	for _, opt := range opts {
 		if err := opt(rv); err != nil {
@@ -128,9 +141,11 @@ func (m *ListenMux) Run() {
 	go m.GCLoop(doneChan)
 	defer func() {
 		close(doneChan)
+		log.Printf("Mux exiting")
 	}()
 	for {
 		buf := make([]byte, m.bufSize)
+		// TODO: add timeout support
 		if n, peer, err := m.listenSock.ReadFromUDP(buf); err != nil {
 			log.Printf("Error in reading from listen socket: %v", err)
 		} else {
@@ -138,9 +153,16 @@ func (m *ListenMux) Run() {
 			if err != nil {
 				log.Printf("Error getting worker: %v", err)
 			} else {
+				m.totalListenBytes += int64(n)
 				log.Printf("Dispatching %d bytes from %s", n, peer)
 				worker.DispatchIncoming(buf[:n])
 			}
+		}
+		select {
+		case <-m.doneChan:
+			return
+		default:
+			continue
 		}
 	}
 }
@@ -174,6 +196,10 @@ func (m *ListenMux) gcOnce() {
 	}()
 	for _, v := range cleanup {
 		v.Shutdown()
+		m.clientBytesIn += v.clientBytesIn
+		m.clientBytesOut += v.clientBytesOut
+		m.destBytesIn += v.destBytesIn
+		m.destBytesOut += v.destBytesOut
 	}
 	if len(cleanup) > 0 {
 		log.Printf("Garbage collected %d connections.", len(cleanup))
@@ -199,6 +225,29 @@ func (m *ListenMux) GetWorker(peer *net.UDPAddr) (*UDPConnWorker, error) {
 	rv.Start(m.listenSock)
 	m.workers[key] = rv
 	return rv, nil
+}
+
+func (m *ListenMux) Shutdown() {
+	m.mapLock.Lock()
+	defer m.mapLock.Unlock()
+	close(m.doneChan)
+	m.listenSock.Close()
+	for _, v := range m.workers {
+		v.Shutdown()
+		m.clientBytesIn += v.clientBytesIn
+		m.clientBytesOut += v.clientBytesOut
+		m.destBytesIn += v.destBytesIn
+		m.destBytesOut += v.destBytesOut
+	}
+}
+
+func (m *ListenMux) LogStats() {
+	m.mapLock.Lock()
+	defer m.mapLock.Unlock()
+	for _, v := range m.workers {
+		v.LogStats()
+	}
+	log.Printf("Parent: C->D: %d/%d, D->C: %d/%d", m.clientBytesIn, m.destBytesOut, m.destBytesIn, m.clientBytesOut)
 }
 
 func NewUDPConnWorker(peer, dest *net.UDPAddr) (*UDPConnWorker, error) {
@@ -234,14 +283,16 @@ func (w *UDPConnWorker) DispatchIncoming(dgram []byte) {
 	// Not a perfect pattern, but this should work
 	if w.incoming != nil {
 		w.incoming <- dgram
+	} else {
+		log.Printf("BUG: attempt to write on nil channel!")
 	}
 }
 
 func (w *UDPConnWorker) ClientToDestLoop() {
-	w.dgramsToSocket(w.incoming, w.dest, w.conn)
+	w.dgramsToSocket(w.incoming, w.dest, w.conn, &w.clientBytesIn, &w.destBytesOut)
 }
 
-func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, sock *net.UDPConn) {
+func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, sock *net.UDPConn, bytesIn, bytesOut *int64) {
 	w.wg.Add(1)
 	shuffler := make([][]byte, 0)
 	ticker := time.NewTicker(w.maxDelay)
@@ -250,7 +301,7 @@ func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, 
 			return
 		}
 		for _, n := range insecureRand.Perm(len(shuffler)) {
-			w.sendDgram(shuffler[n], peer, sock)
+			w.sendDgram(shuffler[n], peer, sock, bytesOut)
 		}
 		shuffler = shuffler[:0]
 	}
@@ -266,6 +317,7 @@ func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, 
 				// closed channel
 				return
 			}
+			*bytesIn += int64(len(dgram))
 			// Handle swapping/shuffling
 			if RandPercentCheck(w.dropPct) {
 				log.Printf("Dropping %d bytes", len(dgram))
@@ -278,7 +330,7 @@ func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, 
 				ticker.Reset(w.maxDelay)
 				continue
 			}
-			w.sendDgram(dgram, peer, sock)
+			w.sendDgram(dgram, peer, sock, bytesOut)
 			flush()
 		case <-ticker.C:
 			// timeout, send and clear buffer
@@ -287,7 +339,7 @@ func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, 
 	}
 }
 
-func (w *UDPConnWorker) sendDgram(dgram []byte, peer *net.UDPAddr, sock *net.UDPConn) {
+func (w *UDPConnWorker) sendDgram(dgram []byte, peer *net.UDPAddr, sock *net.UDPConn, counter *int64) {
 	log.Printf("Sending %d bytes to %s", len(dgram), peer)
 	var n int
 	var err error
@@ -299,8 +351,10 @@ func (w *UDPConnWorker) sendDgram(dgram []byte, peer *net.UDPAddr, sock *net.UDP
 	if err != nil {
 		log.Printf("Error writing on socket: %v", err)
 	} else if n != len(dgram) {
+		*counter += int64(n)
 		log.Printf("Short write on socket: %d written, %d buffer.", n, len(dgram))
 	} else {
+		*counter += int64(n)
 		w.UpdateLastActivity()
 	}
 }
@@ -311,7 +365,7 @@ func (w *UDPConnWorker) DestToClientLoop(listenSock *net.UDPConn) {
 	defer func() {
 		close(w.responses)
 	}()
-	go w.dgramsToSocket(w.responses, w.peer, listenSock)
+	go w.dgramsToSocket(w.responses, w.peer, listenSock, &w.destBytesIn, &w.clientBytesOut)
 	for {
 		buf := make([]byte, w.bufSize)
 		w.conn.SetReadDeadline(time.Now().Add(ReceiveTimeout))
@@ -342,6 +396,10 @@ func (w *UDPConnWorker) Shutdown() {
 	w.shutdownChan <- true
 	close(w.shutdownChan)
 	w.wg.Wait()
+}
+
+func (w *UDPConnWorker) LogStats() {
+	log.Printf("%s: C->D: %d/%d, D->C: %d/%d", w.peer.String(), w.clientBytesIn, w.destBytesOut, w.destBytesIn, w.clientBytesOut)
 }
 
 // Returns true approximately pct of the time.
@@ -397,5 +455,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error starting listener: %v", err)
 	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+	// Signal handler
+	go func() {
+		for sig := range sigChan {
+			switch sig {
+			case syscall.SIGINT, syscall.SIGTERM:
+				log.Printf("%v received, shutting down.", sig)
+				mux.Shutdown()
+				mux.LogStats()
+			case syscall.SIGUSR1:
+				mux.LogStats()
+			default:
+				log.Printf("Unknown signal %v received, ignoring!", sig)
+			}
+		}
+	}()
+
 	mux.Run()
 }
