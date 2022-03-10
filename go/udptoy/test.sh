@@ -20,8 +20,10 @@ setsid -w go run . \
 #  -swappy 10 &
 UDPTOY_PID=$!
 
-socat -u -b64 OPEN:"${INFILE}" UDP4-SENDTO:localhost:${PROXYPORT}
-sleep 1
+# time for socket to be open, etc.
+sleep 5
+socat -u -b512 OPEN:"${INFILE}" UDP4-SENDTO:localhost:${PROXYPORT},sndbuf=2048
+sleep 5
 echo "Killing -$UDPTOY_PID"
 kill -- -$UDPTOY_PID
 kill $SOCAT_PID

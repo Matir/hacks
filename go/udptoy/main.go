@@ -19,6 +19,8 @@ const (
 	GCDelay         = 1 * time.Hour
 	DefaultBufSize  = 65535
 	DefaultMaxDelay = 1 * time.Second
+	// Such a high value needed for high rate sending
+	IncomingChanCap = 10240
 )
 
 var (
@@ -73,6 +75,10 @@ type UDPConnWorker struct {
 func NewListenMux(laddr, dest *net.UDPAddr, opts ...ListenMuxOption) (*ListenMux, error) {
 	conn, err := net.ListenUDP("udp", laddr)
 	if err != nil {
+		return nil, err
+	}
+	if err := conn.SetReadBuffer(256 * 1024); err != nil {
+		conn.Close()
 		return nil, err
 	}
 	rv := &ListenMux{
@@ -154,7 +160,7 @@ func (m *ListenMux) Run() {
 				log.Printf("Error getting worker: %v", err)
 			} else {
 				m.totalListenBytes += int64(n)
-				log.Printf("Dispatching %d bytes from %s", n, peer)
+				//log.Printf("Dispatching %d bytes from %s", n, peer)
 				worker.DispatchIncoming(buf[:n])
 			}
 		}
@@ -232,12 +238,13 @@ func (m *ListenMux) Shutdown() {
 	defer m.mapLock.Unlock()
 	close(m.doneChan)
 	m.listenSock.Close()
-	for _, v := range m.workers {
+	for k, v := range m.workers {
 		v.Shutdown()
 		m.clientBytesIn += v.clientBytesIn
 		m.clientBytesOut += v.clientBytesOut
 		m.destBytesIn += v.destBytesIn
 		m.destBytesOut += v.destBytesOut
+		delete(m.workers, k)
 	}
 }
 
@@ -248,6 +255,7 @@ func (m *ListenMux) LogStats() {
 		v.LogStats()
 	}
 	log.Printf("Parent: C->D: %d/%d, D->C: %d/%d", m.clientBytesIn, m.destBytesOut, m.destBytesIn, m.clientBytesOut)
+	log.Printf("Listen bytes received: %d", m.totalListenBytes)
 }
 
 func NewUDPConnWorker(peer, dest *net.UDPAddr) (*UDPConnWorker, error) {
@@ -259,7 +267,7 @@ func NewUDPConnWorker(peer, dest *net.UDPAddr) (*UDPConnWorker, error) {
 		peer:         peer,
 		dest:         dest,
 		conn:         conn,
-		incoming:     make(chan []byte, 16),
+		incoming:     make(chan []byte, IncomingChanCap),
 		responses:    make(chan []byte),
 		lastActivity: time.Now(),
 		bufSize:      DefaultBufSize,
@@ -340,7 +348,7 @@ func (w *UDPConnWorker) dgramsToSocket(dgrams <-chan []byte, peer *net.UDPAddr, 
 }
 
 func (w *UDPConnWorker) sendDgram(dgram []byte, peer *net.UDPAddr, sock *net.UDPConn, counter *int64) {
-	log.Printf("Sending %d bytes to %s", len(dgram), peer)
+	//log.Printf("Sending %d bytes to %s", len(dgram), peer)
 	var n int
 	var err error
 	if sock.RemoteAddr() == nil {
@@ -457,9 +465,11 @@ func main() {
 	}
 
 	sigChan := make(chan os.Signal, 1)
+	doneChan := make(chan bool, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 	// Signal handler
 	go func() {
+		defer close(doneChan)
 		for sig := range sigChan {
 			switch sig {
 			case syscall.SIGINT, syscall.SIGTERM:
@@ -475,4 +485,5 @@ func main() {
 	}()
 
 	mux.Run()
+	<-doneChan
 }
