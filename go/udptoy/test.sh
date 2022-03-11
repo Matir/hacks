@@ -7,7 +7,7 @@ OUTFILE=${TMPDIR}/output
 DESTPORT=9185
 PROXYPORT=19185
 
-dd if=/dev/urandom of="${INFILE}" bs=1024 count=102400
+dd if=/dev/urandom of="${INFILE}" bs=1024 count=10240
 
 socat -u UDP4-RECV:${DESTPORT} CREATE:"${OUTFILE}" &
 SOCAT_PID=$!
@@ -23,7 +23,7 @@ UDPTOY_PID=$!
 
 # time for socket to be open, etc.
 sleep 5
-socat -u -b512 OPEN:"${INFILE}" UDP4-SENDTO:localhost:${PROXYPORT},sndbuf=2048
+socat -u -b512 EXEC:"pv -q -L128k ${INFILE}" UDP4-SENDTO:localhost:${PROXYPORT},sndbuf=2048
 sleep 5
 echo "Killing -$UDPTOY_PID"
 kill -- -$UDPTOY_PID
