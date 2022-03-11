@@ -198,7 +198,7 @@ func (m *ListenMux) gcOnce() {
 		m.mapLock.Lock()
 		defer m.mapLock.Unlock()
 		for k, v := range m.workers {
-			if v.lastActivity.Add(GCDelay).After(now) {
+			if v.lastActivity.Add(GCDelay).Before(now) {
 				cleanup = append(cleanup, v)
 				delete(m.workers, k)
 			}
