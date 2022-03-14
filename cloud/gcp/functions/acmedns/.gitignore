@@ -4,3 +4,5 @@ testing.txt
 local/local
 client/client
 env.yml
+le/*
+-le/.keep
