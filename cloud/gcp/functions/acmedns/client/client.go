@@ -22,7 +22,7 @@ const (
 	CMD_DELETE             = "delete"
 	CMD_GET                = "get"
 	CERTBOT_DOMAIN         = "CERTBOT_DOMAIN"
-	CERTBOT_TOKEN          = "CERTBOT_TOKEN"
+	CERTBOT_VALIDATION     = "CERTBOT_VALIDATION"
 )
 
 type ACMEProxyClient struct {
@@ -34,7 +34,7 @@ func main() {
 	endpointFlag := flag.String("endpoint", os.Getenv(ACMEPROXY_ENDPOINT_VAR), "Endpoint to update the DNS records.")
 	audienceFlag := flag.String("auth-audience", os.Getenv(AUDIENCE_VAR), "Auth audience for authentication.")
 	domainFlag := flag.String("domain", os.Getenv(CERTBOT_DOMAIN), "Domain to operate on.")
-	tokenFlag := flag.String("token", os.Getenv(CERTBOT_TOKEN), "Token to use for ACME.")
+	tokenFlag := flag.String("token", os.Getenv(CERTBOT_VALIDATION), "Token to use for ACME.")
 	flag.Parse()
 
 	if *endpointFlag == "" {
@@ -158,7 +158,7 @@ func findCertbotCommand() string {
 	hasEnv := func(key string) bool {
 		return os.Getenv(key) != ""
 	}
-	if !hasEnv(CERTBOT_DOMAIN) || !hasEnv(CERTBOT_TOKEN) {
+	if !hasEnv(CERTBOT_DOMAIN) || !hasEnv(CERTBOT_VALIDATION) {
 		return ""
 	}
 	if hasEnv("CERTBOT_AUTH_OUTPUT") {
