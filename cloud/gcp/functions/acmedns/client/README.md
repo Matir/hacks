@@ -13,6 +13,21 @@ It additionally requires that the `GOOGLE_APPLICATION_CREDENTIALS` environment
 variable is set *unless* running on GCP (i.e., in a GCE VM) where the ephemeral
 credentials can be used.
 
+Invocation like:
+
+```
+GOOGLE_APPLICATION_CREDENTIALS=<path> \
+  ACMEPROXY_ENDPOINT=<url> \
+  certbot \
+  certonly \
+  --manual \
+  --manual-auth-hook ./client/client \
+  --config-dir le/config \
+  --work-dir le/work \
+  --logs-dir le/logs \
+  -d test2.sub.rtgcptest.net
+```
+
 This results in an invocation equivalent to:
 
 ```
