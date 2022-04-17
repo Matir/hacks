@@ -14,6 +14,7 @@ func NewGlessPipe() *GlessPipe {
 	return &GlessPipe{
 		registeredFilters: []Filter{
 			filters.GzipFilter{},
+			filters.Bzip2Filter{},
 		},
 	}
 }
