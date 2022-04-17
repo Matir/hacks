@@ -2,14 +2,8 @@ package glesspipe
 
 import (
 	"io"
-)
 
-type FilterScore int
-
-const (
-	FilterScoreNoMatch FilterScore = iota
-	FilterScoreWeakMatch
-	FilterScoreFullMatch
+	"github.com/Matir/hacks/go/glesspipe/filters"
 )
 
 // These are glesspipe filters.  The highest scoring filter is used.
@@ -19,9 +13,9 @@ type Filter interface {
 	// How long we need to be able to decide if this filter applies
 	PeekLen() int
 	// Score the provided buffer (filename optional)
-	Score(string, []byte) FilterScore
+	Score(string, []byte) filters.FilterScore
 	// Take a reader and produce filtered output
-	Apply(io.Reader) io.Reader
+	Apply(io.Reader) (io.Reader, error)
 	// Describe ourselves
 	Name() string
 }

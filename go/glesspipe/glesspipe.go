@@ -2,6 +2,8 @@ package glesspipe
 
 import (
 	"io"
+
+	"github.com/Matir/hacks/go/glesspipe/filters"
 )
 
 type GlessPipe struct {
@@ -10,7 +12,9 @@ type GlessPipe struct {
 
 func NewGlessPipe() *GlessPipe {
 	return &GlessPipe{
-		registeredFilters: []Filter{},
+		registeredFilters: []Filter{
+			filters.GzipFilter{},
+		},
 	}
 }
 
@@ -20,7 +24,11 @@ func (gp *GlessPipe) Run(name string, rdr io.Reader, writer io.Writer) error {
 		return err
 	}
 	if filter := gp.findBestFilter(name, src); filter != nil {
-		_, err := io.Copy(writer, filter.Apply(src))
+		newReader, err := filter.Apply(src)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(writer, newReader)
 		return err
 	}
 	_, err = io.Copy(writer, src)
@@ -28,7 +36,7 @@ func (gp *GlessPipe) Run(name string, rdr io.Reader, writer io.Writer) error {
 }
 
 func (gp *GlessPipe) findBestFilter(name string, src *FilterSource) Filter {
-	strength := FilterScoreNoMatch
+	strength := filters.FilterScoreNoMatch
 	var which Filter
 	peekBuf := src.Peek()
 	for _, v := range gp.registeredFilters {
