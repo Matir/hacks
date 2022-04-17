@@ -2,7 +2,7 @@ package filters
 
 import (
 	"bytes"
-	"compress/gzip"
+	"compress/bzip2"
 	"io"
 )
 
@@ -19,7 +19,7 @@ func (gf Bzip2Filter) PeekLen() int {
 func (gf Bzip2Filter) Score(name string, buf []byte) FilterScore {
 	if bytes.Equal(BZIP_MAGIC[:], buf[:len(BZIP_MAGIC)]) {
 		// double check
-		if bytes.Equal(BZIP_C_MAGIC, buf[3:3+len(BZIP_C_MAGIC)]) {
+		if bytes.Equal(BZIP_C_MAGIC, buf[4:4+len(BZIP_C_MAGIC)]) {
 			return FilterScoreFullMatch
 		}
 	}
@@ -27,9 +27,9 @@ func (gf Bzip2Filter) Score(name string, buf []byte) FilterScore {
 }
 
 func (gf Bzip2Filter) Apply(rdr io.Reader) (io.Reader, error) {
-	return gzip.NewReader(rdr)
+	return bzip2.NewReader(rdr), nil
 }
 
 func (gf Bzip2Filter) Name() string {
-	return "gzip"
+	return "bzip2"
 }
