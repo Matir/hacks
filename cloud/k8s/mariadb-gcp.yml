@@ -24,6 +24,8 @@ spec:
         env:
         - name: MARIADB_ROOT_PASSWORD
           value: r00t-pass
+        - name: MARIADB_ROOT_HOST
+          value: localhost
         volumeMounts:
         - name: mariadb-data
           mountPath: /var/lib/mysql
