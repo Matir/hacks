@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,7 +15,7 @@ import (
 var infoLog = log.New(os.Stderr, "", log.LstdFlags)
 
 func main() {
-	verboseFlag := flag.Bool("-v", false, "Verbose output.")
+	verboseFlag := flag.Bool("v", false, "Verbose output.")
 	flag.Parse()
 
 	if !*verboseFlag {
@@ -31,6 +32,13 @@ func main() {
 	}
 
 	rootWindow := xproto.Setup(X).DefaultScreen(X).Root
+
+	if on_spice, err := runningOnSpice(X, rootWindow); err != nil {
+		log.Fatal(err)
+	} else if !on_spice {
+		// TODO: maybe keep running but inactive?
+		log.Fatal("Not running on spice?")
+	}
 
 	notifications := uint16(randr.NotifyMaskScreenChange |
 		randr.NotifyMaskCrtcChange |
@@ -134,4 +142,72 @@ func callOrFail(funcs ...func() error) error {
 		}
 	}
 	return nil
+}
+
+func runningOnSpice(X *xgb.Conn, window xproto.Window) (bool, error) {
+	edidSeen := false
+	screenRes, err := randr.GetScreenResources(X, window).Reply()
+	if err != nil {
+		return false, err
+	}
+	for _, output := range screenRes.Outputs {
+		outProp, err := randr.ListOutputProperties(X, output).Reply()
+		if err != nil {
+			return false, err
+		}
+		for _, atom := range outProp.Atoms {
+			aNameReply, err := xproto.GetAtomName(X, atom).Reply()
+			if aNameReply.Name != "EDID" {
+				continue
+			}
+			// this is the EDID
+			getOutputProp, err := randr.GetOutputProperty(X, output, atom, xproto.GetPropertyTypeAny, 0, 2048, false, false).Reply()
+			if err != nil {
+				return false, err
+			}
+			// Hopefully have EDID data
+			edidSeen = true
+			//printAsHex(getOutputProp.Data)
+			if edidIsSpice(getOutputProp.Data) {
+				return true, nil
+			}
+		}
+	}
+	return !edidSeen, nil
+}
+
+func edidIsSpice(edid []byte) bool {
+	if vendor, err := edidGetVendor(edid); err != nil {
+		log.Printf("Error decoding vendor: %s", err)
+		return false
+	} else if vendor == "RHT" {
+		return true
+	}
+	return false
+}
+
+func edidGetVendor(edid []byte) (string, error) {
+	if len(edid) < 10 {
+		return "", fmt.Errorf("EDID too short")
+	}
+	vendorBytes := make([]byte, 3)
+	vendorId := (uint16(edid[8]) << 8) | uint16(edid[9])
+	baseByte := byte('A') - 1
+	for i := 0; i < 3; i++ {
+		shr := (2 - i) * 5
+		vendorBytes[i] = byte((vendorId>>shr)&0x1f) + baseByte
+	}
+	vendor := string(vendorBytes)
+	infoLog.Printf("EDID Vendor: %s", vendor)
+	return vendor, nil
+}
+
+func printAsHex(v []byte) {
+	for i, c := range v {
+		if i%16 == 0 {
+			fmt.Printf("\n")
+		}
+		fmt.Printf("%02x ", c)
+	}
+	fmt.Printf("\n")
 }
