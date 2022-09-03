@@ -7,6 +7,9 @@ import (
   "path/filepath"
   "io/fs"
   "fmt"
+  "log"
+
+  "github.com/urfave/negroni"
 )
 
 const (
@@ -16,8 +19,11 @@ const (
 
 type CyberWaiter struct {
   zipReader *zip.Reader
+  zipHandler http.Handler
+  fp *os.File
   addr string
   src string
+  htmlName string
 }
 
 type CyberWaiterOption func(*CyberWaiter) error
@@ -45,6 +51,46 @@ func NewCyberWaiter(opts ...CyberWaiterOption) (*CyberWaiter, error) {
 }
 
 func (c *CyberWaiter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  rw := negroni.NewResponseWriter(w)
+  c.zipHandler.ServeHTTP(rw, r)
+  c.logRequest(rw, r)
+}
+
+func (c *CyberWaiter) logRequest(rw negroni.ResponseWriter, r *http.Request) {
+  log.Printf("[%s] %s %s %d %s %d", r.RemoteAddr, r.Method, r.URL.String(), rw.Status(), http.StatusText(rw.Status()), rw.Size())
+}
+
+func (c *CyberWaiter) RunServer() error {
+  if err := c.maybeUpdate(); err != nil {
+    return err
+  }
+  if err := c.prepareZipServer(); err != nil {
+    return err
+  }
+  defer c.fp.Close()
+  log.Printf("Starting server on %s", c.addr)
+  return http.ListenAndServe(c.addr, c)
+}
+
+func (c *CyberWaiter) prepareZipServer() error {
+  fp, err := os.Open(c.src)
+  if err != nil {
+    return err
+  }
+  fi, err := fp.Stat()
+  if err != nil {
+    fp.Close()
+    return err
+  }
+  rdr, err := zip.NewReader(fp, fi.Size())
+  if err != nil {
+    fp.Close()
+    return err
+  }
+  c.zipReader = rdr
+  c.fp = fp
+  c.zipHandler = http.FileServer(http.FS(rdr))
+  return nil
 }
 
 func (c *CyberWaiter) mkCacheDir() error {
@@ -57,6 +103,7 @@ func (c *CyberWaiter) mkCacheDir() error {
 
 func (c *CyberWaiter) maybeUpdate() error {
   // TODO: make this conditional, etc.
+  log.Printf("Updating CyberChef source.")
   return UpdateCyberChef(c.src)
 }
 
@@ -78,7 +125,7 @@ func main() {
   if err != nil {
     panic(err)
   }
-  if err := cw.maybeUpdate(); err != nil {
+  if err := cw.RunServer(); err != nil {
     panic(err)
   }
 }
