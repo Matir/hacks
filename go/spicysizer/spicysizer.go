@@ -6,9 +6,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/BurntSushi/xgb"
-	"github.com/BurntSushi/xgb/randr"
-	"github.com/BurntSushi/xgb/xproto"
+	"github.com/jezek/xgb"
+	"github.com/jezek/xgb/randr"
+	"github.com/jezek/xgb/xproto"
 )
 
 var infoLog = log.New(os.Stderr, "", log.LstdFlags)
