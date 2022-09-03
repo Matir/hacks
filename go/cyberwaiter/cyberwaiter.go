@@ -2,6 +2,7 @@ package main
 
 import (
   "archive/zip"
+  "errors"
   "flag"
   "fmt"
   "io/fs"
@@ -10,6 +11,7 @@ import (
   "os"
   "path/filepath"
   "strings"
+  "time"
 
   "github.com/urfave/negroni"
 )
@@ -27,6 +29,7 @@ type CyberWaiter struct {
   src string
   htmlName string
   forceUpdate bool
+  noUpdate bool
 }
 
 type CyberWaiterOption func(*CyberWaiter) error
@@ -120,7 +123,26 @@ func (c *CyberWaiter) mkCacheDir() error {
 }
 
 func (c *CyberWaiter) maybeUpdate() error {
-  // TODO: make this conditional, etc.
+  finfo, statErr := os.Stat(c.src)
+  if c.noUpdate {
+    if statErr != nil && errors.Is(statErr, fs.ErrNotExist) {
+      log.Fatalf("Missing cyberchef.zip but updates disabled!")
+    }
+    return nil
+  }
+  needUpdate := c.forceUpdate
+  if !needUpdate {
+    if statErr != nil {
+      // the stat failed
+      needUpdate = true
+    } else {
+      modAgo := time.Now().Sub(finfo.ModTime())
+      needUpdate = modAgo >= 30 * 24 * time.Hour
+    }
+  }
+  if !needUpdate {
+    return nil
+  }
   log.Printf("Updating CyberChef source.")
   return UpdateCyberChef(c.src)
 }
@@ -139,9 +161,17 @@ func WithForceUpdate() CyberWaiterOption {
   }
 }
 
+func WithNoUpdate() CyberWaiterOption {
+  return func(c *CyberWaiter) error {
+    c.noUpdate = true
+    return nil
+  }
+}
+
 func main() {
   addrFlag := flag.String("addr", DEFAULT_ADDR, "Address to serve on")
   forceUpdateFlag := flag.Bool("force-update", false, "Whether to force an update.")
+  noUpdateFlag := flag.Bool("no-update", false, "Don't try to update.")
 
   opts := make([]CyberWaiterOption, 0)
   flag.Parse()
@@ -149,8 +179,14 @@ func main() {
     // TODO: validate address
     opts = append(opts, WithListenAddress(*addrFlag))
   }
+  if *forceUpdateFlag && *noUpdateFlag {
+    log.Fatalf("Force update and no-update together doesn't make sense!")
+  }
   if *forceUpdateFlag {
     opts = append(opts, WithForceUpdate())
+  }
+  if *noUpdateFlag {
+    opts = append(opts, WithNoUpdate())
   }
 
   cw, err := NewCyberWaiter(opts...)
