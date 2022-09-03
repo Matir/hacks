@@ -1,13 +1,14 @@
 package main
 
 import (
-  "net/http"
   "archive/zip"
+  "flag"
+  "fmt"
+  "io/fs"
+  "log"
+  "net/http"
   "os"
   "path/filepath"
-  "io/fs"
-  "fmt"
-  "log"
   "strings"
 
   "github.com/urfave/negroni"
@@ -25,6 +26,7 @@ type CyberWaiter struct {
   addr string
   src string
   htmlName string
+  forceUpdate bool
 }
 
 type CyberWaiterOption func(*CyberWaiter) error
@@ -123,6 +125,43 @@ func (c *CyberWaiter) maybeUpdate() error {
   return UpdateCyberChef(c.src)
 }
 
+func WithListenAddress(addr string) CyberWaiterOption {
+  return func (c *CyberWaiter) error {
+    c.addr = addr
+    return nil
+  }
+}
+
+func WithForceUpdate() CyberWaiterOption {
+  return func(c *CyberWaiter) error {
+    c.forceUpdate = true
+    return nil
+  }
+}
+
+func main() {
+  addrFlag := flag.String("addr", DEFAULT_ADDR, "Address to serve on")
+  forceUpdateFlag := flag.Bool("force-update", false, "Whether to force an update.")
+
+  opts := make([]CyberWaiterOption, 0)
+  flag.Parse()
+  if addrFlag != nil && *addrFlag != "" {
+    // TODO: validate address
+    opts = append(opts, WithListenAddress(*addrFlag))
+  }
+  if *forceUpdateFlag {
+    opts = append(opts, WithForceUpdate())
+  }
+
+  cw, err := NewCyberWaiter(opts...)
+  if err != nil {
+    panic(err)
+  }
+  if err := cw.RunServer(); err != nil {
+    panic(err)
+  }
+}
+
 func getAppCacheDir() (string, error) {
   cacheDir := os.Getenv("XDG_CACHE_HOME")
   if cacheDir == "" {
@@ -134,14 +173,4 @@ func getAppCacheDir() (string, error) {
   }
   rv := filepath.Join(cacheDir, "cyberwaiter")
   return rv, nil
-}
-
-func main() {
-  cw, err := NewCyberWaiter()
-  if err != nil {
-    panic(err)
-  }
-  if err := cw.RunServer(); err != nil {
-    panic(err)
-  }
 }

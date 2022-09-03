@@ -1,14 +1,15 @@
 package main
 
 import (
-  "io/fs"
+  "encoding/json"
   "errors"
   "fmt"
+  "io"
+  "io/fs"
+  "log"
   "net/http"
-  "encoding/json"
   "os"
   "strings"
-  "io"
 )
 
 const (
@@ -106,6 +107,7 @@ func fetchReleaseInfo(src string) (*ReleaseInfo, error) {
 }
 
 func updaterDownloadFile(src, dest string) error {
+  log.Printf("Downloading %v", src)
   client := http.Client{}
   req, err := http.NewRequest(http.MethodGet, src, nil)
   if err != nil {
