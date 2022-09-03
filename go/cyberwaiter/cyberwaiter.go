@@ -8,6 +8,7 @@ import (
   "io/fs"
   "fmt"
   "log"
+  "strings"
 
   "github.com/urfave/negroni"
 )
@@ -51,6 +52,10 @@ func NewCyberWaiter(opts ...CyberWaiterOption) (*CyberWaiter, error) {
 }
 
 func (c *CyberWaiter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  // Redirect on /
+  if r.URL.Path == "/" {
+    r.URL.Path = c.htmlName
+  }
   rw := negroni.NewResponseWriter(w)
   c.zipHandler.ServeHTTP(rw, r)
   c.logRequest(rw, r)
@@ -86,6 +91,17 @@ func (c *CyberWaiter) prepareZipServer() error {
   if err != nil {
     fp.Close()
     return err
+  }
+  for _, zf := range rdr.File {
+    if !strings.HasSuffix(zf.FileHeader.Name, ".html") {
+      continue
+    }
+    if !strings.HasPrefix(zf.FileHeader.Name, "CyberChef") {
+      continue
+    }
+    c.htmlName = "/" + zf.FileHeader.Name
+    log.Printf("Found index HTML file at %s", c.htmlName)
+    break
   }
   c.zipReader = rdr
   c.fp = fp
