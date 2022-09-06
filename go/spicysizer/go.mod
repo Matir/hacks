@@ -1,4 +1,4 @@
-module github.com/matir/hacks/spicysizer
+module github.com/matir/hacks/go/spicysizer
 
 go 1.14
 
