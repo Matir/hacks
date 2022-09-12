@@ -231,8 +231,44 @@ func (s *DNSServer) ServeDNSAAAA(w dns.ResponseWriter, r *dns.Msg, qval string) 
 	log.Printf("Generating A response for %s", qval)
 	m := new(dns.Msg)
 	m.SetReply(r)
-	if qval == REFLECT_DNS {
+	rr := &dns.AAAA{
+		Hdr: dns.RR_Header{
+			Name:   r.Question[0].Name,
+			Rrtype: r.Question[0].Qtype,
+			Class:  r.Question[0].Qclass,
+			Ttl:    DNS_TTL,
+		},
 	}
+	m.Answer = append(m.Answer, rr)
+	if qval == REFLECT_DNS {
+		ip := GetIPFromAddr(w.RemoteAddr()).To16()
+		if ip == nil {
+			SendError(w, r, dns.RcodeNameError)
+			return
+		}
+		rr.AAAA = ip
+		w.WriteMsg(m)
+		return
+	}
+	// Supporting 2 formats
+	// full hex: 32 chars
+	// - instead of :
+	if len(qval) == 32 {
+		if bv, err := hex.DecodeString(qval); err == nil {
+			rr.AAAA = net.IP(bv)
+			log.Printf("%v -> %v", qval, rr.AAAA.String())
+			w.WriteMsg(m)
+			return
+		}
+	}
+	ip := net.ParseIP(strings.ReplaceAll(qval, "-", ":")).To16()
+	if ip == nil {
+		SendError(w, r, dns.RcodeNameError)
+		return
+	}
+	rr.AAAA = ip
+	log.Printf("%v -> %v", qval, rr.AAAA.String())
+	w.WriteMsg(m)
 }
 
 func WithUDPServer(s *DNSServer) error {
