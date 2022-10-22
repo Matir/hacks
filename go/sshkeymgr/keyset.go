@@ -42,6 +42,29 @@ func (ks *KeySet) WriteKeySet(w io.Writer) error {
 	return nil
 }
 
+// Removes any keys matching the keyspec.
+// We expect either a public key or an MD5 or SHA256 based fingerprint.
+// Returns true if found, false if not found
+func (ks *KeySet) RemoveKeyBySpec(spec string) bool {
+	// Try if this looks like a key
+	if pk, _, _, _, err := ssh.ParseAuthorizedKey([]byte(spec)); err == nil {
+		spec = ssh.FingerprintSHA256(pk)
+	}
+	left := ks.Keys[:0]
+	found := false
+	for _, k := range ks.Keys {
+		if !k.MatchesPubkey(spec) {
+			left = append(left, k)
+		} else {
+			found = true
+		}
+	}
+	if found {
+		ks.Keys = left
+	}
+	return found
+}
+
 type KeyData struct {
 	comments   []string
 	pubkeyline string
