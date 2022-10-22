@@ -53,7 +53,7 @@ func (ks *KeySet) RemoveKeyBySpec(spec string) bool {
 	left := ks.Keys[:0]
 	found := false
 	for _, k := range ks.Keys {
-		if !k.MatchesPubkey(spec) {
+		if !k.MatchesFingerprint(spec) {
 			left = append(left, k)
 		} else {
 			found = true
@@ -73,6 +73,15 @@ type KeyData struct {
 	shortname  string
 }
 
+// Read a single key from a reader.
+// This may advance past the end of the key
+func ReadKeyDataFromReader(rdr io.Reader) (*KeyData, error) {
+	scanner := bufio.NewScanner(rdr)
+	return ReadKeydataFromScanner(scanner)
+}
+
+// Read a single key from a scanner.
+// Leave the scanner at the next line (or EOF)
 func ReadKeydataFromScanner(sc *bufio.Scanner) (*KeyData, error) {
 	lines := make([]string, 0)
 	for sc.Scan() {
@@ -96,6 +105,9 @@ func ReadKeydataFromScanner(sc *bufio.Scanner) (*KeyData, error) {
 	return nil, fmt.Errorf("No keydata found in file.")
 }
 
+// Parse the key from lines of data
+// Expects 0 or more comment lines beginning with a #
+// followed by a single line in authorized_keys format.
 func LoadKeydata(lines []string) (*KeyData, error) {
 	kd := &KeyData{}
 	for _, line := range lines {
@@ -122,7 +134,7 @@ func LoadKeydata(lines []string) (*KeyData, error) {
 	return kd, nil
 }
 
-func (kd *KeyData) MatchesPubkey(pk string) bool {
+func (kd *KeyData) MatchesFingerprint(pk string) bool {
 	return ssh.FingerprintSHA256(kd.pubkey) == pk || ssh.FingerprintLegacyMD5(kd.pubkey) == pk
 }
 
@@ -140,4 +152,14 @@ func (kd *KeyData) AddManagedComment() {
 		MANAGED_TAG, date, kd.shortname, ssh.FingerprintSHA256(kd.pubkey))
 	kd.comments = append(kd.comments, line)
 	kd.managed = true
+}
+
+// Compare two KeyData instances.
+// They compare as true iff the fingerprints of the keys match.
+// Note that they explicitly *don't* care about options.
+func (kd *KeyData) Equals(kd2 *KeyData) bool {
+	if kd == nil || kd2 == nil {
+		return false
+	}
+	return ssh.FingerprintSHA256(kd.pubkey) == ssh.FingerprintSHA256(kd2.pubkey)
 }
