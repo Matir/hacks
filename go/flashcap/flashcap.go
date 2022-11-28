@@ -263,6 +263,7 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 		}
 		speed := (pos - lastRead) / uint64(now.Sub(lastUpdated).Seconds())
 		lastUpdated = now
+		lastRead = pos
 		spent := uint64(now.Sub(started).Seconds())
 		clearCurrentLine()
 		fmt.Printf("[%03ds] %s: %s: %s/%s (%s/s)", spent, dev, op, szToString(pos), szToString(size), szToString(speed))
