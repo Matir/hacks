@@ -7,6 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"runtime/pprof"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -17,7 +20,6 @@ import (
 )
 
 const (
-	BLOCK_SIZE      = uint64(4096)
 	WORD_SIZE       = unsafe.Sizeof(uint64(0))
 	MAX_ADDRS       = 10
 	STATUS_INTERVAL = 1 * time.Second
@@ -38,8 +40,15 @@ type sizeStringer func(uint64) string
 type statusCallback func(string, string, uint64, uint64, *TestReport)
 
 func main() {
+	os.Exit(real_main())
+}
+
+// This is used for early return honoring defer
+func real_main() int {
 	noConfirmFlag := flag.Bool("dangerous-no-confirm", false, "Skip confirmation!")
 	binaryFlag := flag.Bool("binary", false, "Use binary sizes.")
+	cpuprofileFlag := flag.String("profile", "", "Log cpu profile.")
+	bufSizeFlag := flag.String("bufsize", "4k", "Buffer size, suffixes K/M/G supported.")
 
 	flag.Parse()
 
@@ -47,14 +56,32 @@ func main() {
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Device not specified!\n")
 		flag.Usage()
-		os.Exit(1)
+		return 1
 	}
+
+	bufSize, err := parseSize(*bufSizeFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing buffer size: %v\n", err)
+		flag.Usage()
+		return 1
+	}
+
 	devName := args[0]
+
+	if *cpuprofileFlag != "" {
+		f, err := os.Create(*cpuprofileFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Can't start profile: %s\n", err)
+			return 1
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	devSize, err := GetDeviceSize64(devName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting device size: %s\n", err)
-		os.Exit(1)
+		return 1
 	}
 	szToString := MakeSizeFunc(*binaryFlag)
 
@@ -69,42 +96,68 @@ func main() {
 			} else {
 				fmt.Fprintln(os.Stderr, "Error reading input!")
 			}
-			os.Exit(1)
+			return 1
 		}
 		if strings.TrimSpace(sc.Text()) != "YES" {
 			fmt.Fprintln(os.Stderr, "Confirmation not given, aborting!")
-			os.Exit(1)
+			return 1
 		}
 	}
 
-	rv := 0
-	if res, err := PerformWriteReadTest(devName, devSize, szToString); err != nil {
-		fmt.Fprintf(os.Stderr, "Error in performing test: %s\n", err)
+	sigch := make(chan os.Signal, 1)
+	stopChan := make(chan bool)
+	go func() {
+		<-sigch
+		fmt.Fprintf(os.Stderr, "Interrupt received, stopping, press CTRL+C again to hard abort.\n")
+		os.Stderr.Sync()
+		stopChan <- true
+		<-sigch
+		fmt.Fprintf(os.Stderr, "2nd interrupt, aborting!\n")
+		os.Stderr.Sync()
 		os.Exit(1)
+	}()
+	signal.Notify(sigch, syscall.SIGINT)
+
+	rv := 0
+	if res, err := PerformWriteReadTest(devName, devSize, szToString, stopChan, bufSize); err != nil {
+		fmt.Fprintf(os.Stderr, "Error in performing test: %s\n", err)
+		return 1
 	} else if res != nil {
 		if res.firstFailedWrite != nil {
 			fmt.Printf("First write error: %v\n", res.firstFailedWrite)
+			rv = 1
 		}
 		if res.firstFailedRead != nil {
 			fmt.Printf("First read error: %v\n", res.firstFailedRead)
+			rv = 1
 		}
 		if res.failedWriteAddrs != nil && len(res.failedWriteAddrs) > 0 {
 			fmt.Printf("%d write errors: %s\n", len(res.failedWriteAddrs), formatAddrList(res.failedWriteAddrs))
+			rv = 1
 		}
 		if res.failedReadAddrs != nil && len(res.failedReadAddrs) > 0 {
 			fmt.Printf("%d read errors: %s\n", len(res.failedReadAddrs), formatAddrList(res.failedReadAddrs))
+			rv = 1
 		}
 		if rv == 0 {
 			fmt.Printf("Test succeeded, %s okay\n", szToString(devSize))
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Error in test: no error, no report!\n")
-		os.Exit(1)
+		return 1
 	}
-	os.Exit(rv)
+	return rv
 }
 
-func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) (*TestReport, error) {
+func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer, stopChan <-chan bool, bufSize int) (*TestReport, error) {
+	checkStop := func() bool {
+		select {
+		case <-stopChan:
+			return true
+		default:
+			return false
+		}
+	}
 	statusFunc := makeStatusFunc(szToString)
 	flags := os.O_RDWR | syscall.O_DIRECT | syscall.O_DSYNC | syscall.O_LARGEFILE | os.O_EXCL
 	fp, err := os.OpenFile(name, flags, 0)
@@ -118,7 +171,7 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) 
 		return nil, fmt.Errorf("Device %s size changed from %d (%s) to %d (%s)", name, devSize, szToString(devSize), verify, szToString(verify))
 	}
 
-	dio, err := directio.NewSize(fp, int(BLOCK_SIZE))
+	dio, err := directio.NewSize(fp, bufSize)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating directio: %w", err)
 	}
@@ -126,8 +179,11 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) 
 	var res TestReport
 
 	// Start write portion
-	for blockAddr := uint64(0); blockAddr < devSize; blockAddr += BLOCK_SIZE {
+	for blockAddr := uint64(0); blockAddr < devSize; blockAddr += uint64(bufSize) {
 		statusFunc(name, "write", blockAddr, devSize, &res)
+		if checkStop() {
+			return nil, fmt.Errorf("Aborted in write test.")
+		}
 		if _, err := fp.Seek(int64(blockAddr), os.SEEK_SET); err != nil {
 			res.failedWriteAddrs = append(res.failedWriteAddrs, blockAddr)
 			if res.firstFailedWrite == nil {
@@ -135,7 +191,7 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) 
 			}
 			continue
 		}
-		blockData := makeBlock(blockAddr, BLOCK_SIZE)
+		blockData := makeBlock(blockAddr, uint64(bufSize))
 		if n, err := dio.Write(blockData); err != nil {
 			res.failedWriteAddrs = append(res.failedWriteAddrs, blockAddr)
 			if res.firstFailedWrite == nil {
@@ -152,8 +208,12 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) 
 	}
 
 	// Start read portion
-	readBlock := make([]byte, BLOCK_SIZE)
-	for blockAddr := uint64(0); blockAddr < devSize; blockAddr += BLOCK_SIZE {
+	fmt.Println("")
+	readBlock := make([]byte, bufSize)
+	for blockAddr := uint64(0); blockAddr < devSize; blockAddr += uint64(bufSize) {
+		if checkStop() {
+			return nil, fmt.Errorf("Aborted in read test.")
+		}
 		statusFunc(name, "read", blockAddr, devSize, &res)
 		if _, err := fp.Seek(int64(blockAddr), os.SEEK_SET); err != nil {
 			res.failedReadAddrs = append(res.failedReadAddrs, blockAddr)
@@ -162,7 +222,7 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) 
 			}
 			continue
 		}
-		blockData := makeBlock(blockAddr, BLOCK_SIZE)
+		blockData := makeBlock(blockAddr, uint64(bufSize))
 		if _, err := fp.Read(readBlock); err != nil {
 			res.failedReadAddrs = append(res.failedReadAddrs, blockAddr)
 			if res.firstFailedRead == nil {
@@ -179,6 +239,7 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer) 
 		}
 	}
 
+	fmt.Println("")
 	return &res, nil
 }
 
@@ -261,6 +322,9 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 		if lastUpdated.Add(STATUS_INTERVAL).After(now) {
 			return
 		}
+		if lastRead > pos {
+			lastRead = pos
+		}
 		speed := (pos - lastRead) / uint64(now.Sub(lastUpdated).Seconds())
 		lastUpdated = now
 		lastRead = pos
@@ -268,4 +332,28 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 		clearCurrentLine()
 		fmt.Printf("[%03ds] %s: %s: %s/%s (%s/s)", spent, dev, op, szToString(pos), szToString(size), szToString(speed))
 	}
+}
+
+func parseSize(szstr string) (int, error) {
+	suffixes := map[string]int{
+		"k": 1024,
+		"m": 1024 * 1024,
+		"g": 1024 * 1024 * 1024,
+		"K": 1024,
+		"M": 1024 * 1024,
+		"G": 1024 * 1024 * 1024,
+	}
+	mul := 1
+	for s, m := range suffixes {
+		if strings.HasSuffix(szstr, s) {
+			mul = m
+			szstr = strings.TrimSuffix(szstr, s)
+			break
+		}
+	}
+	n, err := strconv.ParseInt(szstr, 0, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int(n) * mul, nil
 }
