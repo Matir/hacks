@@ -83,7 +83,7 @@ func real_main() int {
 		fmt.Fprintf(os.Stderr, "Error getting device size: %s\n", err)
 		return 1
 	}
-	szToString := MakeSizeFunc(*binaryFlag)
+	szToString := MakeSizeFunc(*binaryFlag, 3)
 
 	// Confirmation step
 	if !*noConfirmFlag {
@@ -191,7 +191,11 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer, 
 			}
 			continue
 		}
-		blockData := makeBlock(blockAddr, uint64(bufSize))
+		thisBufSize := uint64(bufSize)
+		if uint64(bufSize) > (devSize - blockAddr) {
+			thisBufSize = devSize - blockAddr
+		}
+		blockData := makeBlock(blockAddr, thisBufSize)
 		if n, err := dio.Write(blockData); err != nil {
 			res.failedWriteAddrs = append(res.failedWriteAddrs, blockAddr)
 			if res.firstFailedWrite == nil {
@@ -222,7 +226,16 @@ func PerformWriteReadTest(name string, devSize uint64, szToString sizeStringer, 
 			}
 			continue
 		}
-		blockData := makeBlock(blockAddr, uint64(bufSize))
+		thisBufSize := uint64(bufSize)
+		if uint64(bufSize) > (devSize - blockAddr) {
+			thisBufSize = devSize - blockAddr
+			if uint64(len(readBlock)) > thisBufSize {
+				readBlock = readBlock[:thisBufSize]
+			} else {
+				readBlock = make([]byte, thisBufSize)
+			}
+		}
+		blockData := makeBlock(blockAddr, thisBufSize)
 		if _, err := fp.Read(readBlock); err != nil {
 			res.failedReadAddrs = append(res.failedReadAddrs, blockAddr)
 			if res.firstFailedRead == nil {
@@ -269,7 +282,7 @@ func getDeviceSize64(fp *os.File) (uint64, error) {
 }
 
 // Make a function to get a string size
-func MakeSizeFunc(binary bool) sizeStringer {
+func MakeSizeFunc(binary bool, nfigs int) sizeStringer {
 	prefixes := []string{"", "K", "M", "G", "T", "P"}
 	base := uint64(1000)
 	mid := ""
@@ -277,7 +290,27 @@ func MakeSizeFunc(binary bool) sizeStringer {
 		base = 1024
 		mid = "i"
 	}
-	// TODO: support a decimal length
+
+	// Handle decimal length case
+	if nfigs > 0 {
+		return func(sz uint64) string {
+			szf := float64(sz)
+			szo := sz
+			for i := 0; i < len(prefixes); i++ {
+				if szf < float64(base) || i == len(prefixes)-1 {
+					pfx := prefixes[i]
+					if pfx == "" {
+						mid = ""
+					}
+					return fmt.Sprintf("%.*g %s%sB", nfigs, szf, pfx, mid)
+				}
+				szf /= float64(base)
+			}
+			return fmt.Sprintf("%d B", szo)
+		}
+	}
+
+	// Integer case, nfigs == 0
 	return func(sz uint64) string {
 		szo := sz
 		for i := 0; i < len(prefixes); i++ {
@@ -316,6 +349,7 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 	started := time.Now()
 	lastUpdated := started
 	lastRead := uint64(0)
+	avg := NewRollingAverager(8)
 	return func(dev, op string, pos, size uint64, rep *TestReport) {
 		now := time.Now()
 		// time in future ?
@@ -326,11 +360,12 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 			lastRead = pos
 		}
 		speed := (pos - lastRead) / uint64(now.Sub(lastUpdated).Seconds())
+		avgSpeed := avg.Add(speed)
 		lastUpdated = now
 		lastRead = pos
 		spent := uint64(now.Sub(started).Seconds())
 		clearCurrentLine()
-		fmt.Printf("[%03ds] %s: %s: %s/%s (%s/s)", spent, dev, op, szToString(pos), szToString(size), szToString(speed))
+		fmt.Printf("[%03ds] %s: %s: %s/%s (%s/s)", spent, dev, op, szToString(pos), szToString(size), szToString(avgSpeed))
 	}
 }
 
@@ -356,4 +391,34 @@ func parseSize(szstr string) (int, error) {
 		return 0, err
 	}
 	return int(n) * mul, nil
+}
+
+type RollingAverager struct {
+	samples []uint64
+	next    int
+}
+
+func NewRollingAverager(size int) *RollingAverager {
+	return &RollingAverager{
+		samples: make([]uint64, 0, size),
+	}
+}
+
+func (ra *RollingAverager) Add(v uint64) uint64 {
+	if len(ra.samples) <= ra.next {
+		ra.samples = append(ra.samples, v)
+	} else {
+		ra.samples[ra.next] = v
+	}
+	ra.next += 1
+	ra.next %= cap(ra.samples)
+	return ra.Avg()
+}
+
+func (ra *RollingAverager) Avg() uint64 {
+	sum := uint64(0)
+	for _, v := range ra.samples {
+		sum += v
+	}
+	return sum / uint64(len(ra.samples))
 }
