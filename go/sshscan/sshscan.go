@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -50,11 +51,12 @@ var (
 type HostScanner struct {
 	Host           string
 	Port           uint16
-	remainingAlgos []string
 	KeyData        map[string]string
 	KeyFP          map[string]string
 	ServerVersion  string
 	ScanStart      time.Time
+	remainingAlgos []string
+	mux            sync.Mutex
 }
 
 func NewHostScanner(host string) *HostScanner {
@@ -68,14 +70,17 @@ func NewHostScanner(host string) *HostScanner {
 }
 
 func (hs *HostScanner) removeAlgo(algo string) {
+	hs.mux.Lock()
+	defer hs.mux.Unlock()
 	l := len(hs.remainingAlgos)
-	for i, v := range hs.remainingAlgos {
-		if v == algo {
-			hs.remainingAlgos[i] = hs.remainingAlgos[l-1]
-			hs.remainingAlgos = hs.remainingAlgos[:l-1]
-			return
+	res := make([]string, 0, l-1)
+	// this must preserve order
+	for _, v := range hs.remainingAlgos {
+		if v != algo {
+			res = append(res, v)
 		}
 	}
+	hs.remainingAlgos = res
 }
 
 func (hs *HostScanner) hostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {

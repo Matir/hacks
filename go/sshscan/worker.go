@@ -30,11 +30,11 @@ func (w *Worker) Run() {
 		}
 		hs := NewHostScanner(unit)
 		if err := hs.Scan(); err != nil {
-			log.Printf("Error scanning: %s", err)
+			log.Printf("Error scanning %s: %s", unit, err)
 		} else {
 			w.workCount++
 			if err := w.DB.InsertResult(hs); err != nil {
-				log.Printf("Error inserting: %s", err)
+				log.Printf("Error inserting %s: %s", unit, err)
 			}
 		}
 		if w.workCount >= WorkReportInterval {
