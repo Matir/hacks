@@ -350,8 +350,15 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 	lastUpdated := started
 	lastRead := uint64(0)
 	avg := NewRollingAverager(8)
+	curOp := ""
 	return func(dev, op string, pos, size uint64, rep *TestReport) {
 		now := time.Now()
+		if op != curOp {
+			curOp = op
+			lastRead = 0
+			avg.Reset()
+			started = now
+		}
 		// time in future ?
 		if lastUpdated.Add(STATUS_INTERVAL).After(now) {
 			return
@@ -363,9 +370,18 @@ func makeStatusFunc(szToString sizeStringer) statusCallback {
 		avgSpeed := avg.Add(speed)
 		lastUpdated = now
 		lastRead = pos
+		percent := float64(pos) / float64(size) * 100
 		spent := uint64(now.Sub(started).Seconds())
+		posRnd := pos
+		if posRnd == 0 {
+			posRnd = 1
+		}
+		left := (spent * size / posRnd) - spent
+		spentStr := formatDurationSeconds(spent)
+		leftStr := formatDurationSeconds(left)
 		clearCurrentLine()
-		fmt.Printf("[%03ds] %s: %s: %s/%s (%s/s)", spent, dev, op, szToString(pos), szToString(size), szToString(avgSpeed))
+		fmt.Printf("[%s] %s: %5s: %s/%s (%s/s) [%1.1f%%, %s left]",
+			spentStr, dev, op, szToString(pos), szToString(size), szToString(avgSpeed), percent, leftStr)
 	}
 }
 
@@ -391,6 +407,13 @@ func parseSize(szstr string) (int, error) {
 		return 0, err
 	}
 	return int(n) * mul, nil
+}
+
+func formatDurationSeconds(d uint64) string {
+	if d >= 3600 {
+		return fmt.Sprintf("%02d:%02d:%02d", d/3600, d/60%60, d%60)
+	}
+	return fmt.Sprintf("%02d:%02d", d/60, d%60)
 }
 
 type RollingAverager struct {
@@ -421,4 +444,9 @@ func (ra *RollingAverager) Avg() uint64 {
 		sum += v
 	}
 	return sum / uint64(len(ra.samples))
+}
+
+func (ra *RollingAverager) Reset() {
+	ra.next = 0
+	ra.samples = ra.samples[:0]
 }
