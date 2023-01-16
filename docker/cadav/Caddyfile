@@ -1,0 +1,49 @@
+{
+  auto_https off
+  order webdav after file_server
+  {$CADDY_DEBUG}
+}
+
+import ./Caddyfile.auth
+
+:9999 {
+  vars {
+    static_dir /srv
+  }
+  log {
+    output stderr
+    format console
+    # format json
+  }
+  root * {$WEBDAV_ROOT:/webdav}
+
+  @get method GET
+
+  @getdir {
+    method GET
+    path */
+  }
+
+  import restrictions
+
+  route @getdir {
+    header X-Matched-Getdir "true"
+    root {vars.static_dir}
+    try_files index.html
+  }
+
+  # Can't use handle_path because it's prioritized beneath handle
+  handle /_static/* {
+    uri strip_prefix /_static
+    header X-Static-Path "true"
+    file_server {
+      root {vars.static_dir}
+    }
+  }
+
+  header X-Fallthrough "true"
+  file_server @get {
+    browse
+  }
+  webdav
+}

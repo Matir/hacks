@@ -1,0 +1,18 @@
+(commonuser) {
+  # testing123
+  admin $2a$14$4hhw4M3lnbJsmAzZQ7ulWerfPVYweV9gx5Cfd2eBJZhQv/cOFb0fG
+}
+
+(restrictions) {
+  handle /a/* {
+    basicauth bcrypt "a" {
+      import commonuser
+      auser $2a$14$4hhw4M3lnbJsmAzZQ7ulWerfPVYweV9gx5Cfd2eBJZhQv/cOFb0fG
+    }
+  }
+  handle /* {
+    basicauth bcrypt "root" {
+      import commonuser
+    }
+  }
+}
