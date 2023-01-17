@@ -6,17 +6,19 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
 
 var (
-	baseTemplates = []string{"templates/base.html"}
-	templateMap   = make(map[string]*template.Template)
+	templateMap = make(map[string]*template.Template)
 )
 
 func main() {
-	fs := http.FileServer(http.Dir("./static"))
+	staticDir := path.Join(getTemplateDir(), "static")
+	fs := http.FileServer(http.Dir(staticDir))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/", home)
 	endpoint := ":3000"
@@ -37,7 +39,9 @@ func sendTemplate(w io.Writer, name string, data interface{}) error {
 }
 
 func init() {
-	matches, _ := filepath.Glob("templates/*.html")
+	tmplDir := getTemplateDir()
+	baseTemplates := []string{path.Join(tmplDir, "base.html")}
+	matches, _ := filepath.Glob(path.Join(tmplDir, "*.html"))
 	for _, f := range matches {
 		b := filepath.Base(f)
 		e := filepath.Ext(b)
@@ -45,4 +49,12 @@ func init() {
 		r := append(baseTemplates, f)
 		templateMap[b] = template.Must(template.ParseFiles(r...))
 	}
+}
+
+func getTemplateDir() string {
+	tmplName := "basic"
+	if newName := os.Getenv("TEMPLATE"); newName != "" {
+		tmplName = newName
+	}
+	return path.Join("templates", tmplName)
 }
