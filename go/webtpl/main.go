@@ -27,7 +27,19 @@ func main() {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
-	sendTemplate(w, "index", nil)
+	log.Printf("request: %s", r.URL.Path)
+	tmplName := strings.TrimPrefix(r.URL.Path, "/")
+	if tmplName == "" {
+		tmplName = "index"
+	}
+	if _, ok := templateMap[tmplName]; !ok {
+		log.Printf("Not found: %s", tmplName)
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	if err := sendTemplate(w, tmplName, nil); err != nil {
+		log.Printf("Error sending template: %s", err)
+	}
 }
 
 func sendTemplate(w io.Writer, name string, data interface{}) error {
