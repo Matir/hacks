@@ -9,6 +9,13 @@ import (
 type SyscallMeta struct {
 	SyscallName string
 	NumArgs     int
+	ArgInfo     []SyscallArgInfo
+}
+
+type SyscallArgInfo struct {
+	KernelType string
+	Pointer    bool
+	FixedSize  int
 }
 
 func GetMeta(scnum int) SyscallMeta {

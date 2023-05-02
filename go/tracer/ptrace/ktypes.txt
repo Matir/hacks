@@ -1,0 +1,116 @@
+
+ __s32
+ __sighandler_t
+ __u64
+ aio_context_t
+ aio_context_t __user *
+ cap_user_data_t
+ cap_user_header_t
+ char __user *
+ char __user * __user *
+ clockid_t
+ fd_set __user *
+ gid_t
+ gid_t __user *
+ int
+ int __user *
+ key_serial_t
+ key_t
+ loff_t
+ loff_t __user *
+ long
+ long_t
+ mode_t
+ mqd_t
+ off_t
+ off_t __user *
+ old_sigset_t
+ old_sigset_t __user *
+ old_time_t __user *
+ pid_t
+ qid_t
+ rwf_t
+ siginfo_t __user *
+ sigset_t __user *
+ size_t
+ size_t __user *
+ ssize_t
+ stack_t __user *
+ struct __aio_sigset __user *
+ struct __compat_aio_sigset __user *
+ struct __old_kernel_stat __user *
+ struct epoll_event __user *
+ struct file_handle __user *
+ struct getcpu_cache __user *
+ struct io_event __user *
+ struct iocb __user *
+ struct iocb __user * __user *
+ struct iovec __user *
+ struct itimerspec __user *
+ struct kexec_segment __user *
+ struct linux_dirent __user *
+ struct linux_dirent64 __user *
+ struct mmsghdr __user *
+ struct mq_attr __user *
+ struct msgbuf __user *
+ struct msghdr __user *
+ struct msqid_ds __user *
+ struct old_itimerval __user *
+ struct old_itimerval32 __user *
+ struct old_sigaction __user *
+ struct old_timespec32 __user *
+ struct old_timeval __user *
+ struct old_timeval32 __user *
+ struct old_utsname __user *
+ struct oldold_utsname __user *
+ struct perf_event_attr __user *
+ struct pollfd __user *
+ struct rlimit __user *
+ struct rlimit64 __user *
+ struct robust_list_head __user *
+ struct robust_list_head __user * __user *
+ struct rseq __user *
+ struct rusage __user *
+ struct sched_attr __user *
+ struct sched_param __user *
+ struct sembuf __user *
+ struct shmid_ds __user *
+ struct sigaction __user *
+ struct sigevent __user *
+ struct siginfo __user *
+ struct sockaddr __user *
+ struct stat __user *
+ struct stat64 __user *
+ struct statfs __user *
+ struct statfs64 __user *
+ struct statx __user *
+ struct sysinfo __user *
+ struct timespec __user *
+ struct timex __user *
+ struct timezone __user *
+ struct tms __user *
+ struct user_desc __user *
+ struct user_msghdr __user *
+ struct ustat __user *
+ struct utimbuf __user *
+ struct vm86_struct __user *
+ timer_t
+ timer_t __user *
+ u32 __user *
+ u64
+ uid_t
+ uid_t __user *
+ uint_t __user *
+ umode_t
+ union bpf_attr __user *
+ unsigned
+ unsigned __user *
+ unsigned char __user *
+ unsigned int
+ unsigned int __user *
+ unsigned long
+ unsigned long __user *
+ uptr_t
+ uptr_t __user *
+ void __user *
+ void __user * __user *
