@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -230,42 +229,8 @@ func (ta TraceArg) String() string {
 	return ""
 }
 
-// TODO: make this architecture-independent
 func DecodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *TraceEvent {
-	getErrno := func(p uint64) int {
-		eMin := uint64(math.MaxUint64 - ERRNO_MAX)
-		if uint64(p) < eMin {
-			return 0
-		}
-		return -int(p)
-	}
-	rv := &TraceEvent{
-		Pid:       pid,
-		PC:        regs.Rip,
-		Timestamp: time.Now(),
-	}
-	if start != nil {
-		rv.SyscallExit = true
-		rv.SyscallNum = start.SyscallNum
-		if en := getErrno(regs.Rax); en == 0 {
-			rv.SyscallReturn = regs.Rax
-		} else {
-			rv.SyscallErrno = syscall.Errno(en)
-			rv.SyscallReturnName = unix.ErrnoName(syscall.Errno(en))
-		}
-		extractArgs(pid, regs, &rv.PostcallArgs)
-		rv.PrecallArgs = start.PrecallArgs
-		// TODO: make this more straightforward
-		rv.Argv = start.Argv
-	} else {
-		rv.SyscallNum = regs.Orig_rax
-		extractArgs(pid, regs, &rv.PrecallArgs)
-	}
-	// Special case decoding
-	if handler, ok := SyscallHandlers[rv.SyscallNum]; ok {
-		handler(rv)
-	}
-	return rv
+	return decodeTraceEvent(pid, regs, start)
 }
 
 func extractArgs(pid int, regs *syscall.PtraceRegs, args *TraceArgs) {
