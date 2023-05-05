@@ -80,7 +80,11 @@ func (e *MBoxExplorer) Explore() error {
 			return err
 		}
 		if err := e.ProcessMessageReader(msgrdr); err != nil {
-			return err
+			if strings.Contains(err.Error(), "malformed MIME header line") {
+				log.Printf("error processing message: %s", err)
+			} else {
+				return err
+			}
 		}
 	}
 }
@@ -91,10 +95,17 @@ func (e *MBoxExplorer) ProcessMessageReader(rdr io.Reader) error {
 		return fmt.Errorf("error reading message: %w", err)
 	}
 	meta := ExtractMeta(msg)
+	if meta == nil {
+		return nil
+	}
 	fmt.Printf("Message-Id: %s From: %s\n", meta.MessageId, meta.From)
 	attachMeta, err := e.ProcessAttachments(msg, meta)
 	if err != nil {
-		return fmt.Errorf("error processing attachments: %w", err)
+		if strings.Contains(err.Error(), "duplicate parameter name") {
+			log.Printf("error processing attachments: %v", err)
+		} else {
+			return fmt.Errorf("error processing attachments: %w", err)
+		}
 	}
 	// Insert into db
 	tx, err := e.db.Begin()
@@ -222,6 +233,10 @@ type AttachmentMeta struct {
 }
 
 func ExtractMeta(msg *mail.Message) *MessageMeta {
+	if strings.Contains(msg.Header.Get("X-Gmail-Labels"), "Chat") {
+		// not interested in chat
+		return nil
+	}
 	rv := &MessageMeta{
 		MessageId:   strings.TrimSuffix(strings.TrimPrefix(msg.Header.Get("Message-Id"), "<"), ">"),
 		From:        msg.Header.Get("From"),
