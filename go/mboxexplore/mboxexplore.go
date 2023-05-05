@@ -88,39 +88,80 @@ func (e *MBoxExplorer) Explore() error {
 func (e *MBoxExplorer) ProcessMessageReader(rdr io.Reader) error {
 	msg, err := mail.ReadMessage(rdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("error reading message: %w", err)
 	}
 	meta := ExtractMeta(msg)
-	fmt.Printf("From: %s\n", meta.From)
-	if attachMeta, err := e.ProcessAttachments(msg, meta); err != nil {
-		return err
+	fmt.Printf("Message-Id: %s From: %s\n", meta.MessageId, meta.From)
+	attachMeta, err := e.ProcessAttachments(msg, meta)
+	if err != nil {
+		return fmt.Errorf("error processing attachments: %w", err)
 	}
 	// Insert into db
 	tx, err := e.db.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("error starting transaction: %w", err)
 	}
 	defer tx.Rollback()
-	// TODO: do the real insert
+	if _, err := tx.Exec(
+		`INSERT OR IGNORE INTO messages(message_id, "from", from_email, "to", to_email, subject, date, content_type, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		meta.MessageId,
+		meta.From,
+		meta.FromEmail,
+		meta.To,
+		meta.ToEmail,
+		meta.Subject,
+		meta.Date,
+		meta.ContentType,
+		meta.Timestamp.String(),
+	); err != nil {
+		return fmt.Errorf("error inserting message: %w", err)
+	}
+	for _, a := range meta.AllTo {
+		if _, err := tx.Exec(
+			`INSERT OR IGNORE INTO messages_to(message_id, to_email) VALUES(?, ?)`,
+			meta.MessageId,
+			a,
+		); err != nil {
+			return fmt.Errorf("error inserting into messages_to: %w", err)
+		}
+	}
+	for _, a := range attachMeta {
+		if _, err := tx.Exec(
+			`INSERT OR IGNORE INTO attachments(message_id, hash, content_type, filename, length) VALUES(?, ?, ?, ?, ?)`,
+			meta.MessageId,
+			a.Hash,
+			a.ContentType,
+			a.Filename,
+			a.Length,
+		); err != nil {
+			return fmt.Errorf("error inserting attachment data: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
 	return nil
 }
 
 func (e *MBoxExplorer) ProcessAttachments(msg *mail.Message, meta *MessageMeta) ([]*AttachmentMeta, error) {
+	if meta.ContentType == "" {
+		return nil, nil
+	}
 	rv := make([]*AttachmentMeta, 0)
 	mediaType, params, err := mime.ParseMediaType(meta.ContentType)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("error parsing media type: %w", err)
 	}
 	if !strings.HasPrefix(mediaType, "multipart/") {
-		return nil
+		return nil, nil
 	}
 	mrdr := multipart.NewReader(msg.Body, params["boundary"])
 	for {
 		p, err := mrdr.NextPart()
 		if err == io.EOF {
-			return nil
+			return rv, nil
 		} else if err != nil {
-			return err
+			return rv, fmt.Errorf("error getting next multpart: %w", err)
 		}
 		fname := p.FileName()
 		ctype := p.Header.Get("Content-Type")
@@ -129,19 +170,24 @@ func (e *MBoxExplorer) ProcessAttachments(msg *mail.Message, meta *MessageMeta) 
 		tmpf := filepath.Join(e.dataDirPath, fmt.Sprintf(".tmp.%s", uuid.NewString()))
 		fp, err := os.Create(tmpf)
 		if err != nil {
-			return err
+			return rv, fmt.Errorf("error opening attachment file %s: %w", tmpf, err)
 		}
 		tee := io.TeeReader(p, hasher)
 		nbytes, err := io.Copy(fp, tee)
 		fp.Close()
 		if err != nil {
-			return err
+			if err == io.ErrUnexpectedEOF {
+				log.Printf("Unexpected EOF reading attachments in %s", meta.MessageId)
+				return rv, nil
+			} else {
+				return rv, fmt.Errorf("error writing attachment %d (%s): %w", len(rv), params["boundary"], err)
+			}
 		}
 		// now rename
 		hash := hex.EncodeToString(hasher.Sum(nil))
 		destf := filepath.Join(e.dataDirPath, hash)
 		if err := os.Rename(tmpf, destf); err != nil {
-			return err
+			return rv, fmt.Errorf("error renaming temp file: %w", err)
 		}
 		meta := &AttachmentMeta{
 			MessageId:   meta.MessageId,
@@ -164,6 +210,7 @@ type MessageMeta struct {
 	Date        string
 	ContentType string
 	Timestamp   time.Time
+	AllTo       []string
 }
 
 type AttachmentMeta struct {
@@ -196,6 +243,9 @@ func ExtractMeta(msg *mail.Message) *MessageMeta {
 	if alist, err := msg.Header.AddressList("To"); err == nil {
 		if len(alist) > 0 {
 			rv.ToEmail = alist[0].Address
+		}
+		for _, a := range alist {
+			rv.AllTo = append(rv.AllTo, a.Address)
 		}
 	} else {
 		log.Printf("Error parsing to: %s", err)
@@ -239,23 +289,31 @@ func mustOpenDB(filename string) *sql.DB {
 	query := `
 		CREATE TABLE IF NOT EXISTS messages (
 			message_id TEXT UNIQUE NOT NULL,
-			from TEXT NOT NULL,
+			"from" TEXT NOT NULL,
 			from_email TEXT NOT NULL,
-			to TEXT NOT NULL,
+			"to" TEXT NOT NULL,
 			to_email TEXT NOT NULL,
 			subject TEXT NOT NULL,
 			date TEXT NOT NULL,
 			content_type TEXT NOT NULL,
-			timestamp TEXT
+			timestamp TEXT,
+			PRIMARY KEY (message_id)
+		);
+		CREATE TABLE IF NOT EXISTS messages_to (
+			message_id TEXT NOT NULL,
+			to_email TEXT NOT NULL,
+			PRIMARY KEY (message_id, to_email)
 		);
 		CREATE TABLE IF NOT EXISTS attachments (
 			message_id TEXT NOT NULL,
 			hash TEXT NOT NULL,
 			content_type TEXT NOT NULL,
 			filename TEXT NOT NULL,
-			length INT NOT NULL
+			length INT NOT NULL,
+			PRIMARY KEY (message_id, hash)
 		);`
-	if err := db.Exec(query); err != nil {
+	if _, err := db.Exec(query); err != nil {
 		panic(err)
 	}
+	return db
 }
