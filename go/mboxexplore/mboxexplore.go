@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net/mail"
 	"os"
 	"path/filepath"
@@ -17,6 +20,7 @@ import (
 	"time"
 
 	mbox "github.com/emersion/go-mbox"
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -138,11 +142,13 @@ func (e *MBoxExplorer) ProcessMessageReader(rdr io.Reader) error {
 	}
 	for _, a := range attachMeta {
 		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO attachments(message_id, hash, content_type, filename, length) VALUES(?, ?, ?, ?, ?)`,
+			`INSERT OR IGNORE INTO attachments(message_id, hash, content_type, detected_type, filename, saved_filename, length) VALUES(?, ?, ?, ?, ?, ?, ?)`,
 			meta.MessageId,
 			a.Hash,
 			a.ContentType,
+			a.DetectedType,
 			a.Filename,
+			a.SavedFilename,
 			a.Length,
 		); err != nil {
 			return fmt.Errorf("error inserting attachment data: %w", err)
@@ -176,6 +182,19 @@ func (e *MBoxExplorer) ProcessAttachments(msg *mail.Message, meta *MessageMeta) 
 		}
 		fname := p.FileName()
 		ctype := p.Header.Get("Content-Type")
+		cte := strings.ToLower(strings.TrimSpace(p.Header.Get("Content-Transfer-Encoding")))
+		var attachReader io.Reader
+		switch cte {
+		case "", "7bit", "8bit", "binary":
+			attachReader = p
+		case "base64":
+			attachReader = base64.NewDecoder(base64.StdEncoding, p)
+		case "quoted-printable":
+			attachReader = quotedprintable.NewReader(p)
+		default:
+			log.Printf("Unknown Content-Transfer-Encoding: %s", cte)
+			attachReader = p
+		}
 		hasher := sha256.New()
 		// write to temporary file
 		tmpf := filepath.Join(e.dataDirPath, fmt.Sprintf(".tmp.%s", uuid.NewString()))
@@ -183,7 +202,13 @@ func (e *MBoxExplorer) ProcessAttachments(msg *mail.Message, meta *MessageMeta) 
 		if err != nil {
 			return rv, fmt.Errorf("error opening attachment file %s: %w", tmpf, err)
 		}
-		tee := io.TeeReader(p, hasher)
+		head := bytes.NewBuffer(nil)
+		detectedType, err := mimetype.DetectReader(io.TeeReader(attachReader, head))
+		if err != nil {
+			return rv, fmt.Errorf("error in mimetype detection: %w", err)
+		}
+		joined := io.MultiReader(head, attachReader)
+		tee := io.TeeReader(joined, hasher)
 		nbytes, err := io.Copy(fp, tee)
 		fp.Close()
 		if err != nil {
@@ -196,16 +221,19 @@ func (e *MBoxExplorer) ProcessAttachments(msg *mail.Message, meta *MessageMeta) 
 		}
 		// now rename
 		hash := hex.EncodeToString(hasher.Sum(nil))
-		destf := filepath.Join(e.dataDirPath, hash)
+		newFname := fmt.Sprintf("%s%s", hash, detectedType.Extension())
+		destf := filepath.Join(e.dataDirPath, newFname)
 		if err := os.Rename(tmpf, destf); err != nil {
 			return rv, fmt.Errorf("error renaming temp file: %w", err)
 		}
 		meta := &AttachmentMeta{
-			MessageId:   meta.MessageId,
-			Hash:        hash,
-			ContentType: ctype,
-			Filename:    fname,
-			Length:      nbytes,
+			MessageId:     meta.MessageId,
+			Hash:          hash,
+			ContentType:   ctype,
+			DetectedType:  detectedType.String(),
+			Filename:      fname,
+			SavedFilename: newFname,
+			Length:        nbytes,
 		}
 		rv = append(rv, meta)
 	}
@@ -225,11 +253,13 @@ type MessageMeta struct {
 }
 
 type AttachmentMeta struct {
-	MessageId   string
-	Hash        string
-	ContentType string
-	Filename    string
-	Length      int64
+	MessageId     string
+	Hash          string
+	ContentType   string
+	DetectedType  string
+	Filename      string
+	SavedFilename string
+	Length        int64
 }
 
 func ExtractMeta(msg *mail.Message) *MessageMeta {
@@ -323,7 +353,9 @@ func mustOpenDB(filename string) *sql.DB {
 			message_id TEXT NOT NULL,
 			hash TEXT NOT NULL,
 			content_type TEXT NOT NULL,
+			detected_type TEXT NOT NULL,
 			filename TEXT NOT NULL,
+			saved_filename TEXT NOT NULL,
 			length INT NOT NULL,
 			PRIMARY KEY (message_id, hash)
 		);`
