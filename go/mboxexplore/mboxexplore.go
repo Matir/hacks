@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"database/sql"
@@ -86,6 +87,8 @@ func (e *MBoxExplorer) Explore() error {
 		if err := e.ProcessMessageReader(msgrdr); err != nil {
 			if strings.Contains(err.Error(), "malformed MIME header line") {
 				log.Printf("error processing message: %s", err)
+			} else if strings.Contains(err.Error(), "illegal base64") {
+				log.Printf("error processing message: %s", err)
 			} else {
 				return err
 			}
@@ -93,8 +96,42 @@ func (e *MBoxExplorer) Explore() error {
 	}
 }
 
+type EscapedFromSkipperReader struct {
+	inner *bufio.Reader
+	buf   []byte
+}
+
+func GetEscapedFromSkipperReader(rdr io.Reader) io.Reader {
+	return &EscapedFromSkipperReader{inner: bufio.NewReader(rdr)}
+}
+
+var escapedFromToken = []byte(">From ")
+
+func (r *EscapedFromSkipperReader) Read(buf []byte) (int, error) {
+	if len(r.buf) > 0 {
+		n := copy(buf, r.buf)
+		r.buf = r.buf[n:len(r.buf)]
+		return n, nil
+	}
+	for {
+		line, _, err := r.inner.ReadLine()
+		line = append(line, '\n')
+		n := copy(buf, line)
+		if err != nil {
+			return n, err
+		}
+		if bytes.HasPrefix(line, escapedFromToken) {
+			continue
+		}
+		if len(line) > len(buf) {
+			r.buf = line[n:len(line)]
+		}
+		return n, nil
+	}
+}
+
 func (e *MBoxExplorer) ProcessMessageReader(rdr io.Reader) error {
-	msg, err := mail.ReadMessage(rdr)
+	msg, err := mail.ReadMessage(GetEscapedFromSkipperReader(rdr))
 	if err != nil {
 		return fmt.Errorf("error reading message: %w", err)
 	}
@@ -221,8 +258,13 @@ func (e *MBoxExplorer) ProcessAttachments(msg *mail.Message, meta *MessageMeta) 
 		}
 		// now rename
 		hash := hex.EncodeToString(hasher.Sum(nil))
-		newFname := fmt.Sprintf("%s%s", hash, detectedType.Extension())
-		destf := filepath.Join(e.dataDirPath, newFname)
+		ext := strings.TrimPrefix(detectedType.Extension(), ".")
+		newFname := fmt.Sprintf("%s.%s", hash, ext)
+		destdir := filepath.Join(e.dataDirPath, ext)
+		if err := os.MkdirAll(destdir, 0700); err != nil {
+			return rv, fmt.Errorf("error creating outdir %s: %w", destdir, err)
+		}
+		destf := filepath.Join(e.dataDirPath, ext, newFname)
 		if err := os.Rename(tmpf, destf); err != nil {
 			return rv, fmt.Errorf("error renaming temp file: %w", err)
 		}
