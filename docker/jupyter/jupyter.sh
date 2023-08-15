@@ -12,14 +12,14 @@ import sys
 set_password(sys.stdin.read().strip())
 print('Password set!')
 EOF
-  python3 "${FN}" <<EOF
+  ${VENV_DIR}/bin/python3 "${FN}" <<EOF
 ${JUPYTER_PASSWORD}
 EOF
   rm "${FN}"
   unset JUPYTER_PASSWORD
 fi
 
-exec /usr/local/bin/jupyter lab \
+exec ${VENV_DIR}/bin/jupyter lab \
   --port "${PORT:-9999}" \
   --ip 0.0.0.0 \
   --no-browser \

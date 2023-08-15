@@ -6,15 +6,26 @@ RUN echo "APT Proxy: ${apt_http_proxy}"
 RUN http_proxy=${apt_http_proxy} apt-get -yy update && \
     http_proxy=${apt_http_proxy} apt-get -yy install \
         python3-pip \
+        python3-venv \
         pipenv \
         procps \
         strace \
         python3-dev \
         build-essential \
+        pkg-config \
         default-libmysqlclient-dev \
-        git
+        git \
+        python3
 
-RUN pip install \
+RUN useradd -m jovian
+
+USER jovian
+
+ENV VENV_DIR=/home/jovian/jupyter
+
+RUN python3 -m venv ${VENV_DIR}
+
+RUN ${VENV_DIR}/bin/pip install \
         jupyterlab \
         jupyterlab-vim \
         jupyterlab-git \
@@ -22,10 +33,6 @@ RUN pip install \
         pandas \
         mysqlclient \
         pwntools
-
-RUN useradd -m jovian
-
-USER jovian
 
 ENV LAB_DIR=/home/jovian/lab
 ENV JUPYTER_PASSWORD=
