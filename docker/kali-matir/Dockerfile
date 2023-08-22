@@ -1,4 +1,4 @@
-FROM kalilinux/kali-linux-docker
+FROM kalilinux/kali-rolling
 MAINTAINER david@systemoverlord.com
 
 # Common CLI-based tools from kali
@@ -13,7 +13,7 @@ RUN apt-get update && \
     git \
     hping3 \
     hydra \
-    libcapstone3 \
+    libcapstone4 \
     libffi-dev \
     libssl-dev \
     man-db \
@@ -24,8 +24,8 @@ RUN apt-get update && \
     nmap \
     p7zip-full \
     proxychains \
-    python-pip \
-    python-capstone \
+    python3-pip \
+    python3-capstone \
     radare2 \
     set \
     skipfish \
@@ -55,9 +55,10 @@ RUN pip install pwntools && \
 
 # Matir's personal preferences
 RUN chsh -s /bin/zsh
-ADD skel /root/.skel
+ADD https://github.com/Matir/skel.git#main /root/.skel
 
 ENV HOME /root
+ENV USER root
 
 RUN /root/.skel/install.sh
 
