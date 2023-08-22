@@ -82,13 +82,16 @@ def main():
     if len(sys.argv) != 3:
         print("Usage: %s <wordlist> <gpgfile>" % sys.argv[0])
         sys.exit(1)
+    i = 0
     with open(sys.argv[1], "r") as fp:
         for line in fp:
             line = line.strip()
             for h in get_hashes(line):
+                i += 1
                 if try_decrypt_file(sys.argv[2], h):
                     print(h)
                     break
+    print('Tried {} values.'.format(i))
 
 
 if __name__ == "__main__":
