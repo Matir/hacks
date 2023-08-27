@@ -28,14 +28,15 @@ func getSyscallArgByPosition(regs *syscall.PtraceRegs, pos int) uint64 {
 	return 0 // for static analysis
 }
 
-func decodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *TraceEvent {
-	getErrno := func(p uint64) int {
-		eMin := uint64(math.MaxUint64 - ERRNO_MAX)
-		if uint64(p) < eMin {
-			return 0
-		}
-		return -int(p)
+func getErrno(p uint64) int {
+	eMin := uint64(math.MaxUint64 - ERRNO_MAX)
+	if uint64(p) < eMin {
+		return 0
 	}
+	return -int(p)
+}
+
+func decodeTraceEvent(pid int, regs *syscall.PtraceRegs, start *TraceEvent) *TraceEvent {
 	rv := &TraceEvent{
 		Pid:       pid,
 		PC:        regs.Rip,
