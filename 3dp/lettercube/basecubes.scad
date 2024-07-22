@@ -115,23 +115,27 @@ if(draw_letters == 1) {
     }
 }
 
-if(draw_cube == 1) {
-    for(j=[0:(N_cubes-1)]) {
-        translate([0,j*(size+gap),0]) difference() {
+module rendercube(letters, size=size, expand=expand, letter_depth=letter_depth, eps=eps) {
+    difference() {
             nice_cube(size,expand);
             translate([size/2,letter_depth-eps,size/2])
-                rotate([90,0,0]) linear_extrude(letter_depth+eps) minktext(letters[j*6]);
+                rotate([90,0,0]) linear_extrude(letter_depth+eps) minktext(letters[0]);
             translate([size-letter_depth+eps,size/2,size/2])
-                rotate([90,0,90]) linear_extrude(letter_depth+eps) minktext(letters[1+j*6]);
+                rotate([90,0,90]) linear_extrude(letter_depth+eps) minktext(letters[1]);
             translate([size/2,size-letter_depth+eps,size/2])
-                rotate([90,0,180]) linear_extrude(letter_depth+eps) minktext(letters[2+j*6]);
+                rotate([90,0,180]) linear_extrude(letter_depth+eps) minktext(letters[2]);
             translate([letter_depth-eps,size/2,size/2])
-                rotate([90,0,270]) linear_extrude(letter_depth+eps) minktext(letters[3+j*6]);
+                rotate([90,0,270]) linear_extrude(letter_depth+eps) minktext(letters[3]);
             translate([size/2,size/2,size-letter_depth+eps])
-                rotate([0,0,0]) linear_extrude(letter_depth+eps) minktext(letters[4+j*6]);
+                rotate([0,0,0]) linear_extrude(letter_depth+eps) minktext(letters[4]);
             translate([size/2,size/2,letter_depth-eps])
-                rotate([180,0,0]) linear_extrude(letter_depth+eps) minktext(letters[5+j*6]);
-        }
+                rotate([180,0,0]) linear_extrude(letter_depth+eps) minktext(letters[5]);
     }
 }
 
+if(draw_cube == 1) {
+    for(j=[0:(N_cubes-1)]) {
+        translate([0,j*(size+gap),0])
+        rendercube([for (i=[j*6:(j+1)*6]) letters[i]]);
+    }
+}
