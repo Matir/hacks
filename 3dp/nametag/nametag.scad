@@ -24,9 +24,13 @@ module nametag(name) {
         union() {
             translate([-4.0, 12, 0])
             difference() {
-                cylinder(h=2, d=8.2);
+                union() {
+                    cylinder(h=2, d=8.8);
+                    translate([0, -4.4, 0])
+                        cube([8.8, 8.8, 2]);
+                }
                 translate([0, 0, -0.25])
-                    cylinder(h=2.5, d=4.5);
+                    cylinder(h=2.5, d=5.5);
             }
             linear_extrude(2)
             minkowski() {
