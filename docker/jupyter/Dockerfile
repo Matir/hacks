@@ -5,6 +5,7 @@ ARG apt_http_proxy
 RUN echo "APT Proxy: ${apt_http_proxy}"
 RUN http_proxy=${apt_http_proxy} apt-get -yy update && \
     http_proxy=${apt_http_proxy} apt-get -yy install \
+        bash \
         python3-pip \
         python3-venv \
         pipenv \
@@ -54,4 +55,5 @@ WORKDIR ${LAB_DIR}
 
 EXPOSE 9999/tcp
 
-CMD "/home/jovian/jupyter.sh"
+SHELL ["/bin/bash", "-c"]
+CMD ["/home/jovian/jupyter.sh"]

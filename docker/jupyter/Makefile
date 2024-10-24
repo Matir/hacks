@@ -4,6 +4,9 @@ build:
 buildx:
 	docker buildx build --push --platform=linux/arm64,linux/amd64 -t matir/lab .
 
+buildx-amd64:
+	docker buildx build --push --platform=linux/amd64 -t matir/lab .
+
 run:
 	docker run -v jupyter:/home/jovian/lab -p 9999:9999 -e JUPYTER_PASSWORD=secretpass12 matir/lab
 
