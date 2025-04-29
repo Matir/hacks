@@ -78,6 +78,7 @@ cat <<EOF >/etc/systemd/system/novnc@${NOVNCPORT}.service
 [Unit]
 Description=NoVNC Server
 After=syslog.target network.target
+Wants=vncserver@:5.service
 
 [Service]
 Type=exec
@@ -86,6 +87,9 @@ User=${VNCUSER}
 ExecStart=/usr/bin/websockify --web ${NOVNCWEB} \
     ${SSLCERTFILE:+--cert ${SSLCERTFILE}} \
     ${NOVNCHOST}:${NOVNCPORT} 127.0.0.1:5905
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 # Reload files
