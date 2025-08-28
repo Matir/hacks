@@ -6,7 +6,7 @@ CONTAINER_NAME="hexstrike"
 IMAGE_NAME="hexstrike"
 
 function hexstrike_running {
-  docker ps -f "name=${CONTAINER_NAME}" -q >/dev/null 2>&1
+  docker ps -f "name=${CONTAINER_NAME}" -q 2>/dev/null | grep -q .
 }
 
 function start_hexstrike {

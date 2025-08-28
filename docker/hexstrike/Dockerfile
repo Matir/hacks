@@ -5,6 +5,7 @@ RUN apt-get update && \
   DEBIAN_FRONTEND=noninteractive \
   apt-get install -y --no-install-recommends --no-install-suggests \
   python3-venv git build-essential python3-dev pipx \
+  golang \
   chromium chromium-driver \
   nmap masscan subfinder nuclei amass fierce dnsenum \
   autorecon theharvester responder netexec enum4linux-ng \
@@ -34,6 +35,13 @@ RUN pip install -r requirements.txt
 RUN curl -o /usr/local/bin/pwninit \
   https://github.com/io12/pwninit/releases/download/3.3.1/pwninit && \
   chmod 555 /usr/local/bin/pwninit
+
+RUN mkdir /opt/go
+ENV GOPATH=/opt/go
+RUN go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+RUN go install -v github.com/hakluke/hakrawler@latest
+RUN CGO_ENABLED=1 go install github.com/projectdiscovery/katana/cmd/katana@latest
+ENV PATH="/opt/go/bin:$PATH"
 
 # Add a volume for data
 VOLUME /data
