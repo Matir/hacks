@@ -8,9 +8,6 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlparse
-import requests
-import requests
-import requests
 import psutil
 import statistics
 
