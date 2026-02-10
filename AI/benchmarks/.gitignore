@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.history/
+
+# Node / Frontend
+ui/node_modules/
+ui/dist/
+ui/.vite/
+
+# Results & OS
+.DS_Store
+.env
