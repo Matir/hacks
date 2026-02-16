@@ -1,0 +1,7 @@
+# Caddyfile for LibreChat
+
+# Replace librechat.localhost with your domain name if you are not running locally
+librechat.localhost {
+    # Reverse proxy requests to the LibreChat container
+    reverse_proxy librechat:3080
+}
