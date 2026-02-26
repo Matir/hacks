@@ -1,0 +1,25 @@
+[build-system]
+requires = ["uv_build>=0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "pwnshell"
+version = "0.1.0"
+description = "A sophisticated shell for pwnage"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "David", email = "david@example.com" },
+]
+dependencies = [
+    "pwntools>=4.15.0",
+    "ipython>=9.10.0",
+    'tomli>=2.0.1; python_version < "3.11"',
+]
+
+[project.scripts]
+pwnshell = "pwnshell.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/david/pwnshell"
