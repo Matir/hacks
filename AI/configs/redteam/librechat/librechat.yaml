@@ -1,0 +1,173 @@
+version: "1.1.2"
+
+# ----------------------------------------------------------------------------------
+#                             LibreChat Configuration
+# ----------------------------------------------------------------------------------
+# Full documentation can be found at:
+# https://www.librechat.ai/docs/configuration/librechat_yaml
+#
+# This file is a central place to configure your LibreChat instance.
+# You can define endpoints, tools, and other settings here.
+#
+# Secrets should be stored in environment variables (e.g., in your docker-compose.yml)
+# and referenced here using the `${VAR_NAME}` syntax.
+# ----------------------------------------------------------------------------------
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                                 Endpoints
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Here you can configure various LLM endpoints that LibreChat will connect to.
+# Each endpoint has a `name` that will be displayed in the UI.
+# You can add as many custom endpoints as you like.
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+endpoints:
+  custom:
+    # ------------------------------------------------------------------------------
+    #                                OpenAI
+    # ------------------------------------------------------------------------------
+    - name: "OpenAI"
+      # You can set your OpenAI API key in your docker-compose.yml or .env file
+      apiKey: "${OPENAI_API_KEY}"
+      baseURL: "https://api.openai.com/v1"
+      # You can add multiple models that will be available under this endpoint
+      models:
+        default: ["gpt-4-turbo-preview", "gpt-4", "gpt-3.5-turbo"]
+        fetch: true # Fetch all available models from the endpoint
+      titleConvo: true
+      modelDisplayNames:
+        "gpt-4-turbo-preview": "GPT-4 Turbo"
+
+    # ------------------------------------------------------------------------------
+    #                                Google Gemini
+    # ------------------------------------------------------------------------------
+    - name: "Google"
+      apiKey: "${GOOGLE_API_KEY}"
+      # This is how you would configure the Google Gemini endpoint
+      # Note: The models array is for display and user selection in the UI.
+      models:
+        default: ["gemini-pro", "gemini-pro-vision"]
+        fetch: false
+      titleConvo: true
+      modelDisplayNames:
+        "gemini-pro": "Gemini Pro"
+
+    # ------------------------------------------------------------------------------
+    #                                Anthropic
+    # ------------------------------------------------------------------------------
+    - name: "Anthropic"
+      apiKey: "${ANTHROPIC_API_KEY}"
+      baseURL: "https://api.anthropic.com/v1"
+      models:
+        default: ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-2.1", "claude-instant-1.2"]
+        fetch: false
+      titleConvo: true
+      modelDisplayNames:
+        "claude-3-opus-20240229": "Claude 3 Opus"
+        "claude-3-sonnet-20240229": "Claude 3 Sonnet"
+
+    # ------------------------------------------------------------------------------
+    #                             Ollama (Local LLM)
+    # ------------------------------------------------------------------------------
+    # This is an example of how to connect to a local LLM running with Ollama.
+    # The baseURL should point to your Ollama instance.
+    # Make sure to expose Ollama on a port accessible from the LibreChat container.
+    # ------------------------------------------------------------------------------
+    - name: "Ollama"
+      apiKey: "ollama"
+      baseURL: "http://host.docker.internal:11434/v1/"
+      models:
+        default: ["llama2", "mistral"]
+        fetch: true # Dynamically fetch models from Ollama
+      titleConvo: true
+      modelDisplayNames:
+        "llama2": "Llama 2"
+        "mistral": "Mistral"
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                                     Tools
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Here you can enable and configure various tools (plugins) for your agents.
+# This allows the LLM to interact with external services and perform actions.
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+tools:
+  # --------------------------------------------------------------------------------
+  #                                DuckDuckGo Search
+  # --------------------------------------------------------------------------------
+  # Enables the agent to search the web using DuckDuckGo.
+  # This is a powerful tool for answering questions about recent events.
+  # --------------------------------------------------------------------------------
+  duckduckgo:
+    name: "duckduckgo"
+    max_results: 5 # Number of search results to return
+
+  # --------------------------------------------------------------------------------
+  #                                 Web Browser
+  # --------------------------------------------------------------------------------
+  # Allows the agent to browse the web, extract content from URLs, and summarize it.
+  # Very useful for research and information gathering.
+  # --------------------------------------------------------------------------------
+  browser:
+    name: "browser"
+    # You can configure a headless browser if needed, for example, using Browserless
+    headless: "ws://browserless:3000"
+
+  # --------------------------------------------------------------------------------
+  #                                 File System
+  # --------------------------------------------------------------------------------
+  # Allows the agent to interact with the local file system.
+  # This is a powerful tool, but be very careful with security.
+  # The agent will have access to the paths you specify here.
+  # By default, it's restricted to a folder inside the container.
+  # --------------------------------------------------------------------------------
+  filesystem:
+    name: "filesystem"
+    enabled: true
+    # List of allowed directories. You can mount volumes to these paths in docker-compose.
+    allowed_dirs: ["/app/data", "/app/output"]
+    # Maximum file size in bytes the agent can handle
+    max_file_size: 10485760 # 10 MB
+
+  # --------------------------------------------------------------------------------
+  #                                 Git Commands
+  # --------------------------------------------------------------------------------
+  # Allows the agent to perform git operations like clone, read files, etc.
+  # The agent can interact with repositories in the allowed_repos directory.
+  # --------------------------------------------------------------------------------
+  git:
+    name: "git"
+    enabled: true
+    # Directory where git repositories will be cloned and managed.
+    # Mount a volume to this path to persist the repositories.
+    allowed_repos: "/app/repos"
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                                Other Settings
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# You can also configure other aspects of LibreChat here.
+# For example, you can set rate limits, trust proxies, etc.
+# Refer to the official documentation for a full list of options.
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Example of setting a custom title for the application
+# appTitle: "My Custom LibreChat"
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                                 MCP Servers
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+mcpServers:
+  filesystem:
+    type: "stdio"
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "/app/projects"
+      - "/app/repos"
+      - "/app/output"
+
+  ripgrep:
+    type: "stdio"
+    command: "npx"
+    args:
+      - "-y"
+      - "mcp-ripgrep"

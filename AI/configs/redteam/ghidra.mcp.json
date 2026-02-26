@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "ghidra": {
+      "command": "uvx",
+      "args": [
+        "https://github.com/bethington/ghidra-mcp.git"
+      ],
+      "env": {
+        "GHIDRA_INSTALL_DIR": "/path/to/your/ghidra_12.0.2_PUBLIC"
+      }
+    }
+  }
+}

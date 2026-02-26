@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "nmap": {
+      "command": "uvx",
+      "args": [
+        "https://github.com/imjdl/nmap-mcpserver.git"
+      ]
+    }
+  }
+}

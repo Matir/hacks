@@ -24,6 +24,7 @@ NOVNCWEB=${NOVNCWEB:-/usr/share/novnc/}
 VNCHOME=$(eval echo "~${VNCUSER}/.vnc/")
 NOSSL=${NOSSL:-0}
 SSLCERTFILE=${SSLCERTFILE:-${VNCHOME}/novnc.pem}
+HOSTNAME=${HOSTNAME:-}
 
 # Check username
 if ! $(id ${VNCUSER} >/dev/null 2>&1) ; then
@@ -78,6 +79,7 @@ cat <<EOF >/etc/systemd/system/novnc@${NOVNCPORT}.service
 [Unit]
 Description=NoVNC Server
 After=syslog.target network.target
+Wants=vncserver@:5.service
 
 [Service]
 Type=exec
@@ -86,7 +88,29 @@ User=${VNCUSER}
 ExecStart=/usr/bin/websockify --web ${NOVNCWEB} \
     ${SSLCERTFILE:+--cert ${SSLCERTFILE}} \
     ${NOVNCHOST}:${NOVNCPORT} 127.0.0.1:5905
+
+[Install]
+WantedBy=multi-user.target
 EOF
+
+CADDYCMD="$(command -v caddy || true)"
+
+if test -d "/etc/caddy" -a -n "${HOSTNAME}" -a -n "${CADDYCMD}" ; then
+  echo "Password for caddy basic auth, user will be novnc"
+  CADDYPASS=$(caddy hash-password)
+  mkdir -p /etc/caddy/sites.d
+  # TODO: check if this line already exists
+  echo 'import /etc/caddy/sites.d/*' >> /etc/caddy/Caddyfile
+  cat <<EOF >/etc/caddy/sites.d/novnc.conf
+${HOSTNAME} {
+  basicauth "bcrypt" "NoVNC" {
+    novnc ${CADDYPASS}
+  }
+  reverse_proxy localhost:${NOVNCPORT}
+  rewrite / /vnc.html?autoconnect=true
+}
+EOF
+fi
 
 # Reload files
 systemctl daemon-reload

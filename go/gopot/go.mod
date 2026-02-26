@@ -1,12 +1,15 @@
 module github.com/matir/gopot
 
-go 1.13
+go 1.23.0
+
+require (
+	golang.org/x/crypto v0.35.0
+	upper.io/db.v3 v3.6.4+incompatible
+)
 
 require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/stretchr/testify v1.8.1 // indirect
-	golang.org/x/crypto v0.17.0
+	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
-	upper.io/db.v3 v3.6.4+incompatible
 )

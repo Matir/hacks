@@ -1,0 +1,487 @@
+{
+  "davidtomaschik-mac.roam.internal": {
+    "hardware": {
+      "os": "Darwin",
+      "os_release": "24.6.0",
+      "cpu": "arm",
+      "cpu_cores": 8,
+      "cpu_threads": 8,
+      "ram_gb": 16.0,
+      "gpus": [
+        {
+          "type": "Apple",
+          "name": "Apple Silicon (Unified Memory)"
+        }
+      ]
+    },
+    "ollama_version": "0.15.5",
+    "results": {
+      "qwen2.5:0.5b": {
+        "2048": {
+          "_model_stats": {
+            "size_bytes": 730025472,
+            "size_vram_bytes": 730025472,
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "qwen2",
+              "families": [
+                "qwen2"
+              ],
+              "parameter_size": "494.03M",
+              "quantization_level": "Q4_K_M"
+            }
+          },
+          "history_of_ai": [
+            {
+              "eval_count": 607,
+              "eval_duration_s": 3.98,
+              "ttft_s": 0.06,
+              "tokens_per_second": 152.66,
+              "total_duration_s": 4.33,
+              "load_duration_s": 0.06,
+              "prompt_eval_count": 72
+            },
+            {
+              "eval_count": 607,
+              "eval_duration_s": 3.92,
+              "ttft_s": 0.01,
+              "tokens_per_second": 154.71,
+              "total_duration_s": 4.22,
+              "load_duration_s": 0.07,
+              "prompt_eval_count": 72
+            },
+            {
+              "eval_count": 607,
+              "eval_duration_s": 4.5,
+              "ttft_s": 0.01,
+              "tokens_per_second": 134.77,
+              "total_duration_s": 4.93,
+              "load_duration_s": 0.06,
+              "prompt_eval_count": 72
+            }
+          ],
+          "python_coding": [
+            {
+              "eval_count": 733,
+              "eval_duration_s": 4.97,
+              "ttft_s": 0.04,
+              "tokens_per_second": 147.48,
+              "total_duration_s": 5.48,
+              "load_duration_s": 0.08,
+              "prompt_eval_count": 91
+            },
+            {
+              "eval_count": 733,
+              "eval_duration_s": 5.0,
+              "ttft_s": 0.01,
+              "tokens_per_second": 146.68,
+              "total_duration_s": 5.45,
+              "load_duration_s": 0.08,
+              "prompt_eval_count": 91
+            },
+            {
+              "eval_count": 733,
+              "eval_duration_s": 10.23,
+              "ttft_s": 0.01,
+              "tokens_per_second": 71.66,
+              "total_duration_s": 11.81,
+              "load_duration_s": 0.07,
+              "prompt_eval_count": 91
+            }
+          ]
+        }
+      },
+      "phi3:mini": {
+        "2048": {
+          "_model_stats": {
+            "size_bytes": 3059555840,
+            "size_vram_bytes": 3059555840,
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "phi3",
+              "families": [
+                "phi3"
+              ],
+              "parameter_size": "3.8B",
+              "quantization_level": "Q4_0"
+            }
+          },
+          "history_of_ai": [
+            {
+              "eval_count": 2097,
+              "eval_duration_s": 64.83,
+              "ttft_s": 0.37,
+              "tokens_per_second": 32.35,
+              "total_duration_s": 65.61,
+              "load_duration_s": 0.04,
+              "prompt_eval_count": 63
+            },
+            {
+              "eval_count": 711,
+              "eval_duration_s": 20.14,
+              "ttft_s": 0.18,
+              "tokens_per_second": 35.29,
+              "total_duration_s": 20.75,
+              "load_duration_s": 0.02,
+              "prompt_eval_count": 63
+            },
+            {
+              "eval_count": 711,
+              "eval_duration_s": 22.76,
+              "ttft_s": 0.03,
+              "tokens_per_second": 31.24,
+              "total_duration_s": 23.18,
+              "load_duration_s": 0.01,
+              "prompt_eval_count": 63
+            }
+          ],
+          "python_coding": [
+            {
+              "eval_count": 780,
+              "eval_duration_s": 29.08,
+              "ttft_s": 0.4,
+              "tokens_per_second": 26.83,
+              "total_duration_s": 29.61,
+              "load_duration_s": 0.03,
+              "prompt_eval_count": 79
+            },
+            {
+              "eval_count": 780,
+              "eval_duration_s": 34.24,
+              "ttft_s": 0.03,
+              "tokens_per_second": 22.78,
+              "total_duration_s": 34.4,
+              "load_duration_s": 0.02,
+              "prompt_eval_count": 79
+            },
+            {
+              "eval_count": 780,
+              "eval_duration_s": 32.42,
+              "ttft_s": 0.03,
+              "tokens_per_second": 24.06,
+              "total_duration_s": 32.56,
+              "load_duration_s": 0.03,
+              "prompt_eval_count": 79
+            }
+          ]
+        }
+      },
+      "gemma:2b": {
+        "2048": {
+          "_model_stats": {
+            "size_bytes": 2238898176,
+            "size_vram_bytes": 2238898176,
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "gemma",
+              "families": [
+                "gemma"
+              ],
+              "parameter_size": "3B",
+              "quantization_level": "Q4_0"
+            }
+          },
+          "history_of_ai": [
+            {
+              "eval_count": 573,
+              "eval_duration_s": 11.57,
+              "ttft_s": 0.1,
+              "tokens_per_second": 49.5,
+              "total_duration_s": 11.85,
+              "load_duration_s": 0.08,
+              "prompt_eval_count": 66
+            },
+            {
+              "eval_count": 573,
+              "eval_duration_s": 11.68,
+              "ttft_s": 0.02,
+              "tokens_per_second": 49.07,
+              "total_duration_s": 11.9,
+              "load_duration_s": 0.11,
+              "prompt_eval_count": 66
+            },
+            {
+              "eval_count": 573,
+              "eval_duration_s": 11.63,
+              "ttft_s": 0.02,
+              "tokens_per_second": 49.27,
+              "total_duration_s": 11.86,
+              "load_duration_s": 0.11,
+              "prompt_eval_count": 66
+            }
+          ],
+          "python_coding": [
+            {
+              "eval_count": 490,
+              "eval_duration_s": 10.57,
+              "ttft_s": 0.14,
+              "tokens_per_second": 46.36,
+              "total_duration_s": 11.12,
+              "load_duration_s": 0.1,
+              "prompt_eval_count": 84
+            },
+            {
+              "eval_count": 490,
+              "eval_duration_s": 10.44,
+              "ttft_s": 0.02,
+              "tokens_per_second": 46.92,
+              "total_duration_s": 10.88,
+              "load_duration_s": 0.12,
+              "prompt_eval_count": 84
+            },
+            {
+              "eval_count": 490,
+              "eval_duration_s": 13.19,
+              "ttft_s": 0.02,
+              "tokens_per_second": 37.15,
+              "total_duration_s": 13.49,
+              "load_duration_s": 0.13,
+              "prompt_eval_count": 84
+            }
+          ]
+        }
+      },
+      "gemma3:4b": {
+        "2048": {
+          "_model_stats": {
+            "size_bytes": 4269496768,
+            "size_vram_bytes": 4269496768,
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "gemma3",
+              "families": [
+                "gemma3"
+              ],
+              "parameter_size": "4.3B",
+              "quantization_level": "Q4_K_M"
+            }
+          },
+          "history_of_ai": [
+            {
+              "eval_count": 1138,
+              "eval_duration_s": 40.55,
+              "ttft_s": 0.39,
+              "tokens_per_second": 28.07,
+              "total_duration_s": 42.52,
+              "load_duration_s": 0.24,
+              "prompt_eval_count": 53
+            },
+            {
+              "eval_count": 1136,
+              "eval_duration_s": 48.66,
+              "ttft_s": 0.19,
+              "tokens_per_second": 23.34,
+              "total_duration_s": 50.73,
+              "load_duration_s": 0.25,
+              "prompt_eval_count": 53
+            },
+            {
+              "eval_count": 1136,
+              "eval_duration_s": 88.46,
+              "ttft_s": 0.38,
+              "tokens_per_second": 12.84,
+              "total_duration_s": 90.04,
+              "load_duration_s": 0.42,
+              "prompt_eval_count": 53
+            }
+          ],
+          "python_coding": [
+            {
+              "eval_count": 1781,
+              "eval_duration_s": 103.25,
+              "ttft_s": 0.53,
+              "tokens_per_second": 17.25,
+              "total_duration_s": 105.28,
+              "load_duration_s": 0.26,
+              "prompt_eval_count": 70
+            },
+            {
+              "eval_count": 1781,
+              "eval_duration_s": 101.08,
+              "ttft_s": 0.47,
+              "tokens_per_second": 17.62,
+              "total_duration_s": 102.62,
+              "load_duration_s": 0.21,
+              "prompt_eval_count": 70
+            },
+            {
+              "eval_count": 1781,
+              "eval_duration_s": 102.41,
+              "ttft_s": 0.47,
+              "tokens_per_second": 17.39,
+              "total_duration_s": 104.3,
+              "load_duration_s": 0.29,
+              "prompt_eval_count": 70
+            }
+          ]
+        }
+      },
+      "llama3.1:8b": {
+        "2048": {
+          "_model_stats": {
+            "size_bytes": 5156888576,
+            "size_vram_bytes": 5156888576,
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "llama",
+              "families": [
+                "llama"
+              ],
+              "parameter_size": "8.0B",
+              "quantization_level": "Q4_K_M"
+            }
+          },
+          "history_of_ai": [
+            {
+              "eval_count": 1059,
+              "eval_duration_s": 68.91,
+              "ttft_s": 0.88,
+              "tokens_per_second": 15.37,
+              "total_duration_s": 72.2,
+              "load_duration_s": 0.21,
+              "prompt_eval_count": 51
+            },
+            {
+              "eval_count": 1059,
+              "eval_duration_s": 118.74,
+              "ttft_s": 0.07,
+              "tokens_per_second": 8.92,
+              "total_duration_s": 123.88,
+              "load_duration_s": 0.23,
+              "prompt_eval_count": 51
+            },
+            {
+              "eval_count": 1059,
+              "eval_duration_s": 121.6,
+              "ttft_s": 0.07,
+              "tokens_per_second": 8.71,
+              "total_duration_s": 122.58,
+              "load_duration_s": 0.19,
+              "prompt_eval_count": 51
+            }
+          ],
+          "python_coding": [
+            {
+              "eval_count": 448,
+              "eval_duration_s": 44.77,
+              "ttft_s": 0.98,
+              "tokens_per_second": 10.01,
+              "total_duration_s": 46.12,
+              "load_duration_s": 0.09,
+              "prompt_eval_count": 72
+            },
+            {
+              "eval_count": 448,
+              "eval_duration_s": 47.65,
+              "ttft_s": 0.07,
+              "tokens_per_second": 9.4,
+              "total_duration_s": 48.72,
+              "load_duration_s": 0.18,
+              "prompt_eval_count": 72
+            },
+            {
+              "eval_count": 448,
+              "eval_duration_s": 47.34,
+              "ttft_s": 0.07,
+              "tokens_per_second": 9.46,
+              "total_duration_s": 47.7,
+              "load_duration_s": 0.11,
+              "prompt_eval_count": 72
+            }
+          ]
+        }
+      },
+      "mistral:7b": {
+        "2048": {
+          "_model_stats": {
+            "size_bytes": 4736960512,
+            "size_vram_bytes": 4736960512,
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "llama",
+              "families": [
+                "llama"
+              ],
+              "parameter_size": "7.2B",
+              "quantization_level": "Q4_K_M"
+            }
+          },
+          "history_of_ai": [
+            {
+              "eval_count": 1015,
+              "eval_duration_s": 61.84,
+              "ttft_s": 0.64,
+              "tokens_per_second": 16.41,
+              "total_duration_s": 63.63,
+              "load_duration_s": 0.03,
+              "prompt_eval_count": 54
+            },
+            {
+              "eval_count": 1015,
+              "eval_duration_s": 110.5,
+              "ttft_s": 0.07,
+              "tokens_per_second": 9.19,
+              "total_duration_s": 111.3,
+              "load_duration_s": 0.11,
+              "prompt_eval_count": 54
+            },
+            {
+              "eval_count": 1015,
+              "eval_duration_s": 105.01,
+              "ttft_s": 0.1,
+              "tokens_per_second": 9.67,
+              "total_duration_s": 105.28,
+              "load_duration_s": 0.03,
+              "prompt_eval_count": 54
+            }
+          ],
+          "python_coding": [
+            {
+              "eval_count": 771,
+              "eval_duration_s": 58.92,
+              "ttft_s": 1.06,
+              "tokens_per_second": 13.09,
+              "total_duration_s": 60.1,
+              "load_duration_s": 0.02,
+              "prompt_eval_count": 74
+            },
+            {
+              "eval_count": 762,
+              "eval_duration_s": 58.65,
+              "ttft_s": 0.08,
+              "tokens_per_second": 12.99,
+              "total_duration_s": 58.85,
+              "load_duration_s": 0.01,
+              "prompt_eval_count": 74
+            },
+            {
+              "eval_count": 762,
+              "eval_duration_s": 56.8,
+              "ttft_s": 0.07,
+              "tokens_per_second": 13.42,
+              "total_duration_s": 56.99,
+              "load_duration_s": 0.02,
+              "prompt_eval_count": 74
+            }
+          ]
+        }
+      },
+      "gemma3:12b": {
+        "2048": {
+          "history_of_ai": [],
+          "python_coding": []
+        }
+      }
+    }
+  },
+  "_prompts": {
+    "history_of_ai": "Write a comprehensive essay about the history of artificial intelligence, from its early theoretical foundations in the 1950s to modern-day large language models. Include key milestones, influential figures, and major paradigm shifts.",
+    "python_coding": "Write a complete, well-documented Python script that implements a multi-threaded web scraper. The scraper should take a list of URLs, fetch their contents concurrently using a thread pool, extract all hyperlinks from the HTML, and save the results to a structured JSON file. Include proper error handling and retry logic."
+  }
+}

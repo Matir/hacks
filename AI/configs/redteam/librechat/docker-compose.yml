@@ -1,0 +1,126 @@
+version: '3.8'
+
+# ----------------------------------------------------------------------------------
+#                      Docker Compose for LibreChat
+# ----------------------------------------------------------------------------------
+# This file sets up the services needed to run LibreChat.
+# It includes the main LibreChat application and a MongoDB database.
+#
+# To use this file:
+# 1. Make sure you have Docker and Docker Compose installed.
+# 2. Create a `librechat.yaml` file in the same directory with your configuration.
+# 3. Create a `.env` file in the same directory to store your secrets (API keys).
+# 4. Run `docker-compose up -d` to start the services.
+# ----------------------------------------------------------------------------------
+
+services:
+  # --------------------------------------------------------------------------------
+  #                               LibreChat Service
+  # --------------------------------------------------------------------------------
+  librechat:
+    # Build from the local Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: librechat
+    # Restart the container automatically if it stops
+    restart: unless-stopped
+    # The port to expose on the host machine is removed as Caddy will handle it.
+    # Link to the MongoDB service
+    depends_on:
+      - mongodb
+    # Mount the configuration file into the container
+    volumes:
+      - ./librechat.yaml:/app/librechat.yaml
+      # Mount a directory for file system operations
+      - ./data:/app/data
+      # Mount a directory for git operations
+      - ./repos:/app/repos
+      # Mount a directory for file output
+      - ./output:/app/output
+      # Mount a directory for projects (MCP)
+      - ./projects:/app/projects
+    # Environment variables for the LibreChat application
+    environment:
+      # Connection string for the MongoDB database
+      - MONGO_URI=mongodb://mongodb:27017/LibreChat
+      # Set the application to run in production mode
+      - NODE_ENV=production
+      # Set a secret for signing JWT tokens (change this to a random string)
+      - JWT_SECRET=your-super-secret-for-jwt
+      # Set a secret for encrypting credentials (change this to a random string)
+      - CREDS_KEY=your-super-secret-for-creds
+      # Set a salt for hashing credentials (change this to a random string)
+      - CREDS_SALT=your-super-secret-for-salt
+
+      # ----------------------------------------------------------------------------
+      #                          LLM API Keys
+      # ----------------------------------------------------------------------------
+      # Store your API keys in a `.env` file in the same directory
+      # and reference them here.
+      # Example `.env` file:
+      # OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      # GOOGLE_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      # ANTHROPIC_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      # ----------------------------------------------------------------------------
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    # This allows the container to connect to services running on the host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # --------------------------------------------------------------------------------
+  #                               Caddy Service
+  # --------------------------------------------------------------------------------
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+    depends_on:
+      - librechat
+
+  # --------------------------------------------------------------------------------
+  #                             Browserless Service
+  # --------------------------------------------------------------------------------
+  browserless:
+    image: browserless/chrome:latest
+    container_name: browserless
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - TIMEOUT=60000
+
+  # --------------------------------------------------------------------------------
+  #                               MongoDB Service
+  # --------------------------------------------------------------------------------
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: unless-stopped
+    # Persist the database data
+    volumes:
+      - mongodb-data:/data/db
+    # You can add healthchecks to ensure the database is ready before starting LibreChat
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ----------------------------------------------------------------------------------
+#                                    Volumes
+# ----------------------------------------------------------------------------------
+# Define the named volume for MongoDB data persistence
+volumes:
+  mongodb-data:
+    external: true
+  caddy-data:
+    external: true
