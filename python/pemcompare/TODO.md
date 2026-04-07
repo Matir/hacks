@@ -1,0 +1,22 @@
+# TODO: PEM Comparison Tool Implementation Plan
+
+- [x] Initialize `pemcompare.py`.
+- [x] Configure `argparse` with operations and output formats.
+- [x] Implement certificate loading and identity logic (DER hash).
+- [x] Implement set operations (Union, Intersection, Difference).
+- [x] Implement JSON serialization with SPKI and Cert fingerprints.
+- [x] Refine `--verbose` output to match OpenSSL style.
+- [x] Ensure strict mutual exclusivity for `--json`.
+- [x] Create a test suite with sample certificates.
+- [x] Final validation of all flag combinations.
+- [x] Verify type hints using `mypy pemcompare.py --ignore-missing-imports`.
+- [x] Implement `CertificateFilter` class for parsing and matching.
+- [x] Add `--filter` flag to `argparse`.
+- [x] Implement `apply_filters` function to prune results.
+- [x] Add unit tests for various filter combinations and modes.
+- [x] Update README with filter documentation.
+- [ ] Refactor logic into `PEMCompare` class.
+- [ ] Decouple `PemCertificate.print_text` from `argparse.Namespace`.
+- [ ] Implement flexible source normalization (filenames, file-likes, cert lists).
+- [ ] Update CLI wrapper to use the new class.
+- [ ] Update unit tests to verify programmatic API usage.

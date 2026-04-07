@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pemcompare"
+version = "0.1.0"
+description = "A tool to compare and operate on PEM-encoded x509 certificates"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=42.0.0",
+]
+
+[project.scripts]
+pemcompare = "pemcompare:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pemcompare.py"]
