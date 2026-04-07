@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -40,24 +42,43 @@ type DockerManager interface {
 
 // Manager is the concrete implementation of DockerManager using the official Docker SDK.
 type Manager struct {
-	cli client.APIClient
+	cli          client.APIClient
+	dockerSocket string
 }
 
 // Ensure Manager implements DockerManager.
 var _ DockerManager = (*Manager)(nil)
 
+func parseSocketPath(s string) string {
+	if strings.HasPrefix(s, "unix://") {
+		return strings.TrimPrefix(s, "unix://")
+	} else if strings.Contains(s, "://") {
+		// Not a local unix socket
+		return ""
+	}
+	return s
+}
+
 // NewManager creates a new DockerManager instance.
 // If dockerSocket is provided, it connects to that socket instead of the default.
 func NewManager(dockerSocket string) (*Manager, error) {
 	opts := []client.Opt{client.FromEnv}
+	var socketPath string
+
 	if dockerSocket != "" {
 		opts = append(opts, client.WithHost(dockerSocket))
+		socketPath = parseSocketPath(dockerSocket)
+	} else if envHost := os.Getenv("DOCKER_HOST"); envHost != "" {
+		socketPath = parseSocketPath(envHost)
+	} else {
+		socketPath = "/var/run/docker.sock"
 	}
+
 	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{cli: cli}, nil
+	return &Manager{cli: cli, dockerSocket: socketPath}, nil
 }
 
 // EnsureImage checks for the existence of an image and pulls it if missing.
@@ -85,7 +106,7 @@ func (m *Manager) EnsureImage(ctx context.Context, imageName string) error {
 func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 	name := fmt.Sprintf("handholder-openhands-%d", port)
 	logger := getLogger(ctx).With("port", port, "container_name", name)
-	
+
 	// Try to find the container
 	filter := filters.NewArgs()
 	filter.Add("name", name)
@@ -122,47 +143,11 @@ func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 func (m *Manager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string) error {
 	containerName := fmt.Sprintf("handholder-openhands-%d", port)
 	logger := getLogger(ctx).With("workspace_id", name, "port", port, "image", imageName, "container_name", containerName)
-	
+
 	logger.Info("Creating container")
 
-	// Prepare environment
-	envSlice := make([]string, 0, len(env))
-	for k, v := range env {
-		envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	// Prepare config
-	config := &container.Config{
-		Image: imageName,
-		Env:   envSlice,
-		ExposedPorts: nat.PortSet{
-			"3000/tcp": struct{}{},
-		},
-		Labels: map[string]string{
-			"managed-by": "handholder",
-			"workspace":  name,
-			"port":       fmt.Sprintf("%d", port),
-		},
-	}
-
-	// Prepare host config
-	hostConfig := &container.HostConfig{
-		PortBindings: nat.PortMap{
-			"3000/tcp": []nat.PortBinding{
-				{
-					HostIP:   "127.0.0.1",
-					HostPort: fmt.Sprintf("%d", port),
-				},
-			},
-		},
-		Mounts: []mount.Mount{
-			{
-				Type:   mount.TypeBind,
-				Source: hostWorkspacePath,
-				Target: "/opt/workspace_base",
-			},
-		},
-	}
+	config := m.buildContainerConfig(imageName, env, name, port)
+	hostConfig := m.buildHostConfig(hostWorkspacePath, port)
 
 	resp, err := m.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
 	if err != nil {
@@ -178,6 +163,56 @@ func (m *Manager) StartContainer(ctx context.Context, name string, port int, hos
 
 	logger.Info("Container started successfully", "container_id", resp.ID)
 	return nil
+}
+
+func (m *Manager) buildContainerConfig(imageName string, env map[string]string, workspaceName string, port int) *container.Config {
+	envSlice := make([]string, 0, len(env))
+	for k, v := range env {
+		envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return &container.Config{
+		Image: imageName,
+		Env:   envSlice,
+		ExposedPorts: nat.PortSet{
+			"3000/tcp": struct{}{},
+		},
+		Labels: map[string]string{
+			"managed-by": "handholder",
+			"workspace":  workspaceName,
+			"port":       fmt.Sprintf("%d", port),
+		},
+	}
+}
+
+func (m *Manager) buildHostConfig(hostWorkspacePath string, port int) *container.HostConfig {
+	mounts := []mount.Mount{
+		{
+			Type:   mount.TypeBind,
+			Source: hostWorkspacePath,
+			Target: "/workspace",
+		},
+	}
+	if m.dockerSocket != "" {
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeBind,
+			Source: m.dockerSocket,
+			Target: "/var/run/docker.sock",
+		})
+	}
+
+	return &container.HostConfig{
+		PortBindings: nat.PortMap{
+			"3000/tcp": []nat.PortBinding{
+				{
+					HostIP:   "127.0.0.1",
+					HostPort: fmt.Sprintf("%d", port),
+				},
+			},
+		},
+		Mounts:     mounts,
+		ExtraHosts: []string{"host.docker.internal:host-gateway"},
+	}
 }
 
 // GetContainerStatus returns the current state (running, exited, etc.) and the workspace name for a given port.

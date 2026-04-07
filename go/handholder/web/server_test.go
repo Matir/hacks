@@ -77,9 +77,11 @@ func TestHandleStatus(t *testing.T) {
 	server := NewServer(cfg, fake)
 
 	// Pre-set status in memory
-	server.mu.Lock()
-	server.status[3000] = "Starting..."
-	server.mu.Unlock()
+	func() {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+		server.status[3000] = "Starting..."
+	}()
 
 	req := httptest.NewRequest("GET", "/status?port=3000", nil)
 	rr := httptest.NewRecorder()
@@ -228,11 +230,11 @@ func TestPerPortLocking(t *testing.T) {
 			"alpha": {Name: "Alpha", Workspace: "/tmp/alpha"},
 		},
 	}
-	
+
 	// Create a manager that takes time to stop a container
 	fake := docker_mock.NewFakeManager()
 	fake.StopDelay = 200 * time.Millisecond
-	
+
 	server := NewServer(cfg, fake)
 
 	// Trigger first launch
@@ -246,7 +248,7 @@ func TestPerPortLocking(t *testing.T) {
 	server.handleLaunch(rr2, req2)
 
 	// At this point, both requests are accepted, but one should be waiting for the other.
-	// Since we can't easily peek into the internal state of the goroutines, 
+	// Since we can't easily peek into the internal state of the goroutines,
 	// we'll check if the StopContainerByPort was called sequentially.
 	// We'll give it some time to finish both.
 	time.Sleep(600 * time.Millisecond)
@@ -258,7 +260,7 @@ func TestPerPortLocking(t *testing.T) {
 
 func TestWithLogging(t *testing.T) {
 	server := NewServer(&config.Config{}, nil)
-	
+
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger := getLogger(r.Context())
 		if logger == nil {

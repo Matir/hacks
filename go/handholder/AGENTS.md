@@ -16,7 +16,7 @@ For general information on this project, see [README.md](README.md).
     6. Workspace-specific `env_file`
     7. Workspace-specific `env` map
 - **Web UI:** Use Go's `embed` package to bundle HTML/CSS/JS. Keep the frontend simple and reactive via polling.
-- **Path Mapping:** Always map the workspace host path to `/opt/workspace_base` inside the container.
+- **Path Mapping:** Always map the workspace host path to `/workspace` inside the container.
 - **Graceful Shutdown:** Use a 5-second timeout for `docker stop` to allow OpenHands to save its state.
 
 - **Structured Logging:** Use `log/slog` for all logging.
@@ -32,7 +32,11 @@ For general information on this project, see [README.md](README.md).
 
 - **Command-line Overrides:** All settings in the `[handholder]` block can be overridden via command-line flags (e.g., `-bind-address`, `-port`, `-logging`, `-logformat`, `-docker-socket`, `-trusted-proxies`). These flags take precedence over values in the TOML configuration file.
 
-- **Testing & Validation:** Always ensure that any changes are verified by running both `go vet ./...` (for static analysis) and `go test ./...` (to run all unit and integration tests). A change is only complete when both commands pass successfully.
+- **Testing & Validation:** Always ensure that any changes are verified by running:
+    1. `gofmt -w .` to format all code.
+    2. `go vet ./...` for static analysis.
+    3. `go test ./...` to run all unit and integration tests.
+    A change is only complete when all commands pass successfully.
 - `config/config.go`: Configuration parsing and environment variable resolution.
 - `docker/manager.go`: Docker SDK operations.
 - `web/server.go`: Web handlers and API.

@@ -166,11 +166,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type workspaceView struct {
-		ID      string
-		Name    string
-		Port    int
-		Status  string
-		Active  bool
+		ID     string
+		Name   string
+		Port   int
+		Status string
+		Active bool
 	}
 
 	var workspaces []workspaceView
@@ -179,12 +179,12 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		if port == 0 {
 			port = s.cfg.Defaults.Port
 		}
-		
+
 		state, activeWorkspace, err := s.docker.GetContainerStatus(r.Context(), port)
 		if err != nil {
 			slog.Error("Error getting container status", "error", err, "port", port, "workspace_id", id)
 		}
-		
+
 		workspaces = append(workspaces, workspaceView{
 			ID:     id,
 			Name:   ws.Name,
@@ -205,7 +205,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	logger := getLogger(r.Context()).With("workspace_id", id)
-	
+
 	ws, ok := s.cfg.Workspaces[id]
 	if !ok {
 		logger.Warn("Workspace not found")
@@ -220,15 +220,15 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	logger = logger.With("port", port)
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.status[port] = "Starting..."
-	s.mu.Unlock()
 
 	logger.Info("Attempting to launch workspace")
 
 	go func() {
 		// Create a new context for the background goroutine, but keep the logger
 		ctx := context.WithValue(context.Background(), loggerKey, logger)
-		
+
 		// Acquire per-port lock
 		lock := s.getLock(port)
 		lock.Lock()
@@ -273,7 +273,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	logger := getLogger(r.Context()).With("workspace_id", id)
-	
+
 	ws, ok := s.cfg.Workspaces[id]
 	if !ok {
 		logger.Warn("Workspace not found")
@@ -291,7 +291,7 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		ctx := context.WithValue(context.Background(), loggerKey, logger)
-		
+
 		lock := s.getLock(port)
 		lock.Lock()
 		defer lock.Unlock()
@@ -312,9 +312,13 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	portStr := r.URL.Query().Get("port")
 	port, _ := strconv.Atoi(portStr)
 
-	s.mu.Lock()
-	status, ok := s.status[port]
-	s.mu.Unlock()
+	var status string
+	var ok bool
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		status, ok = s.status[port]
+	}()
 
 	if !ok {
 		state, _, _ := s.docker.GetContainerStatus(r.Context(), port)
@@ -326,8 +330,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // updateStatus updates the internal status map and logs the change.
 func (s *Server) updateStatus(ctx context.Context, port int, msg string) {
-	s.mu.Lock()
-	s.status[port] = msg
-	s.mu.Unlock()
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.status[port] = msg
+	}()
 	getLogger(ctx).Info(msg, "port", port)
 }

@@ -12,7 +12,7 @@ import (
 func TestLoadConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "handholder.toml")
-	
+
 	content := `
 [handholder]
 port = 3001
@@ -54,7 +54,7 @@ sandbox_base_image = "ubuntu:22.04"
 
 func TestResolveEnv(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create global env file
 	globalEnvPath := filepath.Join(tmpDir, "global.env")
 	os.WriteFile(globalEnvPath, []byte("GLOBAL_KEY=global_val\nOVERRIDE_KEY=global_override"), 0644)
@@ -91,7 +91,7 @@ func TestResolveEnv(t *testing.T) {
 	expected := map[string]string{
 		"RUNTIME":                      "docker",
 		"SANDBOX_BASE_CONTAINER_IMAGE": "ubuntu:22.04", // Workspace override wins
-		"SANDBOX_USER_ID":             "5678",         // Workspace override wins
+		"SANDBOX_USER_ID":              "5678",         // Workspace override wins
 		"GLOBAL_KEY":                   "global_val",
 		"WS_KEY":                       "ws_val",
 		"MAP_KEY":                      "global_map",
@@ -137,7 +137,7 @@ func TestDefaultEnv(t *testing.T) {
 			map[string]string{
 				"RUNTIME":                      "docker",
 				"SANDBOX_BASE_CONTAINER_IMAGE": "debian:latest",
-				"SANDBOX_USER_ID":             "1000",
+				"SANDBOX_USER_ID":              "1000",
 				"LLM_MODEL":                    "openai/gpt-4",
 				"LLM_API_KEY":                  "sk-123",
 			},
@@ -256,7 +256,7 @@ func TestApplyOverrides(t *testing.T) {
 func TestLoadConfigDefaults(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.toml")
-	
+
 	content := `
 [workspace.alpha]
 name = "Alpha"
@@ -271,7 +271,7 @@ name = "Alpha"
 	if cfg.HandHolder.BindAddress != "127.0.0.1" {
 		t.Errorf("expected default bind address 127.0.0.1, got %s", cfg.HandHolder.BindAddress)
 	}
-	
+
 	// Should include localhost in trusted proxies by default
 	found := false
 	for _, tp := range cfg.HandHolder.TrustedProxies {

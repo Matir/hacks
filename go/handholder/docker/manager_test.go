@@ -35,14 +35,39 @@ func TestNewManager(t *testing.T) {
 	if mgr == nil {
 		t.Fatal("NewManager returned nil")
 	}
+	if mgr.dockerSocket != "/var/run/docker.sock" {
+		t.Errorf("expected default socket path /var/run/docker.sock, got %s", mgr.dockerSocket)
+	}
 
-	// Case: custom socket
-	mgr, err = NewManager("unix:///var/run/docker.sock")
+	// Case: custom socket unix:///
+	mgr, err = NewManager("unix:///var/run/custom.sock")
 	if err != nil {
 		t.Fatalf("NewManager failed with socket: %v", err)
 	}
 	if mgr == nil {
 		t.Fatal("NewManager returned nil")
+	}
+	if mgr.dockerSocket != "/var/run/custom.sock" {
+		t.Errorf("expected /var/run/custom.sock, got %s", mgr.dockerSocket)
+	}
+
+	// Case: TCP
+	mgr, err = NewManager("tcp://localhost:2375")
+	if err != nil {
+		t.Fatalf("NewManager failed with TCP socket: %v", err)
+	}
+	if mgr.dockerSocket != "" {
+		t.Errorf("expected empty socket path for TCP, got %s", mgr.dockerSocket)
+	}
+
+	// Case: DOCKER_HOST env var
+	t.Setenv("DOCKER_HOST", "unix:///tmp/docker.sock")
+	mgr, err = NewManager("")
+	if err != nil {
+		t.Fatalf("NewManager failed with DOCKER_HOST: %v", err)
+	}
+	if mgr.dockerSocket != "/tmp/docker.sock" {
+		t.Errorf("expected socket path from DOCKER_HOST, got %s", mgr.dockerSocket)
 	}
 }
 
@@ -69,7 +94,7 @@ func TestEnsureImage(t *testing.T) {
 
 func TestStartContainer(t *testing.T) {
 	fake := docker_mock.NewFakeDockerClient()
-	mgr := &Manager{cli: fake}
+	mgr := &Manager{cli: fake, dockerSocket: "/var/run/docker.sock"}
 	ctx := context.Background()
 
 	port := 8080
@@ -98,6 +123,40 @@ func TestStartContainer(t *testing.T) {
 	if cfg.Labels["workspace"] != workspace {
 		t.Errorf("Expected label workspace=%s, got %s", workspace, cfg.Labels["workspace"])
 	}
+
+	// Verify ExtraHosts
+	hcfg, ok := fake.HostConfigs[name]
+	if !ok {
+		t.Fatalf("HostConfig for %s not found", name)
+	}
+	found := false
+	for _, host := range hcfg.ExtraHosts {
+		if host == "host.docker.internal:host-gateway" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected host.docker.internal:host-gateway in ExtraHosts")
+	}
+
+	// Verify mounts
+	foundSocket := false
+	foundWorkspace := false
+	for _, mnt := range hcfg.Mounts {
+		if mnt.Target == "/var/run/docker.sock" {
+			foundSocket = true
+		}
+		if mnt.Target == "/workspace" {
+			foundWorkspace = true
+		}
+	}
+	if !foundSocket {
+		t.Error("expected /var/run/docker.sock mount")
+	}
+	if !foundWorkspace {
+		t.Error("expected /workspace mount")
+	}
 }
 
 func TestStopContainerByPort(t *testing.T) {
@@ -107,7 +166,7 @@ func TestStopContainerByPort(t *testing.T) {
 
 	port := 9000
 	name := "handholder-openhands-9000"
-	
+
 	// Pre-create a container
 	fake.Containers[name] = &container.Config{
 		Labels: map[string]string{"managed-by": "handholder"},
@@ -129,7 +188,7 @@ func TestStopContainerFail(t *testing.T) {
 
 	port := 9001
 	name := "handholder-openhands-9001"
-	
+
 	// Pre-create a container
 	fake.Containers[name] = &container.Config{
 		Labels: map[string]string{"managed-by": "handholder"},

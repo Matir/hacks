@@ -11,25 +11,27 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/docker/docker/client"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // FakeDockerClient implements client.CommonAPIClient (the base for APIClient)
 // We only implement the methods used by the Manager.
 type FakeDockerClient struct {
 	client.APIClient
-	mu         sync.Mutex
-	Containers map[string]*container.Config
-	Images     map[string]bool
-	StopFails  bool
+	mu          sync.Mutex
+	Containers  map[string]*container.Config
+	HostConfigs map[string]*container.HostConfig
+	Images      map[string]bool
+	StopFails   bool
 }
 
 // NewFakeDockerClient creates a new FakeDockerClient instance.
 func NewFakeDockerClient() *FakeDockerClient {
 	return &FakeDockerClient{
-		Containers: make(map[string]*container.Config),
-		Images:     make(map[string]bool),
+		Containers:  make(map[string]*container.Config),
+		HostConfigs: make(map[string]*container.HostConfig),
+		Images:      make(map[string]bool),
 	}
 }
 
@@ -55,7 +57,7 @@ func (f *FakeDockerClient) ImagePull(ctx context.Context, ref string, options im
 func (f *FakeDockerClient) ContainerList(ctx context.Context, options container.ListOptions) ([]types.Container, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	
+
 	nameFilter := options.Filters.Get("name")
 	var result []types.Container
 	for name, config := range f.Containers {
@@ -70,7 +72,7 @@ func (f *FakeDockerClient) ContainerList(ctx context.Context, options container.
 				}
 			}
 		}
-		
+
 		if match {
 			result = append(result, types.Container{
 				ID:     name + "-id",
@@ -87,10 +89,11 @@ func (f *FakeDockerClient) ContainerList(ctx context.Context, options container.
 func (f *FakeDockerClient) ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	
+
 	// Strip leading slash if present
 	containerName = strings.TrimPrefix(containerName, "/")
 	f.Containers[containerName] = config
+	f.HostConfigs[containerName] = hostConfig
 	return container.CreateResponse{ID: containerName + "-id"}, nil
 }
 
@@ -117,7 +120,8 @@ func (f *FakeDockerClient) ContainerRemove(ctx context.Context, containerID stri
 }
 
 type fakeError string
-func (e fakeError) Error() string { return string(e) }
+
+func (e fakeError) Error() string  { return string(e) }
 func dockerError(msg string) error { return fakeError(msg) }
 
 // --- Fake Manager ---

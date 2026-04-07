@@ -16,7 +16,7 @@ HandHolder is a Go-based service to manage and launch OpenHands workspace contai
 - **Automatic Sandbox UID Mapping:** Defaults to the current user's UID to prevent permission issues.
 - **Provider-Aware LLM Configuration:** Automatically prefixes `llm_model` with `llm_provider` if specified.
 - **Web UI:** A basic HTML interface (embedded in the binary) with real-time status polling.
-- **Port Mapping:** Host workspaces are mounted to `/opt/workspace_base` in the container.
+- **Port Mapping:** Host workspaces are mounted to `/workspace` in the container.
 
 ## Configuration (handholder.toml)
 
