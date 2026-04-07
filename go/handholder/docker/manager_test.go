@@ -2,11 +2,29 @@ package docker
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
 	docker_mock "github.com/matir/hacks/go/handholder/docker/mock"
 )
+
+func TestGetLogger(t *testing.T) {
+	// Case: default logger
+	l1 := getLogger(context.Background())
+	if l1 != slog.Default() {
+		t.Error("expected default logger")
+	}
+
+	// Case: logger in context
+	custom := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := context.WithValue(context.Background(), loggerKey, custom)
+	l2 := getLogger(ctx)
+	if l2 != custom {
+		t.Error("expected custom logger from context")
+	}
+}
 
 func TestNewManager(t *testing.T) {
 	// Case: default
@@ -101,6 +119,30 @@ func TestStopContainerByPort(t *testing.T) {
 
 	if _, ok := fake.Containers[name]; ok {
 		t.Error("Container was not removed from fake client")
+	}
+}
+
+func TestStopContainerFail(t *testing.T) {
+	fake := docker_mock.NewFakeDockerClient()
+	mgr := &Manager{cli: fake}
+	ctx := context.Background()
+
+	port := 9001
+	name := "handholder-openhands-9001"
+	
+	// Pre-create a container
+	fake.Containers[name] = &container.Config{
+		Labels: map[string]string{"managed-by": "handholder"},
+	}
+	// Make stop fail but remove succeed (to test force remove)
+	fake.StopFails = true
+
+	if err := mgr.StopContainerByPort(ctx, port); err != nil {
+		t.Fatalf("StopContainerByPort should succeed even if Stop fails (due to force remove): %v", err)
+	}
+
+	if _, ok := fake.Containers[name]; ok {
+		t.Error("Container was not removed via force removal")
 	}
 }
 

@@ -18,9 +18,10 @@
             <h2>{{.Name}}</h2>
             <p>Port: {{.Port}}</p>
             <p>Status: <span class="status" id="status-{{.ID}}">{{.Status}}</span></p>
-            <button onclick="launch('{{.ID}}')">Launch</button>
+            <button onclick="launch('{{.ID}}')" id="btn-launch-{{.ID}}" {{if .Active}}style="display:none"{{end}}>Launch</button>
+            <button onclick="stop('{{.ID}}')" id="btn-stop-{{.ID}}" {{if not .Active}}style="display:none"{{end}}>Stop</button>
             {{if .Active}}
-            <a href="http://localhost:{{.Port}}" target="_blank">Open OpenHands</a>
+            <a href="http://localhost:{{.Port}}" target="_blank" id="link-{{.ID}}">Open OpenHands</a>
             {{end}}
         </div>
         {{end}}
@@ -29,7 +30,15 @@
     <script>
         async function launch(id) {
             document.getElementById('status-' + id).innerText = 'Starting...';
+            document.getElementById('btn-launch-' + id).disabled = true;
             await fetch('/launch?id=' + id);
+            pollStatus(id);
+        }
+
+        async function stop(id) {
+            document.getElementById('status-' + id).innerText = 'Stopping...';
+            document.getElementById('btn-stop-' + id).disabled = true;
+            await fetch('/stop?id=' + id);
             pollStatus(id);
         }
 
@@ -42,12 +51,9 @@
                 const data = await resp.json();
                 document.getElementById('status-' + id).innerText = data.status;
                 
-                if (data.status === 'Running') {
+                if (data.status === 'Running' || data.status === 'not running' || data.status.startsWith('Error')) {
                     clearInterval(interval);
-                    location.reload(); // Reload to show "Open" link and active state
-                }
-                if (data.status.startsWith('Error')) {
-                    clearInterval(interval);
+                    location.reload(); // Reload to update UI buttons and links
                 }
             }, 2000);
         }

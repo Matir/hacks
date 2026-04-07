@@ -1,11 +1,14 @@
 [handholder]
+bind_address = "127.0.0.1" # Default: 127.0.0.1
 port = 3001
-logging = stderr
+logging = "stderr"         # Default: stderr
+logformat = "text"         # Default: text
 docker_socket = "unix:///var/run/docker.sock"
+trusted_proxies = ["127.0.0.1", "::1"] # Default includes localhost
 
 [defaults]
-port = 3000
-image = "ghcr.io/all-hands-ai/openhands:0.21.0"
+port = 3000                # Default: 3000
+image = "ghcr.io/all-hands-ai/openhands:0.21.0" # Default version
 
 [workspace.alpha]
 workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/alpha"

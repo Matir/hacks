@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -13,6 +14,17 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
+
+type contextKey string
+
+const loggerKey contextKey = "logger"
+
+func getLogger(ctx context.Context) *slog.Logger {
+	if logger, ok := ctx.Value(loggerKey).(*slog.Logger); ok {
+		return logger
+	}
+	return slog.Default()
+}
 
 // DockerManager defines the interface for managing OpenHands containers.
 type DockerManager interface {
@@ -50,42 +62,58 @@ func NewManager(dockerSocket string) (*Manager, error) {
 
 // EnsureImage checks for the existence of an image and pulls it if missing.
 func (m *Manager) EnsureImage(ctx context.Context, imageName string) error {
+	logger := getLogger(ctx).With("image", imageName)
 	_, _, err := m.cli.ImageInspectWithRaw(ctx, imageName)
 	if err == nil {
+		logger.Debug("Image already exists locally")
 		return nil
 	}
 
+	logger.Info("Pulling image")
 	out, err := m.cli.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
+		logger.Error("Failed to pull image", "error", err)
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
 	defer out.Close()
 	io.Copy(io.Discard, out) // Wait for pull to complete
+	logger.Info("Image pull complete")
 	return nil
 }
 
 // StopContainerByPort stops and removes a container named handholder-openhands-<port>.
 func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 	name := fmt.Sprintf("handholder-openhands-%d", port)
+	logger := getLogger(ctx).With("port", port, "container_name", name)
 	
 	// Try to find the container
 	filter := filters.NewArgs()
 	filter.Add("name", name)
 	containers, err := m.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filter})
 	if err != nil {
+		logger.Error("Failed to list containers", "error", err)
 		return err
 	}
 
+	if len(containers) == 0 {
+		logger.Debug("No container found to stop")
+		return nil
+	}
+
 	for _, c := range containers {
+		cLogger := logger.With("container_id", c.ID)
+		cLogger.Info("Stopping and removing container")
 		// Found it, stop and remove
 		timeout := 5
 		if err := m.cli.ContainerStop(ctx, c.ID, container.StopOptions{Timeout: &timeout}); err != nil {
 			// If stop fails, try to force remove anyway
-			fmt.Printf("Warning: failed to stop container %s: %v\n", c.ID, err)
+			cLogger.Warn("Failed to stop container, attempting force removal", "error", err)
 		}
 		if err := m.cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
+			cLogger.Error("Failed to remove container", "error", err)
 			return fmt.Errorf("failed to remove container %s: %w", c.ID, err)
 		}
+		cLogger.Info("Container stopped and removed")
 	}
 	return nil
 }
@@ -93,7 +121,10 @@ func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 // StartContainer launches a new OpenHands container with the specified configuration.
 func (m *Manager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string) error {
 	containerName := fmt.Sprintf("handholder-openhands-%d", port)
+	logger := getLogger(ctx).With("workspace_id", name, "port", port, "image", imageName, "container_name", containerName)
 	
+	logger.Info("Creating container")
+
 	// Prepare environment
 	envSlice := make([]string, 0, len(env))
 	for k, v := range env {
@@ -135,23 +166,29 @@ func (m *Manager) StartContainer(ctx context.Context, name string, port int, hos
 
 	resp, err := m.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
 	if err != nil {
+		logger.Error("Failed to create container", "error", err)
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
+	logger.Info("Starting container", "container_id", resp.ID)
 	if err := m.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		logger.Error("Failed to start container", "error", err, "container_id", resp.ID)
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
+	logger.Info("Container started successfully", "container_id", resp.ID)
 	return nil
 }
 
 // GetContainerStatus returns the current state (running, exited, etc.) and the workspace name for a given port.
 func (m *Manager) GetContainerStatus(ctx context.Context, port int) (string, string, error) {
 	name := fmt.Sprintf("handholder-openhands-%d", port)
+	logger := getLogger(ctx).With("port", port)
 	filter := filters.NewArgs()
 	filter.Add("name", name)
 	containers, err := m.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filter})
 	if err != nil {
+		logger.Error("Failed to list containers for status", "error", err)
 		return "", "", err
 	}
 

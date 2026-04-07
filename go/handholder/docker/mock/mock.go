@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -21,6 +22,7 @@ type FakeDockerClient struct {
 	mu         sync.Mutex
 	Containers map[string]*container.Config
 	Images     map[string]bool
+	StopFails  bool
 }
 
 // NewFakeDockerClient creates a new FakeDockerClient instance.
@@ -99,6 +101,9 @@ func (f *FakeDockerClient) ContainerStart(ctx context.Context, containerID strin
 
 // ContainerStop emulates stopping a container.
 func (f *FakeDockerClient) ContainerStop(ctx context.Context, containerID string, options container.StopOptions) error {
+	if f.StopFails {
+		return dockerError("stop failed")
+	}
 	return nil
 }
 
@@ -122,6 +127,8 @@ type FakeManager struct {
 	mu         sync.Mutex
 	Workspaces map[int]string
 	Ensured    map[string]bool
+	StopCount  int
+	StopDelay  time.Duration
 }
 
 // NewFakeManager creates a new FakeManager instance.
@@ -142,8 +149,13 @@ func (f *FakeManager) EnsureImage(ctx context.Context, imageName string) error {
 
 // StopContainerByPort removes the workspace from the specified port.
 func (f *FakeManager) StopContainerByPort(ctx context.Context, port int) error {
+	if f.StopDelay > 0 {
+		time.Sleep(f.StopDelay)
+	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.StopCount++
 	delete(f.Workspaces, port)
 	return nil
 }

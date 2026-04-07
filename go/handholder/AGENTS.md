@@ -8,13 +8,29 @@ For general information on this project, see [README.md](README.md).
 - **Port-Specific Mutex:** HandHolder manages multiple OpenHands instances on different ports. When starting a container on a port, ensure any existing container named `handholder-openhands-<port>` is stopped and removed first.
 - **Container Labels:** All containers launched by HandHolder MUST have the label `managed-by=handholder`. Use this label to identify and clean up containers.
 - **Environment Variables:** Strictly follow the merge priority:
-    1. Global/Default `env_file`
-    2. Global/Default `env` map
-    3. Workspace-specific `env_file`
-    4. Workspace-specific `env` map
+    1. Default `RUNTIME=docker` (from `config.DefaultEnv`)
+    2. Global/Default explicit settings (`sandbox_user_id` [UID], `sandbox_base_image` [tag], `llm_model`, `llm_provider`, `llm_api_key`)
+    3. Global/Default `env_file`
+    4. Global/Default `env` map
+    5. Workspace-specific explicit settings
+    6. Workspace-specific `env_file`
+    7. Workspace-specific `env` map
 - **Web UI:** Use Go's `embed` package to bundle HTML/CSS/JS. Keep the frontend simple and reactive via polling.
 - **Path Mapping:** Always map the workspace host path to `/opt/workspace_base` inside the container.
 - **Graceful Shutdown:** Use a 5-second timeout for `docker stop` to allow OpenHands to save its state.
+
+- **Structured Logging:** Use `log/slog` for all logging.
+    - Follow context-aware logging by retrieving the logger from `context.Context` via `getLogger(ctx)`.
+    - Ensure `workspace_id` is logged for all workspace operations.
+    - POST and `/launch` requests should include a 32-bit hex `req_id` and `client_ip` (resolved via trusted proxies).
+
+- **Mocking & Testing:** 
+    - Use the `docker/mock` package for unit tests.
+    - `docker_mock.FakeDockerClient` emulates the Docker SDK behavior in-memory.
+    - `docker_mock.FakeManager` provides a high-level mock for the `DockerManager` interface.
+    - Always maintain high test coverage (>75% for core logic).
+
+- **Command-line Overrides:** All settings in the `[handholder]` block can be overridden via command-line flags (e.g., `-bind-address`, `-port`, `-logging`, `-logformat`, `-docker-socket`, `-trusted-proxies`). These flags take precedence over values in the TOML configuration file.
 
 - **Testing & Validation:** Always ensure that any changes are verified by running both `go vet ./...` (for static analysis) and `go test ./...` (to run all unit and integration tests). A change is only complete when both commands pass successfully.
 - `config/config.go`: Configuration parsing and environment variable resolution.
