@@ -1,0 +1,17 @@
+[handholder]
+port = 3001
+logging = stderr
+docker_socket = "unix:///var/run/docker.sock"
+
+[defaults]
+port = 3000
+image = "ghcr.io/all-hands-ai/openhands:0.21.0"
+
+[workspace.alpha]
+workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/alpha"
+name = Alpha
+
+[workspace.beta]
+workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/beta"
+name = Beta
+port = 3002
