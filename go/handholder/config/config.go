@@ -22,12 +22,13 @@ type Config struct {
 
 // HandHolderConfig contains global settings for the HandHolder service itself.
 type HandHolderConfig struct {
-	BindAddress    string   `toml:"bind_address"`
-	Port           int      `toml:"port"`
-	Logging        string   `toml:"logging"`
-	LogFormat      string   `toml:"logformat"`
-	DockerSocket   string   `toml:"docker_socket"`
-	TrustedProxies []string `toml:"trusted_proxies"`
+	BindAddress        string   `toml:"bind_address"`
+	Port               int      `toml:"port"`
+	Logging            string   `toml:"logging"`
+	LogFormat          string   `toml:"logformat"`
+	DockerSocket       string   `toml:"docker_socket"`
+	TrustedProxies     []string `toml:"trusted_proxies"`
+	DisableSocketMount bool     `toml:"disable_socket_mount"`
 }
 
 // WorkspaceConfig contains settings for a specific OpenHands workspace or global defaults.
@@ -141,12 +142,13 @@ func (cfg *Config) Validate() error {
 
 // Overrides represents command-line flag overrides for HandHolder settings.
 type Overrides struct {
-	BindAddress    string
-	Port           int
-	Logging        string
-	LogFormat      string
-	DockerSocket   string
-	TrustedProxies string
+	BindAddress        string
+	Port               int
+	Logging            string
+	LogFormat          string
+	DockerSocket       string
+	TrustedProxies     string
+	DisableSocketMount *bool
 }
 
 // ApplyOverrides applies the provided flag overrides to the configuration.
@@ -169,13 +171,25 @@ func (cfg *Config) ApplyOverrides(o Overrides) {
 	}
 	if o.TrustedProxies != "" {
 		proxies := strings.Split(o.TrustedProxies, ",")
-		cfg.HandHolder.TrustedProxies = make([]string, 0, len(proxies))
 		for _, p := range proxies {
 			p = strings.TrimSpace(p)
 			if p != "" {
-				cfg.HandHolder.TrustedProxies = append(cfg.HandHolder.TrustedProxies, p)
+				// Avoid duplicates
+				found := false
+				for _, existing := range cfg.HandHolder.TrustedProxies {
+					if existing == p {
+						found = true
+						break
+					}
+				}
+				if !found {
+					cfg.HandHolder.TrustedProxies = append(cfg.HandHolder.TrustedProxies, p)
+				}
 			}
 		}
+	}
+	if o.DisableSocketMount != nil {
+		cfg.HandHolder.DisableSocketMount = *o.DisableSocketMount
 	}
 }
 

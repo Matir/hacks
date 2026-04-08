@@ -100,6 +100,14 @@ func TestHandleStatus(t *testing.T) {
 	if data["status"] != "Starting..." {
 		t.Errorf("expected status 'Starting...', got %s", data["status"])
 	}
+
+	// Case: Invalid port
+	req2 := httptest.NewRequest("GET", "/status?port=abc", nil)
+	rr2 := httptest.NewRecorder()
+	server.handleStatus(rr2, req2)
+	if rr2.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid port, got %d", rr2.Code)
+	}
 }
 
 func TestHandleStop(t *testing.T) {
@@ -113,7 +121,7 @@ func TestHandleStop(t *testing.T) {
 	server := NewServer(cfg, fake)
 
 	// Pre-start the container
-	fake.StartContainer(nil, "alpha", 3000, "/tmp/alpha", "image", nil)
+	fake.StartContainer(nil, "alpha", 3000, "/tmp/alpha", "image", nil, false)
 
 	req := httptest.NewRequest("GET", "/stop?id=alpha", nil)
 	rr := httptest.NewRecorder()

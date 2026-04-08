@@ -103,7 +103,7 @@ func TestStartContainer(t *testing.T) {
 	img := "node:latest"
 	env := map[string]string{"FOO": "BAR"}
 
-	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env)
+	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env, false)
 	if err != nil {
 		t.Fatalf("StartContainer failed: %v", err)
 	}
@@ -159,6 +159,36 @@ func TestStartContainer(t *testing.T) {
 	}
 }
 
+func TestStartContainerNoSocket(t *testing.T) {
+	fake := docker_mock.NewFakeDockerClient()
+	mgr := &Manager{cli: fake, dockerSocket: "/var/run/docker.sock"}
+	ctx := context.Background()
+
+	port := 8081
+	workspace := "test-ws-no-socket"
+	hostPath := "/tmp/ws"
+	img := "node:latest"
+	env := map[string]string{"FOO": "BAR"}
+
+	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env, true)
+	if err != nil {
+		t.Fatalf("StartContainer failed: %v", err)
+	}
+
+	name := "handholder-openhands-8081"
+	hcfg, ok := fake.HostConfigs[name]
+	if !ok {
+		t.Fatalf("HostConfig for %s not found", name)
+	}
+
+	// Verify mounts
+	for _, mnt := range hcfg.Mounts {
+		if mnt.Target == "/var/run/docker.sock" {
+			t.Error("found /var/run/docker.sock mount when disabled")
+		}
+	}
+}
+
 func TestStopContainerByPort(t *testing.T) {
 	fake := docker_mock.NewFakeDockerClient()
 	mgr := &Manager{cli: fake}
@@ -169,7 +199,10 @@ func TestStopContainerByPort(t *testing.T) {
 
 	// Pre-create a container
 	fake.Containers[name] = &container.Config{
-		Labels: map[string]string{"managed-by": "handholder"},
+		Labels: map[string]string{
+			"managed-by": "handholder",
+			"port":       "9000",
+		},
 	}
 
 	if err := mgr.StopContainerByPort(ctx, port); err != nil {
@@ -191,7 +224,10 @@ func TestStopContainerFail(t *testing.T) {
 
 	// Pre-create a container
 	fake.Containers[name] = &container.Config{
-		Labels: map[string]string{"managed-by": "handholder"},
+		Labels: map[string]string{
+			"managed-by": "handholder",
+			"port":       "9001",
+		},
 	}
 	// Make stop fail but remove succeed (to test force remove)
 	fake.StopFails = true
@@ -224,7 +260,11 @@ func TestGetContainerStatus(t *testing.T) {
 
 	// Case: Running
 	fake.Containers[name] = &container.Config{
-		Labels: map[string]string{"workspace": "alpha"},
+		Labels: map[string]string{
+			"managed-by": "handholder",
+			"port":       "7000",
+			"workspace":  "alpha",
+		},
 	}
 
 	status, ws, err = mgr.GetContainerStatus(ctx, port)

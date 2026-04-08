@@ -59,15 +59,34 @@ func (f *FakeDockerClient) ContainerList(ctx context.Context, options container.
 	defer f.mu.Unlock()
 
 	nameFilter := options.Filters.Get("name")
+	labelFilter := options.Filters.Get("label")
 	var result []types.Container
 	for name, config := range f.Containers {
-		match := false
-		if len(nameFilter) == 0 {
-			match = true
-		} else {
+		match := true
+		if len(nameFilter) > 0 {
+			nameMatch := false
 			for _, nf := range nameFilter {
 				if strings.Contains(name, nf) {
-					match = true
+					nameMatch = true
+					break
+				}
+			}
+			if !nameMatch {
+				match = false
+			}
+		}
+
+		if match && len(labelFilter) > 0 {
+			for _, lf := range labelFilter {
+				parts := strings.SplitN(lf, "=", 2)
+				key := parts[0]
+				val := ""
+				if len(parts) > 1 {
+					val = parts[1]
+				}
+
+				if cVal, ok := config.Labels[key]; !ok || (val != "" && cVal != val) {
+					match = false
 					break
 				}
 			}
@@ -165,7 +184,7 @@ func (f *FakeManager) StopContainerByPort(ctx context.Context, port int) error {
 }
 
 // StartContainer adds a workspace to the specified port.
-func (f *FakeManager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string) error {
+func (f *FakeManager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Workspaces[port] = name

@@ -35,7 +35,7 @@ type DockerManager interface {
 	// StopContainerByPort finds and terminates any container managed by HandHolder on the given port.
 	StopContainerByPort(ctx context.Context, port int) error
 	// StartContainer creates and runs a new OpenHands container.
-	StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string) error
+	StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool) error
 	// GetContainerStatus returns the current status (e.g., "running") and workspace name for the container on a port.
 	GetContainerStatus(ctx context.Context, port int) (string, string, error)
 }
@@ -109,7 +109,8 @@ func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 
 	// Try to find the container
 	filter := filters.NewArgs()
-	filter.Add("name", name)
+	filter.Add("label", "managed-by=handholder")
+	filter.Add("label", fmt.Sprintf("port=%d", port))
 	containers, err := m.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filter})
 	if err != nil {
 		logger.Error("Failed to list containers", "error", err)
@@ -140,14 +141,14 @@ func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 }
 
 // StartContainer launches a new OpenHands container with the specified configuration.
-func (m *Manager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string) error {
+func (m *Manager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool) error {
 	containerName := fmt.Sprintf("handholder-openhands-%d", port)
 	logger := getLogger(ctx).With("workspace_id", name, "port", port, "image", imageName, "container_name", containerName)
 
 	logger.Info("Creating container")
 
 	config := m.buildContainerConfig(imageName, env, name, port)
-	hostConfig := m.buildHostConfig(hostWorkspacePath, port)
+	hostConfig := m.buildHostConfig(hostWorkspacePath, port, disableSocketMount)
 
 	resp, err := m.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
 	if err != nil {
@@ -185,7 +186,7 @@ func (m *Manager) buildContainerConfig(imageName string, env map[string]string, 
 	}
 }
 
-func (m *Manager) buildHostConfig(hostWorkspacePath string, port int) *container.HostConfig {
+func (m *Manager) buildHostConfig(hostWorkspacePath string, port int, disableSocketMount bool) *container.HostConfig {
 	mounts := []mount.Mount{
 		{
 			Type:   mount.TypeBind,
@@ -193,7 +194,7 @@ func (m *Manager) buildHostConfig(hostWorkspacePath string, port int) *container
 			Target: "/workspace",
 		},
 	}
-	if m.dockerSocket != "" {
+	if !disableSocketMount && m.dockerSocket != "" {
 		mounts = append(mounts, mount.Mount{
 			Type:   mount.TypeBind,
 			Source: m.dockerSocket,
@@ -217,10 +218,10 @@ func (m *Manager) buildHostConfig(hostWorkspacePath string, port int) *container
 
 // GetContainerStatus returns the current state (running, exited, etc.) and the workspace name for a given port.
 func (m *Manager) GetContainerStatus(ctx context.Context, port int) (string, string, error) {
-	name := fmt.Sprintf("handholder-openhands-%d", port)
 	logger := getLogger(ctx).With("port", port)
 	filter := filters.NewArgs()
-	filter.Add("name", name)
+	filter.Add("label", "managed-by=handholder")
+	filter.Add("label", fmt.Sprintf("port=%d", port))
 	containers, err := m.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: filter})
 	if err != nil {
 		logger.Error("Failed to list containers for status", "error", err)

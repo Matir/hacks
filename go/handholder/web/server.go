@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/matir/hacks/go/handholder/config"
 	"github.com/matir/hacks/go/handholder/docker"
@@ -30,21 +31,24 @@ const loggerKey contextKey = "logger"
 
 // Server represents the HandHolder web server.
 type Server struct {
-	cfg     *config.Config
-	docker  docker.DockerManager
-	status  map[int]string
-	mu      sync.Mutex
-	locks   map[int]*sync.Mutex
-	locksMu sync.Mutex
+	cfg      *config.Config
+	docker   docker.DockerManager
+	status   map[int]string
+	mu       sync.Mutex
+	locks    map[int]*sync.Mutex
+	locksMu  sync.Mutex
+	template *template.Template
 }
 
 // NewServer creates a new web server instance with the given configuration and Docker manager.
 func NewServer(cfg *config.Config, docker docker.DockerManager) *Server {
+	tmpl := template.Must(template.ParseFS(templates, "templates/index.html"))
 	return &Server{
-		cfg:    cfg,
-		docker: docker,
-		status: make(map[int]string),
-		locks:  make(map[int]*sync.Mutex),
+		cfg:      cfg,
+		docker:   docker,
+		status:   make(map[int]string),
+		locks:    make(map[int]*sync.Mutex),
+		template: tmpl,
 	}
 }
 
@@ -159,18 +163,13 @@ func (s *Server) getLock(port int) *sync.Mutex {
 
 // handleIndex serves the main page listing all workspaces.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFS(templates, "templates/index.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	type workspaceView struct {
-		ID     string
-		Name   string
-		Port   int
-		Status string
-		Active bool
+		ID        string
+		Name      string
+		Port      int
+		Workspace string
+		Status    string
+		Active    bool
 	}
 
 	var workspaces []workspaceView
@@ -186,11 +185,12 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 
 		workspaces = append(workspaces, workspaceView{
-			ID:     id,
-			Name:   ws.Name,
-			Port:   port,
-			Status: state,
-			Active: activeWorkspace == id,
+			ID:        id,
+			Name:      ws.Name,
+			Port:      port,
+			Workspace: ws.Workspace,
+			Status:    state,
+			Active:    activeWorkspace == id,
 		})
 	}
 
@@ -198,7 +198,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return workspaces[i].Name < workspaces[j].Name
 	})
 
-	tmpl.Execute(w, workspaces)
+	s.template.Execute(w, workspaces)
 }
 
 // handleLaunch initiates the launch of a specific workspace.
@@ -258,7 +258,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.updateStatus(ctx, port, "Launching container...")
-		if err := s.docker.StartContainer(ctx, id, port, ws.Workspace, image, env); err != nil {
+		if err := s.docker.StartContainer(ctx, id, port, ws.Workspace, image, env, s.cfg.HandHolder.DisableSocketMount); err != nil {
 			s.updateStatus(ctx, port, fmt.Sprintf("Error starting: %v", err))
 			return
 		}
@@ -310,7 +310,12 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 // handleStatus returns the current startup or operational status of a workspace as JSON.
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	portStr := r.URL.Query().Get("port")
-	port, _ := strconv.Atoi(portStr)
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid port"})
+		return
+	}
 
 	var status string
 	var ok bool
@@ -329,6 +334,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateStatus updates the internal status map and logs the change.
+// Stable statuses (Running, not running, or Error*) are cleared after 5 minutes to prevent memory growth.
 func (s *Server) updateStatus(ctx context.Context, port int, msg string) {
 	func() {
 		s.mu.Lock()
@@ -336,4 +342,15 @@ func (s *Server) updateStatus(ctx context.Context, port int, msg string) {
 		s.status[port] = msg
 	}()
 	getLogger(ctx).Info(msg, "port", port)
+
+	// Clean up stable statuses after 5 minutes
+	if msg == "Running" || msg == "not running" || strings.HasPrefix(msg, "Error") {
+		time.AfterFunc(5*time.Minute, func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.status[port] == msg {
+				delete(s.status, port)
+			}
+		})
+	}
 }
