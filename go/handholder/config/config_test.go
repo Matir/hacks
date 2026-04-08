@@ -241,9 +241,10 @@ func TestResolveEnvErrors(t *testing.T) {
 func TestApplyOverrides(t *testing.T) {
 	cfg := &Config{
 		HandHolder: HandHolderConfig{
-			BindAddress:   "127.0.0.1",
-			Port:          3000,
-			PreloadImages: true,
+			BindAddress:    "127.0.0.1",
+			Port:           3000,
+			PreloadImages:  true,
+			TrustedProxies: []string{"1.2.3.4"},
 		},
 	}
 

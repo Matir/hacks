@@ -175,23 +175,14 @@ func (cfg *Config) ApplyOverrides(o Overrides) {
 		cfg.HandHolder.DockerSocket = o.DockerSocket
 	}
 	if o.TrustedProxies != "" {
-		proxies := strings.Split(o.TrustedProxies, ",")
-		for _, p := range proxies {
+		var proxies []string
+		for _, p := range strings.Split(o.TrustedProxies, ",") {
 			p = strings.TrimSpace(p)
 			if p != "" {
-				// Avoid duplicates
-				found := false
-				for _, existing := range cfg.HandHolder.TrustedProxies {
-					if existing == p {
-						found = true
-						break
-					}
-				}
-				if !found {
-					cfg.HandHolder.TrustedProxies = append(cfg.HandHolder.TrustedProxies, p)
-				}
+				proxies = append(proxies, p)
 			}
 		}
+		cfg.HandHolder.TrustedProxies = proxies
 	}
 	if o.DisableSocketMount != nil {
 		cfg.HandHolder.DisableSocketMount = *o.DisableSocketMount
