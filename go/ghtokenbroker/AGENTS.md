@@ -13,7 +13,8 @@ See @README.md for a general description and @design_requirements.md for the ful
 ## Package Layout
 
 ```
-cmd/ghtokenbroker/   Entry point (main package)
+cmd/ghtokenbroker/   Entry point for the broker server (main package)
+cmd/ghtok/           Client CLI for fetching tokens (main package)
 config/              TOML config loading and PermissionSet type
 secrets/             GitHub App private key loading (PEM file or GCP Secret Manager)
 cache/               Generic in-memory TTL cache
@@ -125,3 +126,71 @@ Every request — allowed and denied — produces a JSON line on stdout:
 ```
 
 Token values never appear in audit logs.
+
+## Using ghtok
+
+`ghtok` is the purpose-built client for the token broker. Build it alongside the server:
+
+```sh
+go build -o ghtok ./cmd/ghtok
+```
+
+### Configuration
+
+Create `~/.ghtok` (TOML) with your agent credentials:
+
+```toml
+api_key = "<your-agent-api-key>"
+server  = "unix:///run/ghtokenbroker.sock"
+# or: server = "tcp://127.0.0.1:8080"
+default_permissions = ["contents:write", "metadata:read"]
+```
+
+Configuration is also accepted via environment variables (`GHTOK_API_KEY`,
+`GHTOK_SERVER`) or flags (`--api-key`, `--server`), each overriding the
+previous source.
+
+### Fetching a token
+
+```sh
+# Print the raw token to stdout — useful in scripts
+TOKEN=$(ghtok --repo myorg/myrepo --permissions contents:write,metadata:read)
+```
+
+### Transparent gh wrapper
+
+Place `ghtok` earlier in `PATH` than the real `gh`, or symlink it as `gh`.
+It detects the current repository from `git remote origin`, fetches a token,
+and execs the real `gh` binary with `GH_TOKEN` set. All arguments pass through
+unchanged.
+
+```sh
+ln -s /usr/local/bin/ghtok /usr/local/bin/gh
+gh pr create --title "automated change"   # token injected automatically
+```
+
+Alternatively, prefix any `gh` invocation explicitly:
+
+```sh
+ghtok gh issue list --repo myorg/myrepo
+```
+
+### Git credential helper
+
+Configure `ghtok` as a git credential helper so `git push`/`git pull`
+authenticate automatically:
+
+```sh
+git config --global credential.helper ghtok
+# Scope to github.com only:
+git config --global credential.https://github.com.helper ghtok
+```
+
+When git requests credentials, `ghtok` returns:
+```
+username=x-access-token
+password=<installation_token>
+```
+
+The repo is derived from the credential `path` field supplied by git, or falls
+back to `git remote get-url origin` in the current directory.
