@@ -1,0 +1,20 @@
+openhands {
+	# Forward /handholder* to localhost:3001 with prefix stripped
+	handle_path /handholder* {
+		reverse_proxy localhost:3001
+	}
+
+	# Forward all other requests to localhost:3000
+	handle {
+		reverse_proxy localhost:3000
+	}
+
+	# If localhost:3000 is unreachable (502 or 503), redirect to /handholder
+	handle_errors {
+		@gateway_error {
+			expression {err.status_code} == 502 || {err.status_code} == 503
+			not path /handholder*
+		}
+		redir @gateway_error /handholder
+	}
+}
