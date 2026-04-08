@@ -1,4 +1,11 @@
 openhands {
+	# Protect all routes with forward_auth
+	# Replace 'auth-service:9091' with your actual auth provider (e.g., Authelia or Authentik)
+	forward_auth auth-service:9091 {
+		uri /api/verify?rd=https://auth.example.com/
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+
 	# Forward /handholder* to localhost:3001 with prefix stripped
 	handle_path /handholder* {
 		reverse_proxy localhost:3001

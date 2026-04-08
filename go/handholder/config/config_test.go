@@ -466,3 +466,31 @@ func TestGetLogHandler(t *testing.T) {
 		t.Fatal("GetLogHandler returned nil handler")
 	}
 }
+
+func TestExampleConfig(t *testing.T) {
+	// Find the example config relative to the project root
+	// config_test.go is in the config/ directory
+	configPath := "../handholder.toml"
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load example config: %v", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Example config failed validation: %v", err)
+	}
+
+	// Basic checks to ensure it loaded what we expect
+	if cfg.HandHolder.Port != 3001 {
+		t.Errorf("expected handholder port 3001, got %d", cfg.HandHolder.Port)
+	}
+
+	if _, ok := cfg.Workspaces["alpha"]; !ok {
+		t.Error("expected workspace 'alpha' to exist")
+	}
+
+	if _, ok := cfg.Workspaces["beta"]; !ok {
+		t.Error("expected workspace 'beta' to exist")
+	}
+}

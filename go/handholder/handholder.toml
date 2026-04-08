@@ -12,9 +12,9 @@ image = "ghcr.io/all-hands-ai/openhands:0.21.0" # Default version
 
 [workspace.alpha]
 workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/alpha"
-name = Alpha
+name = "Alpha"
 
 [workspace.beta]
 workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/beta"
-name = Beta
+name = "Beta"
 port = 3002
