@@ -1,4 +1,4 @@
-test_workspaces
-handholder
-coverage.out
-cmd/handholder/handholder
+/test_workspaces
+/handholder
+/coverage.out
+/cmd/handholder/handholder

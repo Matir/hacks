@@ -29,6 +29,7 @@ type HandHolderConfig struct {
 	DockerSocket       string   `toml:"docker_socket"`
 	TrustedProxies     []string `toml:"trusted_proxies"`
 	DisableSocketMount bool     `toml:"disable_socket_mount"`
+	PreloadImages      bool     `toml:"preload_images"`
 }
 
 // WorkspaceConfig contains settings for a specific OpenHands workspace or global defaults.
@@ -49,6 +50,9 @@ type WorkspaceConfig struct {
 // LoadConfig reads and parses a TOML configuration file from the given path.
 func LoadConfig(path string) (*Config, error) {
 	var cfg Config
+	// Default PreloadImages to true
+	cfg.HandHolder.PreloadImages = true
+
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode config: %w", err)
 	}
@@ -149,6 +153,7 @@ type Overrides struct {
 	DockerSocket       string
 	TrustedProxies     string
 	DisableSocketMount *bool
+	PreloadImages      *bool
 }
 
 // ApplyOverrides applies the provided flag overrides to the configuration.
@@ -191,6 +196,9 @@ func (cfg *Config) ApplyOverrides(o Overrides) {
 	if o.DisableSocketMount != nil {
 		cfg.HandHolder.DisableSocketMount = *o.DisableSocketMount
 	}
+	if o.PreloadImages != nil {
+		cfg.HandHolder.PreloadImages = *o.PreloadImages
+	}
 }
 
 // DefaultEnv returns the default environment variables for all containers.
@@ -200,7 +208,7 @@ func DefaultEnv(defaults WorkspaceConfig) map[string]string {
 		"RUNTIME": "docker",
 	}
 	if defaults.SandboxBaseImage != "" {
-		env["SANDBOX_BASE_CONTAINER_IMAGE"] = ensureTag(defaults.SandboxBaseImage)
+		env["SANDBOX_BASE_CONTAINER_IMAGE"] = EnsureTag(defaults.SandboxBaseImage)
 	}
 	if defaults.SandboxUserID != "" {
 		env["SANDBOX_USER_ID"] = defaults.SandboxUserID
@@ -218,8 +226,8 @@ func DefaultEnv(defaults WorkspaceConfig) map[string]string {
 	return env
 }
 
-// ensureTag adds :latest if no tag is present in the image name.
-func ensureTag(image string) string {
+// EnsureTag adds :latest if no tag is present in the image name.
+func EnsureTag(image string) string {
 	if !strings.Contains(image, ":") {
 		return image + ":latest"
 	}
@@ -252,7 +260,7 @@ func (w *WorkspaceConfig) ResolveEnv(defaults WorkspaceConfig) (map[string]strin
 
 	// 3. Workspace-specific SandboxBaseImage
 	if w.SandboxBaseImage != "" {
-		resolved["SANDBOX_BASE_CONTAINER_IMAGE"] = ensureTag(w.SandboxBaseImage)
+		resolved["SANDBOX_BASE_CONTAINER_IMAGE"] = EnsureTag(w.SandboxBaseImage)
 	}
 
 	// 3.1 Workspace-specific SandboxUserID

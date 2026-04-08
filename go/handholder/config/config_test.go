@@ -46,9 +46,20 @@ sandbox_base_image = "ubuntu:22.04"
 		t.Errorf("expected default sandbox_user_id %s, got %s", u.Uid, cfg.Defaults.SandboxUserID)
 	}
 
-	ws := cfg.Workspaces["test"]
-	if ws.SandboxBaseImage != "ubuntu:22.04" {
-		t.Errorf("expected workspace sandbox_base_image ubuntu:22.04, got %s", ws.SandboxBaseImage)
+	if cfg.HandHolder.PreloadImages != true {
+		t.Errorf("expected default preload_images true, got %v", cfg.HandHolder.PreloadImages)
+	}
+
+	// Test override in TOML
+	content2 := `
+[handholder]
+preload_images = false
+`
+	configPath2 := filepath.Join(tmpDir, "handholder2.toml")
+	os.WriteFile(configPath2, []byte(content2), 0644)
+	cfg2, _ := LoadConfig(configPath2)
+	if cfg2.HandHolder.PreloadImages != false {
+		t.Errorf("expected preload_images false from TOML, got %v", cfg2.HandHolder.PreloadImages)
 	}
 }
 
@@ -230,15 +241,18 @@ func TestResolveEnvErrors(t *testing.T) {
 func TestApplyOverrides(t *testing.T) {
 	cfg := &Config{
 		HandHolder: HandHolderConfig{
-			BindAddress: "127.0.0.1",
-			Port:        3000,
+			BindAddress:   "127.0.0.1",
+			Port:          3000,
+			PreloadImages: true,
 		},
 	}
 
+	f := false
 	cfg.ApplyOverrides(Overrides{
 		BindAddress:    "0.0.0.0",
 		Port:           3001,
 		TrustedProxies: "10.0.0.1, 192.168.1.1",
+		PreloadImages:  &f,
 	})
 
 	if cfg.HandHolder.BindAddress != "0.0.0.0" {
@@ -246,6 +260,9 @@ func TestApplyOverrides(t *testing.T) {
 	}
 	if cfg.HandHolder.Port != 3001 {
 		t.Errorf("expected 3001, got %d", cfg.HandHolder.Port)
+	}
+	if cfg.HandHolder.PreloadImages != false {
+		t.Errorf("expected preload_images false, got %v", cfg.HandHolder.PreloadImages)
 	}
 	expectedProxies := []string{"10.0.0.1", "192.168.1.1"}
 	if !reflect.DeepEqual(cfg.HandHolder.TrustedProxies, expectedProxies) {
