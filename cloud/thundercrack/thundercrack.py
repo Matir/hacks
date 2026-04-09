@@ -3,11 +3,14 @@
 import argparse
 import binascii
 import json
+import logging
 import os
+import pathlib
 import requests
 import shlex
 import sys
 import tempfile
+import time
 
 from libcloud.compute import base
 from libcloud.compute import deployment
@@ -27,17 +30,16 @@ HASHCAT_BIN_PATH = "/root/hashcat/hashcat.bin"
 PASSWD_FILE_PATH = "/root/passwd"
 WORDLIST_FILE_PATH = "/root/wordlist"
 
-STATUS_OK = 'ok'
-STATUS_ERROR = 'error'
+# Configure logging
+logger = logging.getLogger('thundercrack')
 
-msg_prefix = {
-        STATUS_OK: '[+] ',
-        STATUS_ERROR: '[!] ',
-}
-
-
-def print_msg(msg: str, status: str = STATUS_OK) -> None:
-    print('{}{}'.format(msg_prefix[status], msg), flush=True)
+def setup_logging(verbose: bool = False) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(levelname)s: %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(level)
 
 
 def get_driver(
@@ -85,6 +87,11 @@ class ThunderCrackArgs(argparse.Namespace):
     hashfile: Optional[str]
     benchmark: bool
     debug_cmd: bool
+    verbose: bool
+    instance_name: Optional[str]
+    spot: bool
+    auto_shutdown: bool
+    download_results: bool
     hashcat_args: List[str]
 
 
@@ -124,6 +131,20 @@ def get_args(argv: Sequence[str]) -> ThunderCrackArgs:
             '--debug_cmd', default=False, action='store_true',
             help='Debugging command: print hashcat command line only.')
     parser.add_argument(
+            '--verbose', default=False, action='store_true',
+            help='Enable verbose logging.')
+    parser.add_argument(
+            '--instance_name', default=None, help='Custom instance name.')
+    parser.add_argument(
+            '--spot', default=False, action='store_true',
+            help='Use spot (preemptible) instances to save cost.')
+    parser.add_argument(
+            '--auto_shutdown', default=False, action='store_true',
+            help='Automatically shut down the instance after hashcat finishes.')
+    parser.add_argument(
+            '--download_results', default=False, action='store_true',
+            help='Wait for hashcat to finish and download the results.')
+    parser.add_argument(
             'hashcat_args', nargs='*', default=[],
             help='Extra arguments for hashcat.')
     args, extras = parser.parse_known_args(
@@ -147,7 +168,7 @@ def list_available_choices(driver: base.NodeDriver) -> None:
 
 def get_image(
         driver: base.NodeDriver,
-        basename: str = 'debian-10') -> base.NodeImage:
+        basename: str = 'debian-13') -> base.NodeImage:
     """Find an image that starts with a given name."""
     for image in driver.list_images():
         if image.name.startswith(basename):
@@ -167,6 +188,12 @@ def get_size(
 def get_ssh_key(key_path: Optional[str] = None) -> pkey.PKey:
     if key_path:
         return pkey.PKey.from_private_key_file(key_path)
+    
+    # Check for default generated key.
+    default_key = pathlib.Path("thundercrack_id_ecdsa")
+    if default_key.exists():
+        return pkey.PKey.from_private_key_file(str(default_key))
+        
     return ecdsakey.ECDSAKey.generate()
 
 
@@ -188,11 +215,11 @@ class CheckedMultiStepDeployment(deployment.MultiStepDeployment):
         ScriptDeployment returns are checked.
         """
         for s in self.steps:
-            print_msg('Running step: {!r}'.format(s))
+            logger.info('Running step: %r', s)
             node = s.run(node, client)
             if isinstance(s, deployment.ScriptDeployment):
                 if s.exit_status != 0:
-                    print_msg('Step failed: {}'.format(s.stderr), STATUS_ERROR)
+                    logger.error('Step failed: %s', s.stderr)
                     raise ScriptFailedError('Failed Script: {!r}'.format(s))
         return node
 
@@ -234,7 +261,16 @@ def build_hashcat_command(args: ThunderCrackArgs) -> str:
 def build_tmux_command(args: ThunderCrackArgs) -> str:
     """Build the tmux line."""
     hashcat_cmd = build_hashcat_command(args)
-    print_msg('Hashcat command line: {}'.format(hashcat_cmd))
+    logger.info('Hashcat command line: %s', hashcat_cmd)
+    
+    # Touch a marker file when done.
+    hashcat_cmd = f"{hashcat_cmd}; touch /tmp/thundercrack_done"
+
+    # If auto_shutdown is requested AND we aren't downloading, append a poweroff command.
+    # Note: this will only execute if hashcat finishes (even if it fails).
+    if args.auto_shutdown and not args.download_results:
+        hashcat_cmd = f"{hashcat_cmd}; logger -t thundercrack 'Auto-shutdown triggered'; poweroff"
+
     cmd = [
             "tmux",
             "new-session",
@@ -247,23 +283,35 @@ def build_tmux_command(args: ThunderCrackArgs) -> str:
 def get_deploy_steps(args: ThunderCrackArgs) -> CheckedMultiStepDeployment:
     """Get the deployment steps."""
     hashcat_url = get_hashcat_download()
-    setup_script_steps = [
-            "cd /root",
-            "sed -i 's/ main/ main contrib non-free/' /etc/apt/sources.list",
-            "apt-get update",
-            "DEBIAN_FRONTEND=noninteractive apt-get -y install p7zip wget "
-            "tmux linux-headers-$(uname -r)",
-            "DEBIAN_FRONTEND=noninteractive apt-get -t buster-backports -y "
-            "install nvidia-cuda-dev nvidia-cuda-toolkit nvidia-driver",
-            "modprobe nvidia",
-            "wget -O /tmp/hashcat.7z {}".format(hashcat_url),
-            "7zr x /tmp/hashcat.7z",
-            "ln -s hashcat-* hashcat",
-    ]
-    setup_script = ' && '.join(setup_script_steps)
-    setup_deployment = deployment.ScriptDeployment(setup_script)
+    if not hashcat_url:
+        logger.error("Could not find hashcat download URL")
+        sys.exit(1)
 
-    steps = CheckedMultiStepDeployment([setup_deployment])
+    steps = CheckedMultiStepDeployment([])
+
+    # 1. Base dependencies and system prep
+    prep_script = [
+        "cd /root",
+        "sed -i 's/ main/ main contrib non-free/' /etc/apt/sources.list",
+        "apt-get update",
+        "DEBIAN_FRONTEND=noninteractive apt-get -y install p7zip wget tmux linux-headers-$(uname -r)",
+    ]
+    steps.add(deployment.ScriptDeployment(' && '.join(prep_script), name='system_prep'))
+
+    # 2. NVIDIA Driver installation
+    driver_script = [
+        "DEBIAN_FRONTEND=noninteractive apt-get -y install nvidia-cuda-dev nvidia-cuda-toolkit nvidia-driver",
+        "modprobe nvidia || true",
+    ]
+    steps.add(deployment.ScriptDeployment(' && '.join(driver_script), name='driver_install'))
+
+    # 3. Hashcat download and extraction
+    hashcat_script = [
+        f"wget -O /tmp/hashcat.7z {hashcat_url}",
+        "7zr x /tmp/hashcat.7z",
+        "rm -f hashcat && ln -s hashcat-* hashcat",
+    ]
+    steps.add(deployment.ScriptDeployment(' && '.join(hashcat_script), name='hashcat_setup'))
 
     if not args.benchmark:
         ensure_file_exists(
@@ -282,7 +330,7 @@ def get_deploy_steps(args: ThunderCrackArgs) -> CheckedMultiStepDeployment:
             steps.add(wordlist_deployment)
 
     tmux_cmd = build_tmux_command(args)
-    tmux_deployment = deployment.ScriptDeployment(tmux_cmd)
+    tmux_deployment = deployment.ScriptDeployment(tmux_cmd, name='start_cracking')
     steps.add(tmux_deployment)
 
     return steps
@@ -290,12 +338,16 @@ def get_deploy_steps(args: ThunderCrackArgs) -> CheckedMultiStepDeployment:
 
 def get_hashcat_download() -> Optional[str]:
     """Get the URL for the hashcat download."""
-    resp = requests.get(HASHCAT_RELEASES_URL)
-    body = resp.json()
-    for asset in body['assets']:
-        url = asset['browser_download_url']
-        if url.endswith('.7z'):
-            return url
+    try:
+        resp = requests.get(HASHCAT_RELEASES_URL)
+        resp.raise_for_status()
+        body = resp.json()
+        for asset in body.get('assets', []):
+            url = asset.get('browser_download_url')
+            if url and url.endswith('.7z'):
+                return url
+    except (requests.RequestException, ValueError) as e:
+        logger.error("Failed to fetch hashcat releases: %s", e)
     return None
 
 
@@ -306,16 +358,23 @@ def build_vm(
         gpu_type: str,
         gpus: int,
         ssh_key: pkey.PKey,
+        ssh_key_path: str,
         disk_size: int,
-        deploy_steps: deployment.Deployment) -> base.Node:
+        deploy_steps: deployment.Deployment,
+        instance_name: Optional[str] = None,
+        spot: bool = False) -> base.Node:
     """Build the VM."""
     kwargs: Dict[str, Any] = dict()
     if gpus:
         kwargs['ex_accelerator_type'] = gpu_type
         kwargs['ex_accelerator_count'] = gpus
         kwargs['ex_on_host_maintenance'] = 'TERMINATE'
-    name = get_instance_name()
-    print_msg('New instance will be named: {}'.format(name))
+    
+    if spot:
+        kwargs['ex_preemptible'] = True
+    
+    name = instance_name or get_instance_name()
+    logger.info('New instance will be named: %s', name)
     pubkey = '{} {}'.format(ssh_key.get_name(), ssh_key.get_base64())
     metadata = {
         'items': [
@@ -325,52 +384,97 @@ def build_vm(
             }
         ]
     }
-    driver._build_service_accounts_gce_list = (  # type: ignore
-            lambda *args, **kwargs: [])
 
-    # Write temporary path
-    with tempfile.NamedTemporaryFile('w') as tmpf:
-        ssh_key.write_private_key(tmpf)
-        tmpf.flush()
-        print_msg("Starting build/deploy steps.")
-        print_msg(
-                "Note: this can take several minutes for the instance to "
-                "become ready, hashcat to be deployed, etc.")
-        node = driver.deploy_node(
-                name=name,
-                image=image,
-                size=size,
-                ex_metadata=metadata,
-                deploy=deploy_steps,
-                ssh_key=tmpf.name,
-                ex_disk_size=disk_size,
-                ex_service_accounts=[],
-                **kwargs)
-        return node
+    logger.info("Starting build/deploy steps.")
+    logger.info(
+            "Note: this can take several minutes for the instance to "
+            "become ready, hashcat to be deployed, etc.")
+    node = driver.deploy_node(
+            name=name,
+            image=image,
+            size=size,
+            ex_metadata=metadata,
+            deploy=deploy_steps,
+            ssh_key=ssh_key_path,
+            ex_disk_size=disk_size,
+            ex_service_accounts=[],
+            **kwargs)
+    return node
+
+
+def wait_and_download(
+        node: base.Node,
+        key: pkey.PKey,
+        args: ThunderCrackArgs) -> None:
+    """Wait for results and download them."""
+    ip = node.public_ips[0]
+    logger.info("Waiting for results from %s...", ip)
+    
+    # We use paramiko to check for the completion file.
+    import paramiko
+    
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # Retry loop to connect (instance might still be booting or script running)
+    connected = False
+    for i in range(120): # 10 minutes (5 second interval)
+        try:
+            client.connect(ip, username='root', pkey=key, timeout=10)
+            connected = True
+            break
+        except Exception:
+            time.sleep(5)
+            
+    if not connected:
+        logger.error("Failed to connect to %s after 10 minutes", ip)
+        return
+
+    # Now poll for the file /tmp/thundercrack_done
+    logger.info("Connected. Polling for completion...")
+    while True:
+        _, stdout, _ = client.exec_command('ls /tmp/thundercrack_done')
+        if stdout.channel.recv_exit_status() == 0:
+            break
+        time.sleep(30)
+    
+    logger.info("Hashcat finished. Downloading results...")
+    sftp = client.open_sftp()
+    remote_path = PASSWD_FILE_PATH + ".out"
+    local_path = "passwd.out"
+    try:
+        sftp.get(remote_path, local_path)
+        logger.info("Results downloaded to %s", local_path)
+    except Exception as e:
+        logger.error("Failed to download results: %s", e)
+    finally:
+        sftp.close()
+        client.close()
+
+    if args.auto_shutdown:
+        logger.info("Auto-shutdown: destroying instance %s", node.name)
+        node.destroy()
 
 
 def ensure_file_exists(
         path: Optional[str],
         error: str = 'Required file missing.') -> Optional[NoReturn]:
     if path is None:
-        print_msg(error, STATUS_ERROR)
+        logger.error(error)
         sys.exit(1)
-    try:
-        if not os.path.isfile(path):
-            print_msg(error, STATUS_ERROR)
-            sys.exit(1)
-    except TypeError:
-        print_msg(error, STATUS_ERROR)
-        sys.exit(2)
+    if not pathlib.Path(path).is_file():
+        logger.error(error)
+        sys.exit(1)
     return None
 
 
 def main(argv: List[str]) -> None:
     args = get_args(argv)
+    setup_logging(args.verbose)
     if args.debug_cmd:
         print(build_hashcat_command(args))
         return
-    print_msg("Getting driver and setting up...")
+    logger.info("Getting driver and setting up...")
     driver = get_driver(
             account_name=args.service_account,
             json_path=args.credentials,
@@ -379,15 +483,40 @@ def main(argv: List[str]) -> None:
     image = get_image(driver)
     size = get_size(driver, name=args.size)
     key = get_ssh_key(args.ssh_key)
-    print_msg("Setting up deploy steps...")
+    
+    # Save the key if it was generated and doesn't exist.
+    if not args.ssh_key:
+        key_path = pathlib.Path("thundercrack_id_ecdsa")
+        if not key_path.exists():
+            key.write_private_key_file(str(key_path))
+            key_path.chmod(0o600)
+            logger.info("Generated new SSH key and saved to %s", key_path)
+        else:
+            logger.info("Using existing generated key %s", key_path)
+
+    logger.info("Setting up deploy steps...")
     deploy_steps = get_deploy_steps(args)
-    print_msg("Starting build...")
-    node = build_vm(
-            driver, image, size, args.gpu, args.gpus, key,
-            args.disk_size, deploy_steps)
-    print_msg(
+    
+    # Use a temporary file to pass the key to libcloud's deploy_node.
+    with tempfile.NamedTemporaryFile('w', delete=True) as tmpf:
+        key.write_private_key(tmpf)
+        tmpf.flush()
+        
+        logger.info("Starting build...")
+        node = build_vm(
+                driver, image, size, args.gpu, args.gpus, key,
+                tmpf.name, args.disk_size, deploy_steps,
+                instance_name=args.instance_name, spot=args.spot)
+        
+    logger.info(
         "Started hashcat. SSH to instance attach to TMUX to see status/output")
-    print_msg("gcloud compute ssh {}".format(node.name))
+    logger.info("gcloud compute ssh %s", node.name)
+
+    if args.download_results:
+        if not node.public_ips:
+            logger.error("No public IP available for results download.")
+        else:
+            wait_and_download(node, key, args)
 
 
 if __name__ == '__main__':
