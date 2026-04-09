@@ -13,6 +13,8 @@ SHOW_PARENT=false
 OUTPUT_JSON=false
 ONLY_FORKS=false
 SKIP_FORKS=false
+ONLY_ARCHIVED=false
+SKIP_ARCHIVED=false
 
 # Parse flags
 while [[ "$#" -gt 0 ]]; do
@@ -22,6 +24,8 @@ while [[ "$#" -gt 0 ]]; do
         -j|--json) OUTPUT_JSON=true ;;
         -f|--forks) ONLY_FORKS=true; SKIP_FORKS=false ;;
         --no-forks) SKIP_FORKS=true; ONLY_FORKS=false ;;
+        --archived) ONLY_ARCHIVED=true; SKIP_ARCHIVED=false ;;
+        --no-archived) SKIP_ARCHIVED=true; ONLY_ARCHIVED=false ;;
         -b|--before) 
             if [[ -z "$2" || "$2" == -* ]]; then
                 echo "Error: --before requires a date argument (e.g., YYYY-MM-DD)" >&2
@@ -31,7 +35,7 @@ while [[ "$#" -gt 0 ]]; do
             shift 
             ;;
         -h|--help)
-            echo "Usage: $0 [-r|--reverse] [-p|--show-parent] [-j|--json] [-f|--forks] [--no-forks] [-b|--before YYYY-MM-DD]"
+            echo "Usage: $0 [-r|--reverse] [-p|--show-parent] [-j|--json] [-f|--forks] [--no-forks] [--archived] [--no-archived] [-b|--before YYYY-MM-DD]"
             exit 0
             ;;
         *) echo "Unknown parameter: $1" >&2; exit 1 ;;
@@ -53,6 +57,8 @@ fi
 GH_ARGS=(repo list "$USERNAME" --limit 1000 --json nameWithOwner,pushedAt,parent)
 [[ "$ONLY_FORKS" == true ]] && GH_ARGS+=(--fork)
 [[ "$SKIP_FORKS" == true ]] && GH_ARGS+=(--source)
+[[ "$ONLY_ARCHIVED" == true ]] && GH_ARGS+=(--archived)
+[[ "$SKIP_ARCHIVED" == true ]] && GH_ARGS+=(--no-archived)
 
 # Build JQ filter
 # 1. Filter for ownership
@@ -82,6 +88,8 @@ SORT_DESC="newest first"
 MSG="Listing repositories for user: $USERNAME, sorted by last push date ($SORT_DESC)"
 [[ "$ONLY_FORKS" == true ]] && MSG="Listing FORKS owned by user: $USERNAME, sorted by last push date ($SORT_DESC)"
 [[ "$SKIP_FORKS" == true ]] && MSG="Listing non-forks owned by user: $USERNAME, sorted by last push date ($SORT_DESC)"
+[[ "$ONLY_ARCHIVED" == true ]] && MSG="$MSG (archived only)"
+[[ "$SKIP_ARCHIVED" == true ]] && MSG="$MSG (non-archived only)"
 if [[ -n "$BEFORE_DATE" ]]; then
     MSG="$MSG, pushed before $BEFORE_DATE"
 fi
