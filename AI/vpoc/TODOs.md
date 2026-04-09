@@ -1,0 +1,16 @@
+- [ ] Bootstrap ADK Framework
+- [ ] Provide configuration interface for vpoc
+  - [ ] Listening port for web interface
+  - [ ] Base workspace directory
+  - [ ] Model providers configuration
+  - [ ] Model to use for each agent
+  - [ ] Daily budget cap (across all projects)
+  - [ ] Separate secret storage for API keys, etc.
+- [ ] Build web interface
+  - [ ] Display current project(s)
+  - [ ] Show running/paused status
+- [ ] Build agents
+  - [ ] Source review agent
+  - [ ] PoC Agent
+  - [ ] Validation agent
+  - [ ] Reporting agent
