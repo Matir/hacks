@@ -1,8 +1,32 @@
 # VPOC
 
-VPOC is a security analysis tool for Application Security.
+VPOC is an autonomous security analysis tool for Application Security, built on the Google Agent Development Kit (ADK).
 
-At the moment, it focuses on source-available security analysis.
+It focuses on source-available security analysis, combining LLM-driven vulnerability discovery with automated Proof-of-Concept (PoC) validation.
+
+## Architecture
+
+VPOC employs a multi-agent orchestration pattern:
+- **Orchestrator Agent**: Manages the lifecycle of findings and coordinates specialized agents.
+- **Source Review Agent**: Performs deep static analysis to identify potential vulnerabilities.
+- **PoC Agent**: Dynamically generates exploit scripts and specialized Docker environments.
+- **Validation Agent**: Executes PoCs in a sandboxed environment to confirm reachability and impact.
+- **Reporting Agent**: Aggregates findings and logs into human-readable security reports.
+
+## Features
+
+- **Multi-Language Support**: PHP, C/C++, Go, Rust, Lua.
+- **Autonomous Validation**: 
+  - Findings are validated by running the application in a hardened Docker container.
+  - **Sandboxed Execution**: Strict resource limits (CPU/RAM) and default **no network access** (or isolated private networks).
+  - **Hybrid Environment**: Uses pre-configured base containers specialized at runtime based on source analysis.
+- **Interactive Human-in-the-Loop**:
+  - Web-based dashboard for real-time monitoring and finding triage.
+  - **Project Initialization Wizard**: Kickoff reviews with high-level descriptions, git URLs, or file uploads.
+  - **Human Guidance**: Users can provide hints, approve/reject findings, and define strategic priorities.
+- **Resource Management**:
+  - **Deterministic Budgeting**: Hard daily budget caps enforced across all projects.
+  - **Per-Agent Model Assignment**: Optimize cost and performance by assigning specific models (e.g., Gemini 1.5 Pro vs. Flash) to different agents.
 
 ## Supported AI Platforms
 
@@ -10,28 +34,10 @@ At the moment, it focuses on source-available security analysis.
 - OpenRouter
 - Any OpenAI-Compatible
 
-## Features
-
-- Examine Source Code in a Variety of Languages
-  - PHP
-  - C/C++
-  - Go
-  - Rust
-  - Lua
-- Find security vulnerabilities
-  - Categorize
-- When possible, validate the finding by running the application in a Docker
-  container and peforming a minimal PoC.
-
 ## Feedback
 
 - Provide a log of the full LLM conversations in the findings.
 - Generate a clear report of the finding for human review.
-
-## Independence
-
-- The tool operates mostly autonomously, though with a human console that can
-  provide status monitoring and assistance.
 
 ## Author
 

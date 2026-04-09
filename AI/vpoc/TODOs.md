@@ -3,14 +3,21 @@
   - [ ] Listening port for web interface
   - [ ] Base workspace directory
   - [ ] Model providers configuration
-  - [ ] Model to use for each agent
-  - [ ] Daily budget cap (across all projects)
+  - [ ] Per-agent model assignment (Gemini Pro, Flash, etc.)
+  - [ ] Deterministic daily budget cap (Hard limit across all projects)
   - [ ] Separate secret storage for API keys, etc.
-- [ ] Build web interface
-  - [ ] Display current project(s)
-  - [ ] Show running/paused status
-- [ ] Build agents
-  - [ ] Source review agent
-  - [ ] PoC Agent
-  - [ ] Validation agent
-  - [ ] Reporting agent
+  - [ ] Registry of Docker base containers for supported languages
+- [ ] Build Orchestrator & State Management
+  - [ ] Findings database/JSON schema
+  - [ ] Lifecycle management for findings (Review -> PoC -> Validation -> Report)
+  - [ ] Token usage tracking and budget enforcement
+- [ ] Build Web Interface
+  - [ ] Project Initialization Wizard (git/URL/upload, high-value targets, hints)
+  - [ ] Real-time Interactive Dashboard
+  - [ ] Finding triage (Approve/Reject, Provide hints, Prioritize)
+  - [ ] Show running/paused status and budget alerts
+- [ ] Build Agents
+  - [ ] Source Review Agent (Prioritized static analysis)
+  - [ ] PoC Agent (Dynamic Dockerfile generation, exploit scripting)
+  - [ ] Validation Agent (Sandboxed execution, result monitoring)
+  - [ ] Reporting Agent (Final report generation)
