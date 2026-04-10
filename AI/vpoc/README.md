@@ -6,12 +6,14 @@ It focuses on source-available security analysis, combining LLM-driven vulnerabi
 
 ## Architecture
 
-VPOC employs a single-process, multi-agent orchestration pattern:
-- **Orchestrator Agent**: Manages the lifecycle of findings and coordinates specialized agents.
-- **Source Review Agent**: Performs deep static analysis to identify potential vulnerabilities.
-- **PoC Agent**: Dynamically generates exploit scripts and specialized Docker environments.
-- **Validation Agent**: Executes PoCs in a sandboxed environment to confirm reachability and impact.
-- **Reporting Agent**: Aggregates findings and logs into human-readable security reports.
+VPOC employs a single-process, multi-agent orchestration pattern, where each agent combines **deterministic tool-driven logic** with **LLM-driven reasoning**:
+- **Orchestrator Agent**: Manages the lifecycle of findings, project-wide state, and budget transitions.
+- **Attack Surface Mapper (Recon Agent)**: Maps the target's entry points and reasons about the semantic value of endpoints.
+- **Environment Architect (Build Agent)**: Automates and troubleshoots the build environment by interpreting error logs.
+- **Source Review Agent**: Performs deep static analysis and pre-screens tool findings for false positives.
+- **PoC Agent**: Dynamically generates specialized exploit scripts and Docker environments.
+- **Validation Agent**: Executes PoCs in a sandboxed environment and analyzes the security impact of results.
+- **Reporting Agent**: Aggregates findings and synthesizes logs into human-readable security reports.
 
 ## Features
 

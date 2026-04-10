@@ -13,13 +13,37 @@
 The [source is on Github](https://github.com/google/adk-python) and there is
 [documentation for agentic development by LLMs](https://github.com/google/adk-python/blob/main/llms.txt).
 
-## Agent Roles
+## Agent Roles & Intelligence Profiles
 
-- **Orchestrator Agent**: The central controller that manages the workflow, state, and budget. It maintains a findings database and coordinates the other agents.
-- **Source Review Agent**: Responsible for static source code analysis. It uses a parallel worker-pool architecture to execute multiple tools and analyze codebase shards concurrently.
-- **PoC Agent**: Takes a potential finding and attempts to generate an exploit script (PoC). It specializes Docker base containers by generating dynamic Dockerfiles to install dependencies.
-- **Validation Agent**: Executes the PoC in a hardened Docker sandbox. It monitors the application's response (e.g., crashes, unauthorized access) to confirm the finding's impact.
-- **Reporting Agent**: Compiles findings, logs, and PoC results into a final security report for human review.
+Each agent in VPOC combines **Deterministic Logic** (for reliability and speed) with **LLM-Driven Intelligence** (for reasoning and complex synthesis).
+
+### 1. Orchestrator Agent
+- **Deterministic**: State machine management, budget enforcement, finding lifecycle transitions, database transactions, and event broadcasting (Pub/Sub).
+- **LLM-Driven**: Interpreting broad user hints to adjust project-wide strategy and resolving conflicts between agent findings.
+
+### 2. Attack Surface Mapper (Recon Agent)
+- **Tool-Driven**: Static analysis of routing files (e.g., `routes.rb`, `urls.py`), configuration files (`docker-compose.yml`), and dependency manifests.
+- **LLM-Driven**: Reasoning about the *semantic importance* of endpoints (e.g., identifying high-value targets like authentication or payment flows) and inferring hidden parameters from naming conventions.
+
+### 3. Environment Architect (Build Agent)
+- **Tool-Driven**: Executing build commands (`make`, `npm install`, `cmake`), capturing exit codes, and parsing standard error output.
+- **LLM-Driven**: Interpreting complex compiler/linker errors to suggest missing system libraries and synthesizing build hints from unstructured `README.md` or `INSTALL` files.
+
+### 4. Source Review Agent
+- **Tool-Driven**: Orchestrating static analysis tools (Semgrep, CodeQL, Joern), sharding codebases, and deduplicating raw findings.
+- **LLM-Driven**: Pre-screening tool findings to filter out false positives and correlating disparate "weak signals" into a coherent vulnerability hypothesis.
+
+### 5. PoC Agent
+- **Tool-Driven**: Staging files to the filesystem and triggering Docker image builds.
+- **LLM-Driven**: Generating the exploit script (Python/Bash) and synthesizing specialized Dockerfiles to install dependencies for the specific exploit.
+
+### 6. Validation Agent
+- **Tool-Driven**: Managing the hardened Docker sandbox (gVisor/seccomp), monitoring container resource usage (CPU/RAM peaks), and capturing execution logs.
+- **LLM-Driven**: Analyzing the *outcome* of a PoC execution (e.g., "The heap dump confirms a buffer overflow" vs "The 500 error was a generic timeout").
+
+### 7. Reporting Agent
+- **Tool-Driven**: Markdown/PDF template rendering and finding-log aggregation.
+- **LLM-Driven**: Synthesizing technical logs into human-readable executive summaries, impact assessments, and remediation advice.
 
 ## Finding Lifecycle & Streaming
 

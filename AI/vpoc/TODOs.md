@@ -1,38 +1,54 @@
 # VPOC TODO List (MVP Prioritized)
 
 - [ ] **P0: Core Workflow Engine**
-  - [ ] [P0] Bootstrap ADK Framework (Orchestrator base)
-  - [ ] [P0] Build Agents:
-    - [ ] [P0] **Source Review Agent**
-      - [x] Implement `AnalysisRunner` for parallel tool execution
-      - [ ] [P0] Implement `SemgrepTool` integration (Easiest P0 tool)
-      - [ ] [P1] Implement `CodeQLTool` integration
-      - [ ] [P2] Implement `JoernTool` integration
-      - [ ] [P2] Implement language-specific tools (Psalm, govulncheck, cargo-audit)
-    - [ ] [P0] **PoC Agent** (Dynamic Dockerfile generation, exploit scripting)
-    - [ ] [P0] **Validation Agent** (Sandboxed execution, result monitoring)
-  - [ ] [P0] Build Orchestrator & State Management:
+  - [ ] [P0] **Bootstrap ADK Framework**
+    - [ ] Define base `VPOCAgent` class (Inheriting from ADK `Agent`)
+    - [ ] Implement Orchestrator-to-Agent command protocol
+    - [ ] Set up ADK-compatible event loop and message passing
+  - [ ] [P0] **Source Review Agent**
+    - [x] Implement `AnalysisRunner` for parallel tool execution
+    - [ ] [P0] **SemgrepTool** Integration:
+      - [ ] Implement Semgrep JSON output parser
+      - [ ] Implement rule-set selection logic based on language detection
+      - [ ] Implement `FindingExtractor` to convert tool results to VPOC schema
+    - [ ] [P1] Implement `CodeQLTool` integration
+  - [ ] [P0] **PoC Agent**
+    - [ ] Implement **ExploitGenerator** (LLM-driven Python script creation)
+    - [ ] Implement **DockerfileGenerator** (Dynamic specialization of base images)
+    - [ ] Implement **ArtifactStaging** (Writing scripts and Dockerfiles to `artifacts/`)
+  - [ ] [P0] **Validation Agent**
+    - [ ] Implement **DockerSandboxRunner** (using `docker-py` with gVisor/seccomp)
+    - [ ] Implement **ResultMonitor** (Capturing exit codes, logs, and memory/CPU peaks)
+    - [ ] Implement **CleanupHandler** (Force-removing containers and networks on exit)
+  - [ ] [P0] **Orchestrator & State Management**
     - [x] Implement `StorageManager` and database schema
-    - [ ] [P0] Lifecycle management for findings (POTENTIAL -> POC -> VALIDATED)
-    - [ ] [P0] **Priority-Weighted Queue** (Stream findings from discovery to PoC)
-    - [ ] [P0] **Sandbox Hardening Profile** (Implement gVisor/seccomp/resource constraints)
-    - [ ] [P1] Findings database/JSON schema (Refine based on agent output)
+    - [ ] [P0] **Finding Lifecycle Manager** (State transitions: POTENTIAL -> POC -> VALIDATED)
+    - [ ] [P0] **Priority-Weighted Queue**:
+      - [ ] Implement `FindingStreamer` (Real-time handoff to PoC Agent)
+      - [ ] Implement `WorkerPool` for parallel finding processing
+    - [ ] [P0] **Sandbox Hardening Profile** (Pre-baked Docker security configurations)
 
 - [ ] **P1: Usability & Configuration**
-  - [ ] [P1] Build TUI Mode (Single-Project Focused):
-    - [ ] [P1] Status Screen (Activity monitoring)
-    - [ ] [P1] Chat Screen (Interactive guidance)
-    - [ ] [P1] Findings Screen (Triage)
-    - [ ] [P1] Log Screen (Execution logs)
-  - [ ] [P1] Build Web Interface:
-    - [ ] [P1] Project Initialization Wizard (git/URL/upload, hints)
-    - [ ] [P1] Real-time Interactive Dashboard (Basic view of findings)
-  - [ ] [P1] Provide configuration interface for vpoc:
-    - [ ] [P1] Base workspace directory
-    - [ ] [P1] Model providers configuration
-    - [ ] [P1] Registry of Docker base containers for supported languages
-    - [ ] [P2] Listening port for web interface
-    - [ ] [P2] Per-agent model assignment
+  - [ ] [P1] **Attack Surface Mapper** (Recon Agent):
+    - [ ] Implement **EndpointFinder** (Identifying API routes, controllers, and exposed services)
+    - [ ] Implement **ConfigurationAnalyzer** (Parsing `.env`, `docker-compose.yml`, and build files for secrets/misconfigs)
+    - [ ] Implement **High-Value Target Ranker** (Prioritizing files based on entry-point proximity)
+  - [ ] [P1] **Environment Architect** (Build Agent):
+    - [ ] Implement **DependencyResolver** (Iterative detection and installation of required libraries/dev-packages)
+    - [ ] Implement **CodeQLDatabaseGenerator** (Automated generation of databases for deep analysis)
+    - [ ] Implement **BuildFailureDebugger** (Analyzing compiler/linker errors to suggest fixes)
+  - [ ] [P1] **TUI Mode** (Single-Project Focused):
+    - [ ] Implement **TUIApplication** base using `Textual`
+    - [ ] **Status Screen**: Visual progress bars for agents and tool execution
+    - [ ] **Chat Screen**: Interactive message bus for user hints and agent requests
+    - [ ] **Findings Screen**: Filterable list of findings with detail view (LLM rationale)
+    - [ ] **Log Screen**: Real-time log multiplexer subscribing to the event bus
+  - [ ] [P1] **Web Interface** (MVP):
+    - [ ] Project Initialization Wizard (git/URL/upload)
+    - [ ] Dashboard: High-level view of project status and finding counts
+  - [ ] [P1] **Project Configuration**:
+    - [ ] Implement `config.json` loader/saver
+    - [ ] Define Registry of Docker base containers for supported languages
 
 - [ ] **P2: Management & Reporting**
   - [ ] [P2] State Persistence & Resumption:
