@@ -7,7 +7,7 @@ openhands {
 	}
 
 	# Forward /handholder* to localhost:3001 with prefix stripped
-	handle_path /handholder* {
+	handle /handholder* {
 		reverse_proxy localhost:3001
 	}
 

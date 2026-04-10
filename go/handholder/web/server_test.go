@@ -44,8 +44,8 @@ func TestHandleLaunch(t *testing.T) {
 	fake := docker_mock.NewFakeManager()
 	server := NewServer(cfg, fake)
 
-	// Test case: Launch Alpha
-	req := httptest.NewRequest("GET", "/launch?id=alpha", nil)
+	// Test case: Launch Alpha (method check only; CSRF is enforced by middleware)
+	req := httptest.NewRequest("POST", "/launch?id=alpha", nil)
 	rr := httptest.NewRecorder()
 
 	server.handleLaunch(rr, req)
@@ -62,12 +62,20 @@ func TestHandleLaunch(t *testing.T) {
 		t.Errorf("expected alpha to be running, got %s (state: %s)", name, state)
 	}
 
-	// Test case: Invalid ID (404)
-	req2 := httptest.NewRequest("GET", "/launch?id=nonexistent", nil)
+	// Test case: Wrong method (405)
+	req2 := httptest.NewRequest("GET", "/launch?id=alpha", nil)
 	rr2 := httptest.NewRecorder()
 	server.handleLaunch(rr2, req2)
-	if rr2.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for invalid workspace, got %d", rr2.Code)
+	if rr2.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET, got %d", rr2.Code)
+	}
+
+	// Test case: Invalid ID (404)
+	req3 := httptest.NewRequest("POST", "/launch?id=nonexistent", nil)
+	rr3 := httptest.NewRecorder()
+	server.handleLaunch(rr3, req3)
+	if rr3.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for invalid workspace, got %d", rr3.Code)
 	}
 }
 
@@ -123,7 +131,7 @@ func TestHandleStop(t *testing.T) {
 	// Pre-start the container
 	fake.StartContainer(nil, "alpha", 3000, "/tmp/alpha", "image", nil, false)
 
-	req := httptest.NewRequest("GET", "/stop?id=alpha", nil)
+	req := httptest.NewRequest("POST", "/stop?id=alpha", nil)
 	rr := httptest.NewRecorder()
 
 	server.handleStop(rr, req)
@@ -138,6 +146,107 @@ func TestHandleStop(t *testing.T) {
 	state, _, _ := fake.GetContainerStatus(nil, 3000)
 	if state != "not running" {
 		t.Errorf("expected alpha to be stopped, got state %s", state)
+	}
+
+	// Test case: Wrong method (405)
+	req2 := httptest.NewRequest("GET", "/stop?id=alpha", nil)
+	rr2 := httptest.NewRecorder()
+	server.handleStop(rr2, req2)
+	if rr2.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET, got %d", rr2.Code)
+	}
+}
+
+func TestCSRFMiddleware(t *testing.T) {
+	server := NewServer(&config.Config{}, nil)
+	token := server.csrfToken
+
+	sentinel := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := server.withCSRF(sentinel)
+
+	tests := []struct {
+		name       string
+		method     string
+		csrfHeader string
+		wantStatus int
+	}{
+		{"GET passes without token", http.MethodGet, "", http.StatusOK},
+		{"HEAD passes without token", http.MethodHead, "", http.StatusOK},
+		{"POST with valid token passes", http.MethodPost, token, http.StatusOK},
+		{"POST without token rejected", http.MethodPost, "", http.StatusForbidden},
+		{"POST with wrong token rejected", http.MethodPost, "wrong-token", http.StatusForbidden},
+		{"PUT with valid token passes", http.MethodPut, token, http.StatusOK},
+		{"PUT without token rejected", http.MethodPut, "", http.StatusForbidden},
+		{"DELETE with valid token passes", http.MethodDelete, token, http.StatusOK},
+		{"DELETE without token rejected", http.MethodDelete, "", http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/", nil)
+			if tt.csrfHeader != "" {
+				req.Header.Set("X-CSRF-Token", tt.csrfHeader)
+			}
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != tt.wantStatus {
+				t.Errorf("got %d, want %d", rr.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestCSRFMiddlewareIntegration(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.WorkspaceConfig{Port: 3000},
+		Workspaces: map[string]config.WorkspaceConfig{
+			"alpha": {Name: "Alpha", Workspace: "/tmp/alpha"},
+		},
+	}
+	fake := docker_mock.NewFakeManager()
+	server := NewServer(cfg, fake)
+	token := server.csrfToken
+
+	// Build the same mux that Start() would use
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", server.handleIndex)
+	mux.HandleFunc("/launch", server.handleLaunch)
+	mux.HandleFunc("/stop", server.handleStop)
+	mux.HandleFunc("/status", server.handleStatus)
+	handler := server.withCSRF(mux)
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		csrfHeader string
+		wantStatus int
+	}{
+		{"GET index allowed", http.MethodGet, "/", "", http.StatusOK},
+		{"GET status allowed", http.MethodGet, "/status?port=3000", "", http.StatusOK},
+		{"POST launch with token allowed", http.MethodPost, "/launch?id=alpha", token, http.StatusAccepted},
+		{"POST launch without token rejected", http.MethodPost, "/launch?id=alpha", "", http.StatusForbidden},
+		{"POST launch with wrong token rejected", http.MethodPost, "/launch?id=alpha", "bad", http.StatusForbidden},
+		{"POST stop with token allowed", http.MethodPost, "/stop?id=alpha", token, http.StatusAccepted},
+		{"POST stop without token rejected", http.MethodPost, "/stop?id=alpha", "", http.StatusForbidden},
+		{"GET launch rejected by handler (405)", http.MethodGet, "/launch?id=alpha", "", http.StatusMethodNotAllowed},
+		{"GET stop rejected by handler (405)", http.MethodGet, "/stop?id=alpha", "", http.StatusMethodNotAllowed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			if tt.csrfHeader != "" {
+				req.Header.Set("X-CSRF-Token", tt.csrfHeader)
+			}
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != tt.wantStatus {
+				t.Errorf("got %d, want %d", rr.Code, tt.wantStatus)
+			}
+		})
 	}
 }
 
@@ -246,12 +355,12 @@ func TestPerPortLocking(t *testing.T) {
 	server := NewServer(cfg, fake)
 
 	// Trigger first launch
-	req1 := httptest.NewRequest("GET", "/launch?id=alpha", nil)
+	req1 := httptest.NewRequest("POST", "/launch?id=alpha", nil)
 	rr1 := httptest.NewRecorder()
 	server.handleLaunch(rr1, req1)
 
 	// Trigger second launch immediately
-	req2 := httptest.NewRequest("GET", "/launch?id=alpha", nil)
+	req2 := httptest.NewRequest("POST", "/launch?id=alpha", nil)
 	rr2 := httptest.NewRecorder()
 	server.handleLaunch(rr2, req2)
 
@@ -279,7 +388,7 @@ func TestWithLogging(t *testing.T) {
 
 	handler := server.withLogging(nextHandler)
 
-	// Test GET (no req_id expected in context normally, but logger should be present)
+	// Test GET (logger present but no req_id)
 	req := httptest.NewRequest("GET", "/", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -287,8 +396,11 @@ func TestWithLogging(t *testing.T) {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
 
-	// Test /launch (req_id expected)
-	req = httptest.NewRequest("GET", "/launch?id=alpha", nil)
+	// Test POST (req_id injected into logger)
+	req = httptest.NewRequest("POST", "/launch?id=alpha", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
 }

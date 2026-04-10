@@ -31,39 +31,61 @@ const loggerKey contextKey = "logger"
 
 // Server represents the HandHolder web server.
 type Server struct {
-	cfg      *config.Config
-	docker   docker.DockerManager
-	status   map[int]string
-	mu       sync.Mutex
-	locks    map[int]*sync.Mutex
-	locksMu  sync.Mutex
-	template *template.Template
+	cfg       *config.Config
+	docker    docker.DockerManager
+	status    map[int]string
+	mu        sync.Mutex
+	locks     map[int]*sync.Mutex
+	locksMu   sync.Mutex
+	template  *template.Template
+	csrfToken string
 }
 
 // NewServer creates a new web server instance with the given configuration and Docker manager.
 func NewServer(cfg *config.Config, docker docker.DockerManager) *Server {
 	tmpl := template.Must(template.ParseFS(templates, "templates/index.html"))
+	tok := make([]byte, 32)
+	if _, err := rand.Read(tok); err != nil {
+		panic(fmt.Sprintf("failed to generate CSRF token: %v", err))
+	}
 	return &Server{
-		cfg:      cfg,
-		docker:   docker,
-		status:   make(map[int]string),
-		locks:    make(map[int]*sync.Mutex),
-		template: tmpl,
+		cfg:       cfg,
+		docker:    docker,
+		status:    make(map[int]string),
+		locks:     make(map[int]*sync.Mutex),
+		template:  tmpl,
+		csrfToken: hex.EncodeToString(tok),
 	}
 }
 
 // Start runs the HTTP server on the configured address and port.
 func (s *Server) Start() error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/launch", s.handleLaunch)
-	mux.HandleFunc("/stop", s.handleStop)
-	mux.HandleFunc("/status", s.handleStatus)
+	basePath := s.cfg.HandHolder.BasePath
 
-	handler := s.withLogging(mux)
+	innerMux := http.NewServeMux()
+	innerMux.HandleFunc("/", s.handleIndex)
+	innerMux.HandleFunc("/launch", s.handleLaunch)
+	innerMux.HandleFunc("/stop", s.handleStop)
+	innerMux.HandleFunc("/status", s.handleStatus)
+
+	var rootHandler http.Handler
+	if basePath == "/" {
+		rootHandler = innerMux
+	} else {
+		outerMux := http.NewServeMux()
+		stripped := http.StripPrefix(basePath, innerMux)
+		outerMux.Handle(basePath+"/", stripped)
+		// Redirect bare base path (no trailing slash) to base path with slash
+		outerMux.HandleFunc(basePath, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, basePath+"/", http.StatusMovedPermanently)
+		})
+		rootHandler = outerMux
+	}
+
+	handler := s.withLogging(s.withCSRF(rootHandler))
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.HandHolder.BindAddress, s.cfg.HandHolder.Port)
-	slog.Info("Starting HandHolder", "addr", addr)
+	slog.Info("Starting HandHolder", "addr", addr, "base_path", basePath)
 	return http.ListenAndServe(addr, handler)
 }
 
@@ -72,7 +94,7 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		logger := slog.Default()
 		clientIP := s.getClientIP(r)
 
-		if r.Method == http.MethodPost || r.URL.Path == "/launch" || r.URL.Path == "/stop" {
+		if r.Method == http.MethodPost {
 			id := make([]byte, 4)
 			rand.Read(id)
 			reqID := hex.EncodeToString(id)
@@ -81,6 +103,19 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), loggerKey, logger)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// withCSRF rejects any non-GET/HEAD request that lacks a valid X-CSRF-Token header.
+func (s *Server) withCSRF(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			if r.Header.Get("X-CSRF-Token") != s.csrfToken {
+				http.Error(w, "invalid or missing CSRF token", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -161,17 +196,23 @@ func (s *Server) getLock(port int) *sync.Mutex {
 	return s.locks[port]
 }
 
+type workspaceView struct {
+	ID        string
+	Name      string
+	Port      int
+	Workspace string
+	Status    string
+	Active    bool
+}
+
+type indexData struct {
+	BasePath   string
+	CSRFToken  string
+	Workspaces []workspaceView
+}
+
 // handleIndex serves the main page listing all workspaces.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	type workspaceView struct {
-		ID        string
-		Name      string
-		Port      int
-		Workspace string
-		Status    string
-		Active    bool
-	}
-
 	var workspaces []workspaceView
 	for id, ws := range s.cfg.Workspaces {
 		port := ws.Port
@@ -198,11 +239,19 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return workspaces[i].Name < workspaces[j].Name
 	})
 
-	s.template.Execute(w, workspaces)
+	basePath := s.cfg.HandHolder.BasePath
+	if basePath == "/" {
+		basePath = ""
+	}
+	s.template.Execute(w, indexData{BasePath: basePath, CSRFToken: s.csrfToken, Workspaces: workspaces})
 }
 
 // handleLaunch initiates the launch of a specific workspace.
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	logger := getLogger(r.Context()).With("workspace_id", id)
 
@@ -271,6 +320,10 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 // handleStop initiates the stop of a specific workspace container.
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	logger := getLogger(r.Context()).With("workspace_id", id)
 

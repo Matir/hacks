@@ -16,6 +16,8 @@ For general information on this project, see [README.md](README.md).
     6. Workspace-specific `env_file`
     7. Workspace-specific `env` map
 - **Web UI:** Use Go's `embed` package to bundle HTML/CSS/JS. Keep the frontend simple and reactive via polling.
+- **HTTP Method Enforcement:** State-changing endpoints (`/launch`, `/stop`) must only accept `POST`. Handlers must check `r.Method == http.MethodPost` and return `405 Method Not Allowed` otherwise.
+- **CSRF Protection:** All non-GET/HEAD requests are protected by the `withCSRF` middleware, which validates the `X-CSRF-Token` request header against a server-wide token (32 random bytes, hex-encoded, generated at startup). Requests with a missing or incorrect token receive `403 Forbidden`. The token is embedded in the HTML page via the `{{.CSRFToken}}` template field and sent by JavaScript as an `X-CSRF-Token` header on every mutating `fetch` call. Never embed the CSRF token in URLs or cookies.
 - **Path Mapping:** Always map the workspace host path to `/workspace` inside the container.
 - **Graceful Shutdown:** Use a 5-second timeout for `docker stop` to allow OpenHands to save its state.
 

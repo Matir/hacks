@@ -17,6 +17,7 @@ func main() {
 	// Handholder override flags
 	bindAddr := flag.String("bind-address", "", "IP address to bind to (overrides config)")
 	port := flag.Int("port", 0, "port for the HandHolder service (overrides config)")
+	basePath := flag.String("base-path", "", "URL base path prefix (e.g. /handholder) (overrides config)")
 	logging := flag.String("logging", "", "logging output destination (overrides config)")
 	logFormat := flag.String("logformat", "", "logging format: text or json (overrides config)")
 	dockerSocket := flag.String("docker-socket", "", "Docker socket path (overrides config)")
@@ -35,6 +36,7 @@ func main() {
 	overrides := config.Overrides{
 		BindAddress:    *bindAddr,
 		Port:           *port,
+		BasePath:       *basePath,
 		Logging:        *logging,
 		LogFormat:      *logFormat,
 		DockerSocket:   *dockerSocket,

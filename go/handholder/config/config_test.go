@@ -309,19 +309,18 @@ name = "Alpha"
 		t.Error("expected error for malformed TOML")
 	}
 
-	// Test validation error
+	// Test validation error (handholder port conflicts with workspace port)
 	invalidPath := filepath.Join(tmpDir, "invalid.toml")
 	invalidContent := `
+[handholder]
+port = 3000
 [workspace.ws1]
 name = "WS1"
-port = 3000
-[workspace.ws2]
-name = "WS2"
 port = 3000
 `
 	os.WriteFile(invalidPath, []byte(invalidContent), 0644)
 	if _, err := LoadConfig(invalidPath); err == nil {
-		t.Error("expected error for duplicate port in config")
+		t.Error("expected error for handholder port conflicting with workspace port")
 	}
 }
 
@@ -351,7 +350,7 @@ func TestConfigValidate(t *testing.T) {
 					"ws2": {Name: "WS2", Port: 3001},
 				},
 			},
-			true,
+			false,
 		},
 		{
 			"Duplicate name",

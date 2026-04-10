@@ -24,6 +24,7 @@ type Config struct {
 type HandHolderConfig struct {
 	BindAddress        string   `toml:"bind_address"`
 	Port               int      `toml:"port"`
+	BasePath           string   `toml:"base_path"`
 	Logging            string   `toml:"logging"`
 	LogFormat          string   `toml:"logformat"`
 	DockerSocket       string   `toml:"docker_socket"`
@@ -80,6 +81,18 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.HandHolder.BindAddress = "127.0.0.1"
 	}
 
+	// Normalize base path: must start with /, no trailing slash (except root)
+	if cfg.HandHolder.BasePath == "" {
+		cfg.HandHolder.BasePath = "/"
+	} else {
+		if !strings.HasPrefix(cfg.HandHolder.BasePath, "/") {
+			cfg.HandHolder.BasePath = "/" + cfg.HandHolder.BasePath
+		}
+		if cfg.HandHolder.BasePath != "/" {
+			cfg.HandHolder.BasePath = strings.TrimRight(cfg.HandHolder.BasePath, "/")
+		}
+	}
+
 	// Always trust localhost by default
 	localhosts := []string{"127.0.0.1", "::1"}
 	for _, lh := range localhosts {
@@ -104,8 +117,8 @@ func LoadConfig(path string) (*Config, error) {
 
 // Validate checks the configuration for consistency and basic correctness.
 func (cfg *Config) Validate() error {
-	ports := make(map[int]string)
 	names := make(map[string]string)
+	workspacePorts := make(map[int]bool)
 
 	for id, ws := range cfg.Workspaces {
 		// Validate port
@@ -116,10 +129,7 @@ func (cfg *Config) Validate() error {
 		if port < 1024 || port > 65535 {
 			return fmt.Errorf("invalid port %d for workspace %s (must be 1024-65535)", port, id)
 		}
-		if otherID, ok := ports[port]; ok {
-			return fmt.Errorf("duplicate port %d used by workspaces %s and %s", port, id, otherID)
-		}
-		ports[port] = id
+		workspacePorts[port] = true
 
 		// Validate name
 		if ws.Name == "" {
@@ -131,13 +141,13 @@ func (cfg *Config) Validate() error {
 		names[ws.Name] = id
 	}
 
-	// Also check HandHolder service port
+	// Also check HandHolder service port does not overlap with workspace ports
 	if cfg.HandHolder.Port != 0 {
 		if cfg.HandHolder.Port < 1024 || cfg.HandHolder.Port > 65535 {
 			return fmt.Errorf("invalid handholder port %d (must be 1024-65535)", cfg.HandHolder.Port)
 		}
-		if otherID, ok := ports[cfg.HandHolder.Port]; ok {
-			return fmt.Errorf("handholder port %d conflicts with workspace %s", cfg.HandHolder.Port, otherID)
+		if workspacePorts[cfg.HandHolder.Port] {
+			return fmt.Errorf("handholder port %d conflicts with a workspace port", cfg.HandHolder.Port)
 		}
 	}
 
@@ -148,6 +158,7 @@ func (cfg *Config) Validate() error {
 type Overrides struct {
 	BindAddress        string
 	Port               int
+	BasePath           string
 	Logging            string
 	LogFormat          string
 	DockerSocket       string
@@ -164,6 +175,9 @@ func (cfg *Config) ApplyOverrides(o Overrides) {
 	}
 	if o.Port != 0 {
 		cfg.HandHolder.Port = o.Port
+	}
+	if o.BasePath != "" {
+		cfg.HandHolder.BasePath = o.BasePath
 	}
 	if o.Logging != "" {
 		cfg.HandHolder.Logging = o.Logging
