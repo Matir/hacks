@@ -5,6 +5,7 @@ logging = "stderr"         # Default: stderr
 logformat = "text"         # Default: text
 docker_socket = "unix:///var/run/docker.sock"
 trusted_proxies = ["127.0.0.1", "::1"] # Default includes localhost
+base_path = "/handholder"
 
 [defaults]
 port = 3000                # Default: 3000
