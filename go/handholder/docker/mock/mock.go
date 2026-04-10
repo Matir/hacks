@@ -24,6 +24,7 @@ type FakeDockerClient struct {
 	HostConfigs map[string]*container.HostConfig
 	Images      map[string]bool
 	StopFails   bool
+	ExecCmds    []container.ExecOptions // records exec calls
 }
 
 // NewFakeDockerClient creates a new FakeDockerClient instance.
@@ -121,6 +122,19 @@ func (f *FakeDockerClient) ContainerStart(ctx context.Context, containerID strin
 	return nil
 }
 
+// ContainerExecCreate records an exec configuration and returns a fake exec ID.
+func (f *FakeDockerClient) ContainerExecCreate(ctx context.Context, containerID string, config container.ExecOptions) (types.IDResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ExecCmds = append(f.ExecCmds, config)
+	return types.IDResponse{ID: "exec-id"}, nil
+}
+
+// ContainerExecStart emulates starting an exec instance.
+func (f *FakeDockerClient) ContainerExecStart(ctx context.Context, execID string, config container.ExecStartOptions) error {
+	return nil
+}
+
 // ContainerStop emulates stopping a container.
 func (f *FakeDockerClient) ContainerStop(ctx context.Context, containerID string, options container.StopOptions) error {
 	if f.StopFails {
@@ -184,7 +198,7 @@ func (f *FakeManager) StopContainerByPort(ctx context.Context, port int) error {
 }
 
 // StartContainer adds a workspace to the specified port.
-func (f *FakeManager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool) error {
+func (f *FakeManager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool, sudoWorkaround bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Workspaces[port] = name

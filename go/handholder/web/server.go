@@ -251,7 +251,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				host = r.Host
 			}
-			openURL = fmt.Sprintf("%s://%s:%d", scheme, host, port)
+			remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				remoteHost = r.RemoteAddr
+			}
+			if s.isTrustedProxy(remoteHost) {
+				openURL = fmt.Sprintf("%s://%s", scheme, host)
+			} else {
+				openURL = fmt.Sprintf("%s://%s:%d", scheme, host, port)
+			}
 		}
 
 		workspaces = append(workspaces, workspaceView{
@@ -337,7 +345,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.updateStatus(ctx, port, "Launching container...")
-		if err := s.docker.StartContainer(ctx, id, port, ws.Workspace, image, env, s.cfg.HandHolder.DisableSocketMount); err != nil {
+		if err := s.docker.StartContainer(ctx, id, port, ws.Workspace, image, env, s.cfg.HandHolder.DisableSocketMount, s.cfg.HandHolder.SudoWorkaround); err != nil {
 			s.updateStatus(ctx, port, fmt.Sprintf("Error starting: %v", err))
 			return
 		}

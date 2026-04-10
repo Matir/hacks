@@ -31,6 +31,7 @@ type HandHolderConfig struct {
 	TrustedProxies     []string `toml:"trusted_proxies"`
 	DisableSocketMount bool     `toml:"disable_socket_mount"`
 	PreloadImages      bool     `toml:"preload_images"`
+	SudoWorkaround     bool     `toml:"sudo_workaround"`
 }
 
 // WorkspaceConfig contains settings for a specific OpenHands workspace or global defaults.
@@ -54,6 +55,8 @@ func LoadConfig(path string) (*Config, error) {
 	var cfg Config
 	// Default PreloadImages to true
 	cfg.HandHolder.PreloadImages = true
+	// Default SudoWorkaround to true
+	cfg.HandHolder.SudoWorkaround = true
 
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode config: %w", err)

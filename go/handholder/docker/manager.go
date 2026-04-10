@@ -35,7 +35,7 @@ type DockerManager interface {
 	// StopContainerByPort finds and terminates any container managed by HandHolder on the given port.
 	StopContainerByPort(ctx context.Context, port int) error
 	// StartContainer creates and runs a new OpenHands container.
-	StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool) error
+	StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool, sudoWorkaround bool) error
 	// GetContainerStatus returns the current status (e.g., "running") and workspace name for the container on a port.
 	GetContainerStatus(ctx context.Context, port int) (string, string, error)
 }
@@ -141,7 +141,7 @@ func (m *Manager) StopContainerByPort(ctx context.Context, port int) error {
 }
 
 // StartContainer launches a new OpenHands container with the specified configuration.
-func (m *Manager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool) error {
+func (m *Manager) StartContainer(ctx context.Context, name string, port int, hostWorkspacePath string, imageName string, env map[string]string, disableSocketMount bool, sudoWorkaround bool) error {
 	containerName := fmt.Sprintf("handholder-openhands-%d", port)
 	logger := getLogger(ctx).With("workspace_id", name, "port", port, "image", imageName, "container_name", containerName)
 
@@ -163,6 +163,34 @@ func (m *Manager) StartContainer(ctx context.Context, name string, port int, hos
 	}
 
 	logger.Info("Container started successfully", "container_id", resp.ID)
+
+	if sudoWorkaround {
+		if err := m.runSudoWorkaround(ctx, resp.ID, logger); err != nil {
+			logger.Warn("Sudo workaround failed", "error", err)
+		}
+	}
+
+	return nil
+}
+
+// runSudoWorkaround grants passwordless sudo to the enduser account inside the container.
+func (m *Manager) runSudoWorkaround(ctx context.Context, containerID string, logger *slog.Logger) error {
+	logger.Info("Applying sudo workaround", "container_id", containerID)
+	execConfig := container.ExecOptions{
+		User: "root",
+		Cmd: []string{
+			"sh", "-c",
+			"echo 'enduser ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/enduser && chmod 400 /etc/sudoers.d/enduser",
+		},
+	}
+	execID, err := m.cli.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create exec: %w", err)
+	}
+	if err := m.cli.ContainerExecStart(ctx, execID.ID, container.ExecStartOptions{}); err != nil {
+		return fmt.Errorf("failed to start exec: %w", err)
+	}
+	logger.Info("Sudo workaround applied", "container_id", containerID)
 	return nil
 }
 
@@ -211,7 +239,7 @@ func (m *Manager) buildHostConfig(hostWorkspacePath string, port int, disableSoc
 		})
 	}
 
-	return &container.HostConfig{
+	hc := &container.HostConfig{
 		PortBindings: nat.PortMap{
 			"3000/tcp": []nat.PortBinding{
 				{
@@ -222,7 +250,17 @@ func (m *Manager) buildHostConfig(hostWorkspacePath string, port int, disableSoc
 		},
 		Mounts:     mounts,
 		ExtraHosts: []string{"host.docker.internal:host-gateway"},
+		AutoRemove: true,
 	}
+	if journaldAvailable() {
+		hc.LogConfig = container.LogConfig{Type: "journald"}
+	}
+	return hc
+}
+
+func journaldAvailable() bool {
+	_, err := os.Stat("/run/systemd/journal/socket")
+	return err == nil
 }
 
 // GetContainerStatus returns the current state (running, exited, etc.) and the workspace name for a given port.

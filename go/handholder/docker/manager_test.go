@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
@@ -103,7 +104,7 @@ func TestStartContainer(t *testing.T) {
 	img := "node:latest"
 	env := map[string]string{"FOO": "BAR"}
 
-	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env, false)
+	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env, false, false)
 	if err != nil {
 		t.Fatalf("StartContainer failed: %v", err)
 	}
@@ -170,7 +171,7 @@ func TestStartContainerNoSocket(t *testing.T) {
 	img := "node:latest"
 	env := map[string]string{"FOO": "BAR"}
 
-	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env, true)
+	err := mgr.StartContainer(ctx, workspace, port, hostPath, img, env, true, false)
 	if err != nil {
 		t.Fatalf("StartContainer failed: %v", err)
 	}
@@ -238,6 +239,47 @@ func TestStopContainerFail(t *testing.T) {
 
 	if _, ok := fake.Containers[name]; ok {
 		t.Error("Container was not removed via force removal")
+	}
+}
+
+func TestStartContainerSudoWorkaround(t *testing.T) {
+	fake := docker_mock.NewFakeDockerClient()
+	mgr := &Manager{cli: fake}
+	ctx := context.Background()
+
+	err := mgr.StartContainer(ctx, "test-ws", 8082, "/tmp/ws", "node:latest", nil, false, true)
+	if err != nil {
+		t.Fatalf("StartContainer failed: %v", err)
+	}
+
+	if len(fake.ExecCmds) != 1 {
+		t.Fatalf("expected 1 exec call, got %d", len(fake.ExecCmds))
+	}
+	exec := fake.ExecCmds[0]
+	if exec.User != "root" {
+		t.Errorf("expected exec user 'root', got %q", exec.User)
+	}
+	if len(exec.Cmd) < 3 || exec.Cmd[0] != "sh" || exec.Cmd[1] != "-c" {
+		t.Errorf("unexpected exec cmd: %v", exec.Cmd)
+	}
+	cmd := exec.Cmd[2]
+	if !strings.Contains(cmd, "/etc/sudoers.d/enduser") {
+		t.Errorf("exec cmd missing sudoers path: %s", cmd)
+	}
+}
+
+func TestStartContainerNoSudoWorkaround(t *testing.T) {
+	fake := docker_mock.NewFakeDockerClient()
+	mgr := &Manager{cli: fake}
+	ctx := context.Background()
+
+	err := mgr.StartContainer(ctx, "test-ws", 8083, "/tmp/ws", "node:latest", nil, false, false)
+	if err != nil {
+		t.Fatalf("StartContainer failed: %v", err)
+	}
+
+	if len(fake.ExecCmds) != 0 {
+		t.Errorf("expected no exec calls when sudoWorkaround=false, got %d", len(fake.ExecCmds))
 	}
 }
 

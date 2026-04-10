@@ -130,7 +130,7 @@ func TestHandleStop(t *testing.T) {
 	server := NewServer(cfg, fake)
 
 	// Pre-start the container
-	fake.StartContainer(nil, "alpha", 3000, "/tmp/alpha", "image", nil, false)
+	fake.StartContainer(nil, "alpha", 3000, "/tmp/alpha", "image", nil, false, false)
 
 	req := httptest.NewRequest("POST", "/stop?id=alpha", nil)
 	rr := httptest.NewRecorder()
@@ -439,14 +439,14 @@ func TestHandleIndexOpenURL(t *testing.T) {
 			wantURL:   "http://myhost.example.com:3000",
 		},
 		{
-			name:         "trusted proxy https uses https scheme",
+			name:         "trusted proxy omits port",
 			workspace:    config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha"},
 			defaults:     config.WorkspaceConfig{Port: 3000},
 			remoteAddr:   "10.0.0.1:5000",
 			host:         "myhost.example.com",
 			proto:        "https",
 			trustedProxy: "10.0.0.1",
-			wantURL:      "https://myhost.example.com:3000",
+			wantURL:      "https://myhost.example.com",
 		},
 		{
 			name:         "untrusted proxy header ignored",
