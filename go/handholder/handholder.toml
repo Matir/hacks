@@ -11,10 +11,9 @@ port = 3000                # Default: 3000
 image = "ghcr.io/all-hands-ai/openhands:0.21.0" # Default version
 
 [workspace.alpha]
-workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/alpha"
+workspace = "/home/openhands/test_workspaces/alpha"
 name = "Alpha"
 
 [workspace.beta]
-workspace = "/Users/davidtomaschik/Personal/hacks/go/handholder/test_workspaces/beta"
+workspace = "/home/openhands/test_workspaces/beta"
 name = "Beta"
-port = 3002
