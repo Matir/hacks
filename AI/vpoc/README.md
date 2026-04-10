@@ -6,7 +6,7 @@ It focuses on source-available security analysis, combining LLM-driven vulnerabi
 
 ## Architecture
 
-VPOC employs a multi-agent orchestration pattern:
+VPOC employs a single-process, multi-agent orchestration pattern:
 - **Orchestrator Agent**: Manages the lifecycle of findings and coordinates specialized agents.
 - **Source Review Agent**: Performs deep static analysis to identify potential vulnerabilities.
 - **PoC Agent**: Dynamically generates exploit scripts and specialized Docker environments.
@@ -17,13 +17,17 @@ VPOC employs a multi-agent orchestration pattern:
 
 - **Multi-Language Support**: PHP, C/C++, Go, Rust, Lua.
 - **Autonomous Validation**: 
-  - Findings are validated by running the application in a hardened Docker container.
-  - **Sandboxed Execution**: Strict resource limits (CPU/RAM) and default **no network access** (or isolated private networks).
+  - Findings are validated by running the application in a **hardened Docker sandbox** (using gVisor/seccomp, strict resource limits, and no-egress networking).
+  - **Pipelined Analysis**: Findings are streamed from discovery to validation in real-time, using a priority-weighted queue.
   - **Hybrid Environment**: Uses pre-configured base containers specialized at runtime based on source analysis.
 - **Interactive Human-in-the-Loop**:
-  - Web-based dashboard for real-time monitoring and finding triage.
+  - **TUI Mode**: Terminal User Interface for single-project analysis, featuring dedicated screens for Chat, Status, and Findings.
+  - **Web Dashboard**: Web-based interface for real-time monitoring and multi-project triage.
   - **Project Initialization Wizard**: Kickoff reviews with high-level descriptions, git URLs, or file uploads.
   - **Human Guidance**: Users can provide hints, approve/reject findings, and define strategic priorities.
+- **State Persistence & Resumption**:
+  - **Checkpointing**: All runs record granular state to allow stopping and resuming without significant loss of analysis quality.
+  - **Project Isolation**: Each project maintains its own isolated state and findings database.
 - **Resource Management**:
   - **Deterministic Budgeting**: Hard daily budget caps enforced across all projects.
   - **Per-Agent Model Assignment**: Optimize cost and performance by assigning specific models (e.g., Gemini 1.5 Pro vs. Flash) to different agents.

@@ -1,0 +1,21 @@
+[tools]
+uv = "latest"
+
+[tasks.test]
+description = "Run all unit tests"
+run = "uv run pytest tests/"
+
+[tasks.lint]
+description = "Run flake8 and mypy for code quality and type safety"
+run = [
+    "uv run flake8 agents/ tools/ core/",
+    "uv run mypy agents/ tools/ core/"
+]
+
+[tasks.fix]
+description = "Auto-format code (optional helper)"
+run = "uv run black agents/ tools/ core/"
+
+[tasks.check]
+description = "Run all validation steps (lint + test)"
+depends = ["lint", "test"]
