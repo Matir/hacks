@@ -180,6 +180,21 @@ func (s *Server) isTrustedProxy(ipStr string) bool {
 	return false
 }
 
+// getRequestScheme returns the scheme (http or https) for the request.
+// If X-Forwarded-Proto is set and the request came from a trusted proxy, that value is used.
+func (s *Server) getRequestScheme(r *http.Request) string {
+	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteHost = r.RemoteAddr
+	}
+	if s.isTrustedProxy(remoteHost) {
+		if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+			return proto
+		}
+	}
+	return "http"
+}
+
 func getLogger(ctx context.Context) *slog.Logger {
 	if logger, ok := ctx.Value(loggerKey).(*slog.Logger); ok {
 		return logger
@@ -203,6 +218,7 @@ type workspaceView struct {
 	Workspace string
 	Status    string
 	Active    bool
+	OpenURL   string
 }
 
 type indexData struct {
@@ -225,6 +241,19 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			slog.Error("Error getting container status", "error", err, "port", port, "workspace_id", id)
 		}
 
+		openURL := ws.ProxyURL
+		if openURL == "" {
+			openURL = s.cfg.Defaults.ProxyURL
+		}
+		if openURL == "" {
+			scheme := s.getRequestScheme(r)
+			host, _, err := net.SplitHostPort(r.Host)
+			if err != nil {
+				host = r.Host
+			}
+			openURL = fmt.Sprintf("%s://%s:%d", scheme, host, port)
+		}
+
 		workspaces = append(workspaces, workspaceView{
 			ID:        id,
 			Name:      ws.Name,
@@ -232,6 +261,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			Workspace: ws.Workspace,
 			Status:    state,
 			Active:    activeWorkspace == id,
+			OpenURL:   openURL,
 		})
 	}
 

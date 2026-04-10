@@ -39,6 +39,7 @@ type WorkspaceConfig struct {
 	Name             string            `toml:"name"`
 	Port             int               `toml:"port"`
 	Image            string            `toml:"image"`
+	ProxyURL         string            `toml:"proxy_url"`
 	SandboxBaseImage string            `toml:"sandbox_base_image"`
 	SandboxUserID    string            `toml:"sandbox_user_id"`
 	LLMModel         string            `toml:"llm_model"`
@@ -105,6 +106,18 @@ func LoadConfig(path string) (*Config, error) {
 		}
 		if !found {
 			cfg.HandHolder.TrustedProxies = append(cfg.HandHolder.TrustedProxies, lh)
+		}
+	}
+
+	// Expand ~ in workspace paths
+	for id, ws := range cfg.Workspaces {
+		if strings.HasPrefix(ws.Workspace, "~/") || ws.Workspace == "~" {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("workspace %s: failed to expand ~: %w", id, err)
+			}
+			ws.Workspace = homeDir + ws.Workspace[1:]
+			cfg.Workspaces[id] = ws
 		}
 	}
 

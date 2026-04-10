@@ -466,6 +466,37 @@ func TestGetLogHandler(t *testing.T) {
 	}
 }
 
+func TestTildeExpansionInWorkspacePath(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("could not get home dir: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "handholder.toml")
+	content := `
+[handholder]
+port = 3001
+
+[workspace.tilde]
+name = "Tilde Workspace"
+workspace = "~/projects/foo"
+`
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	want := homeDir + "/projects/foo"
+	if got := cfg.Workspaces["tilde"].Workspace; got != want {
+		t.Errorf("expected workspace path %q, got %q", want, got)
+	}
+}
+
 func TestExampleConfig(t *testing.T) {
 	// Find the example config relative to the project root
 	// config_test.go is in the config/ directory

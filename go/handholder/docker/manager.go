@@ -194,6 +194,15 @@ func (m *Manager) buildHostConfig(hostWorkspacePath string, port int, disableSoc
 			Target: "/workspace",
 		},
 	}
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		openhandsState := homeDir + "/.openhands-state"
+		_ = os.MkdirAll(openhandsState, 0o700)
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeBind,
+			Source: openhandsState,
+			Target: "/.openhands-state",
+		})
+	}
 	if !disableSocketMount && m.dockerSocket != "" {
 		mounts = append(mounts, mount.Mount{
 			Type:   mount.TypeBind,

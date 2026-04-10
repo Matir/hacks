@@ -22,7 +22,7 @@
             <p>Status: <span class="status" id="status-{{.ID}}">{{.Status}}</span></p>
             <button onclick="launch('{{.ID}}')" id="btn-launch-{{.ID}}" {{if .Active}}class="hidden"{{end}}>Launch</button>
             <button onclick="stop('{{.ID}}')" id="btn-stop-{{.ID}}" {{if not .Active}}class="hidden"{{end}}>Stop</button>
-            <a href="http://localhost:{{.Port}}" target="_blank" id="link-{{.ID}}" {{if not .Active}}class="hidden"{{end}}>Open OpenHands</a>
+            <a href="{{.OpenURL}}" target="_blank" id="link-{{.ID}}" {{if not .Active}}class="hidden"{{end}}>Open OpenHands</a>
         </div>
         {{end}}
     </div>

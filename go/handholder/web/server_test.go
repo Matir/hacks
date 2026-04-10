@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -372,6 +373,145 @@ func TestPerPortLocking(t *testing.T) {
 
 	if fake.StopCount != 2 {
 		t.Errorf("expected 2 stop calls, got %d", fake.StopCount)
+	}
+}
+
+func TestGetRequestScheme(t *testing.T) {
+	cfg := &config.Config{
+		HandHolder: config.HandHolderConfig{
+			TrustedProxies: []string{"10.0.0.1"},
+		},
+	}
+	server := NewServer(cfg, nil)
+
+	tests := []struct {
+		name       string
+		remoteAddr string
+		proto      string
+		want       string
+	}{
+		{"direct, no header", "1.2.3.4:1234", "", "http"},
+		{"direct, header ignored", "1.2.3.4:1234", "https", "http"},
+		{"trusted proxy, https", "10.0.0.1:1234", "https", "https"},
+		{"trusted proxy, http", "10.0.0.1:1234", "http", "http"},
+		{"trusted proxy, no header", "10.0.0.1:1234", "", "http"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			if tt.proto != "" {
+				req.Header.Set("X-Forwarded-Proto", tt.proto)
+			}
+			if got := server.getRequestScheme(req); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandleIndexOpenURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		defaults    config.WorkspaceConfig
+		workspace   config.WorkspaceConfig
+		remoteAddr  string
+		host        string
+		proto       string
+		trustedProxy string
+		wantURL     string
+	}{
+		{
+			name:      "direct request uses http and request host",
+			workspace: config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha"},
+			defaults:  config.WorkspaceConfig{Port: 3000},
+			remoteAddr: "1.2.3.4:5000",
+			host:      "myhost.example.com",
+			wantURL:   "http://myhost.example.com:3000",
+		},
+		{
+			name:      "host with port strips port",
+			workspace: config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha"},
+			defaults:  config.WorkspaceConfig{Port: 3000},
+			remoteAddr: "1.2.3.4:5000",
+			host:      "myhost.example.com:8080",
+			wantURL:   "http://myhost.example.com:3000",
+		},
+		{
+			name:         "trusted proxy https uses https scheme",
+			workspace:    config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha"},
+			defaults:     config.WorkspaceConfig{Port: 3000},
+			remoteAddr:   "10.0.0.1:5000",
+			host:         "myhost.example.com",
+			proto:        "https",
+			trustedProxy: "10.0.0.1",
+			wantURL:      "https://myhost.example.com:3000",
+		},
+		{
+			name:         "untrusted proxy header ignored",
+			workspace:    config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha"},
+			defaults:     config.WorkspaceConfig{Port: 3000},
+			remoteAddr:   "1.2.3.4:5000",
+			host:         "myhost.example.com",
+			proto:        "https",
+			wantURL:      "http://myhost.example.com:3000",
+		},
+		{
+			name:      "workspace proxy_url overrides",
+			workspace: config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha", ProxyURL: "https://proxy.example.com/alpha"},
+			defaults:  config.WorkspaceConfig{Port: 3000},
+			remoteAddr: "1.2.3.4:5000",
+			host:      "myhost.example.com",
+			wantURL:   "https://proxy.example.com/alpha",
+		},
+		{
+			name:      "default proxy_url used when workspace has none",
+			workspace: config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha"},
+			defaults:  config.WorkspaceConfig{Port: 3000, ProxyURL: "https://default-proxy.example.com"},
+			remoteAddr: "1.2.3.4:5000",
+			host:      "myhost.example.com",
+			wantURL:   "https://default-proxy.example.com",
+		},
+		{
+			name:      "workspace proxy_url overrides default proxy_url",
+			workspace: config.WorkspaceConfig{Name: "Alpha", Workspace: "/tmp/alpha", ProxyURL: "https://ws-proxy.example.com"},
+			defaults:  config.WorkspaceConfig{Port: 3000, ProxyURL: "https://default-proxy.example.com"},
+			remoteAddr: "1.2.3.4:5000",
+			host:      "myhost.example.com",
+			wantURL:   "https://ws-proxy.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			trusted := []string{}
+			if tt.trustedProxy != "" {
+				trusted = []string{tt.trustedProxy}
+			}
+			cfg := &config.Config{
+				HandHolder: config.HandHolderConfig{TrustedProxies: trusted},
+				Defaults:   tt.defaults,
+				Workspaces: map[string]config.WorkspaceConfig{"alpha": tt.workspace},
+			}
+			server := NewServer(cfg, docker_mock.NewFakeManager())
+
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			req.Host = tt.host
+			if tt.proto != "" {
+				req.Header.Set("X-Forwarded-Proto", tt.proto)
+			}
+			rr := httptest.NewRecorder()
+			server.handleIndex(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("unexpected status %d", rr.Code)
+			}
+			if !strings.Contains(rr.Body.String(), `href="`+tt.wantURL+`"`) {
+				t.Errorf("body does not contain href=%q\nbody: %s", tt.wantURL, rr.Body.String())
+			}
+		})
 	}
 }
 
