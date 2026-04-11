@@ -2,36 +2,80 @@
 
 - [ ] **P0: Core Workflow Engine**
   - [ ] [P0] **Bootstrap ADK Framework**
-    - [x] Define base `VPOCAgent` class (Inheriting from ADK `Agent`)
+    - [x] Define base `VPOCAgent` class (Inheriting from ADK `Agent`) *(superseded by VPOCMixin)*
+    - [x] Replace `VPOCAgent` with `VPOCMixin` in `agents/base.py`; update `SourceReviewAgent` to extend `VPOCMixin, BaseAgent` directly
     - [ ] [P0] **Core Infrastructure Utilities**:
-      - [ ] Implement `PromptLoader` in `core/utils.py` (loads from `prompts/`)
+      - [ ] Implement `PromptLoader` in `core/utils.py` (strict `{placeholder}` validation, raises `PromptRenderError`, cached reads)
+      - [ ] Implement `LanguageDetector` in `core/utils.py` (extension counting, >5% threshold, excludes vendor dirs)
+      - [ ] Implement `SourceFetcher` in `core/source_fetcher.py` (public git shallow clone, httpx download, file copy; 100MB cap)
       - [ ] Define `ProjectConfig` and `ServerConfig` Pydantic models in `core/models.py`
-      - [ ] Implement `ToolError` schema and standardized exception handlers
-    - [ ] Implement Orchestrator-to-Agent command protocol
+      - [x] Define `FindingStatus` enum in `core/models.py` (POTENTIAL, SCREENED, REJECTED, POC_GENERATING, POC_READY, POC_FAILED, VALIDATING, VALIDATED, INCONCLUSIVE, AWAITING_HUMAN)
+      - [x] Add scoring fields to `Finding` model: `priority_score`, `llm_confidence`, `cvss_score`, `cvss_vector`
+      - [x] Add `impact_weight` table to `core/models.py` (RCE=100, SQLi=80, SSRF=70, AuthBypass=70, XSS=40, InfoDisclosure=20)
+      - [x] Implement `ToolError` schema and standardized exception handlers
+    - [ ] Implement Orchestrator-to-Agent command protocol via ADK Runner + InMemorySessionService
     - [ ] Set up ADK-compatible event loop and message passing
+  - [x] [P0] **Existing Code Compliance** (standards gaps in current codebase):
+    - [x] `core/models.py`: Replace `datetime.datetime.utcnow()` with `datetime.datetime.now(datetime.UTC)` (deprecated in Python 3.12+; already triggers test warnings)
+    - [x] `core/models.py`: Replace `from typing import Optional` with `import typing` per coding style; use `typing.Optional` throughout
+    - [x] `core/models.py`: Tighten `Finding.status` field type to `FindingStatus` once enum is defined (currently untyped `str`)
+    - [x] `core/storage.py`: Replace `from typing import List` with `import typing` per coding style
+    - [x] `core/storage.py`: Add `update_finding_status(finding_id, status: FindingStatus)` method (required by Finding Lifecycle Manager)
+    - [x] `core/storage.py`: Add `AgentCheckpoint` CRUD methods (`save_checkpoint`, `get_checkpoint`, `list_checkpoints`)
+    - [x] `core/storage.py`: Add `HintLog` CRUD methods (`add_hint`, `get_hints`)
+    - [x] `core/events.py`: Move `import time` to module level; replace fragile `lambda: 0.0` + `__init__` override with `default_factory=time.time`
+    - [x] `core/events.py`: Fix thread safety bug — `publish_threadsafe` reads `_subscribers` without holding the asyncio lock
+    - [x] `core/events.py`: Define topic constants (e.g. `TOPIC_HINT`, `TOPIC_COMMAND`, `TOPIC_FINDING_UPDATED`, `TOPIC_AGENT_STATUS`, `TOPIC_LOG_LINE`, `TOPIC_BUDGET_ALERT`)
+    - [x] `core/events.py`: Define typed `HintEvent` and `CommandEvent` Pydantic models (subclass or companion to `Event`)
+    - [x] `tools/base.py`: Add type annotation `supports_sharding: bool = False` and `-> str` return type on `__repr__`
+    - [x] `agents/source_review_agent.py`: Replace broad `except Exception` with specific exception types; use `ToolError` schema
+    - [x] `agents/source_review_agent.py`: Replace `print()` calls with `logging` module
+  - [x] [P0] **Missing Runtime Dependencies** (add to `pyproject.toml`):
+    - [x] Add `litellm` (LLM provider abstraction for all agents)
+    - [x] Add `httpx` (async HTTP for `SourceFetcher` download URLs)
+    - [x] Add `docker` (docker-py, for `ContainerTool` and `SandboxRunner`)
+  - [ ] [P0] **Global Storage** (`~/.vpoc/global.db`):
+    - [ ] Implement `GlobalStorageManager` in `core/global_storage.py`
+    - [ ] Define `Project` SQLModel (id, name, status, created_at, updated_at)
+    - [ ] Move `TokenUsage` to global DB (keep `project_id` field for attribution)
+    - [ ] Define `BudgetConfig` SQLModel (daily_limit, updated_at) for live budget management
+  - [ ] [P0] **Budget Enforcement**:
+    - [ ] Implement `BudgetManager` in `core/budget.py` (daily totals from global DB, midnight UTC reset)
+    - [ ] Implement `BudgetExhaustedError` and graceful stop (in-flight calls complete, then halt)
+    - [ ] Broadcast `budget.alert` event to all UIs with prompt for new limit
   - [ ] [P0] **Source Review Agent**
-    - [x] Implement parallel tool orchestration (via `VPOCAgent`)
+    - [x] Implement parallel tool orchestration (via `VPOCAgent`) *(to be updated for VPOCMixin)*
     - [ ] [P0] **Tool Base Classes**:
-      - [ ] Extend `AsyncTool` with `ContainerTool` subclass for Docker-based tools
+      - [ ] Extend `AsyncTool` with `ContainerTool` subclass for static analysis tools (mounts `source/` read-only, no sandbox hardening)
+      - [ ] Implement `SandboxRunner` in `core/sandbox.py` for PoC execution (gVisor/seccomp, `--cap-drop ALL`, `--read-only`, `--network none`, PID limits)
+      - [ ] Implement gVisor availability check at startup; hard error if `require_gvisor = true` and absent
       - [ ] Implement Semgrep JSON output parser
-      - [ ] Implement rule-set selection logic based on language detection
+      - [ ] Implement rule-set selection logic based on `LanguageDetector` output
       - [ ] Implement `FindingExtractor` to convert tool results to VPOC schema
     - [ ] [P1] Implement `CodeQLTool` integration
   - [ ] [P0] **PoC Agent**
-    - [ ] Implement **ExploitGenerator** (LLM-driven Python script creation)
+    - [ ] Implement **ExploitGenerator** (LLM-driven Python/Bash script creation via `LlmAgent`)
     - [ ] Implement **DockerfileGenerator** (Dynamic specialization of base images)
-    - [ ] Implement **ArtifactStaging** (Writing scripts and Dockerfiles to `artifacts/`)
+    - [ ] Implement **ArtifactStaging** (Writing `exploit.py`, `Dockerfile`, `metadata.json`, `llm_transcript.jsonl` to `artifacts/<finding_id>/`)
   - [ ] [P0] **Validation Agent**
-    - [ ] Implement **DockerSandboxRunner** (using `docker-py` with gVisor/seccomp)
-    - [ ] Implement **ResultMonitor** (Capturing exit codes, logs, and memory/CPU peaks)
-    - [ ] Implement **CleanupHandler** (Force-removing containers and networks on exit)
+    - [ ] Implement **SandboxRunner** execution (docker-py, gVisor/seccomp profile)
+    - [ ] Implement **ResultMonitor** (Capturing exit codes, stdout/stderr, CPU/RAM peaks)
+    - [ ] Implement **OutcomeAnalyzer** (LLM determines success per vuln type; owns success criteria)
+    - [ ] Implement **CleanupHandler** (Force-removing containers and networks on exit/resume)
   - [ ] [P0] **Orchestrator & State Management**
     - [x] Implement `StorageManager` and database schema
-    - [ ] [P0] **Finding Lifecycle Manager** (State transitions: POTENTIAL -> POC -> VALIDATED)
+    - [ ] [P0] **Finding Lifecycle Manager** (Full state transitions per `FindingStatus` enum)
     - [ ] [P0] **Priority-Weighted Queue**:
-      - [ ] Implement `FindingStreamer` (Real-time handoff to PoC Agent)
+      - [ ] Implement `FindingStreamer` (Real-time handoff to PoC Agent on SCREENED promotion)
       - [ ] Implement `WorkerPool` for parallel finding processing
-    - [ ] [P0] **Sandbox Hardening Profile** (Pre-baked Docker security configurations)
+    - [ ] [P0] **Checkpointing**:
+      - [x] Define `AgentCheckpoint` SQLModel in `project.db` (agent_name, finding_id, stage, state_json, updated_at)
+      - [ ] Implement per-file checkpoint writes in Source Review Agent
+      - [ ] Implement checkpoint read + skip logic on agent resume
+    - [ ] [P0] **Human Interaction**:
+      - [x] Define `HintEvent` and `CommandEvent` on EventBus (topics: `orchestrator.hint`, `orchestrator.command`)
+      - [x] Define `HintLog` SQLModel in `project.db`
+      - [ ] Implement quick-action command handlers in Orchestrator (PAUSE, RESUME, SKIP_FINDING, PRIORITIZE_RCE, MARK_FALSE_POSITIVE)
 
 - [ ] **P1: Usability & Configuration**
   - [ ] [P1] **Attack Surface Mapper** (Recon Agent):
@@ -42,33 +86,42 @@
     - [ ] Implement **DependencyResolver** (Iterative detection and installation of required libraries/dev-packages)
     - [ ] Implement **CodeQLDatabaseGenerator** (Automated generation of databases for deep analysis)
     - [ ] Implement **BuildFailureDebugger** (Analyzing compiler/linker errors to suggest fixes)
-  - [ ] [P1] **TUI Mode** (Single-Project Focused):
-    - [ ] Implement **TUIApplication** base using `Textual`
-    - [ ] **Status Screen**: Visual progress bars for agents and tool execution
-    - [ ] **Chat Screen**: Interactive message bus for user hints and agent requests
-    - [ ] **Findings Screen**: Filterable list of findings with detail view (LLM rationale)
-    - [ ] **Log Screen**: Real-time log multiplexer subscribing to the event bus
-  - [ ] [P1] **Web Interface** (MVP):
-    - [ ] Project Initialization Wizard (git/URL/upload)
+  - [ ] [P1] **TUI Mode** (Textual):
+    - [x] Add `textual` dependency
+    - [ ] Implement **TUIApplication** base
+    - [ ] **Kickoff Screen**: Full project initialization wizard (mirrors web interface)
+    - [ ] **Status Screen**: `DataTable` of agents with stage + progress; budget status
+    - [ ] **Chat Screen**: `Input` widget for free-form hints + quick-action buttons; publishes `HintEvent`/`CommandEvent`
+    - [ ] **Findings Screen**: Filterable `DataTable` + detail panel (CVSS, priority score, rationale, state)
+    - [ ] **Log Screen**: `RichLog` widget scrolling EventBus `log.line` events
+  - [ ] [P1] **Web Interface** (FastAPI + Uvicorn + HTMX + Jinja2):
+    - [x] Add `fastapi`, `uvicorn`, `jinja2`, `python-multipart` dependencies
+    - [ ] Project Initialization Wizard (public git URL / download URL / file upload, 100MB cap)
     - [ ] Dashboard: High-level view of project status and finding counts
+    - [ ] SSE endpoint subscribing to EventBus for real-time browser push (`hx-ext="sse"`)
+    - [ ] POST endpoints for hints, quick actions, and budget updates
+    - [ ] Findings view with state, CVSS score, priority score, rationale summary
   - [ ] [P1] **Project Configuration**:
-    - [ ] Implement `config.toml` loader/saver
+    - [ ] Implement `config.toml` loader/saver for both `ServerConfig` and `ProjectConfig`
     - [ ] Define Registry of Docker base containers for supported languages
 
 - [ ] **P2: Management & Reporting**
   - [ ] [P2] State Persistence & Resumption:
-    - [ ] [P2] Implement checkpointing for agents
-    - [ ] [P2] Implement stateless re-entry for the Orchestrator
-  - [ ] [P2] Build Web Interface:
-    - [ ] [P2] Finding triage (Approve/Reject, Provide hints)
-    - [ ] [P2] Show running/paused status
-  - [ ] [P2] **Reporting Agent** (Final report generation)
-  - [ ] [P2] Token usage tracking and budget enforcement
+    - [ ] [P2] Implement stateless re-entry for the Orchestrator (reads `AgentCheckpoint` on startup)
+    - [ ] [P2] Container ID cleanup on resume (stop/rm stale containers from interrupted validation)
+  - [ ] [P2] Build Web Interface enhancements:
+    - [ ] [P2] Finding triage (Approve/Reject, Provide hints, Mark False Positive)
+    - [ ] [P2] Show running/paused project status
+  - [ ] [P2] **Reporting Agent**:
+    - [ ] Markdown report generation (`artifacts/report.md`)
+    - [ ] Sections: Executive Summary, Finding Detail per vuln (CVSS, evidence, rationale summary, remediation), Appendix (token usage, tools run, scan duration)
+    - [ ] LLM transcripts saved to `artifacts/<finding_id>/llm_transcript.jsonl` (not in report)
 
 - [ ] **P3: Advanced Features**
-  - [ ] [P3] Deterministic daily budget cap (Hard limit)
   - [ ] [P3] Separate secret storage for API keys
-  - [ ] [P3] Budget alerts in dashboard
+  - [ ] [P3] Budget alerts in dashboard (warn at configurable % of daily limit)
+  - [ ] [P3] Concurrent multi-project execution (Orchestrator pool)
+  - [ ] [P3] Private git repository support (token-based auth)
 
 - [x] **Completed Tasks**
   - [x] Initialize project environment with `uv` and `virtualenv`

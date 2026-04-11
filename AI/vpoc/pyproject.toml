@@ -5,9 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "docker>=7.1.0",
+    "fastapi>=0.135.3",
     "google-adk>=1.29.0",
+    "httpx>=0.28.1",
+    "litellm>=1.83.4",
+    "python-multipart>=0.0.26",
     "sqlmodel>=0.0.38",
+    "textual>=8.2.3",
     "tomli>=2.4.1",
+    "uvicorn[standard]>=0.44.0",
 ]
 
 [dependency-groups]

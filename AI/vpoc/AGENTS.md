@@ -9,185 +9,322 @@
 - **Dependency Management**: Use `uv` for all package management and virtual environment creation.
 - **Virtual Environment**: All development and execution should occur within a `uv`-managed virtualenv.
 - **Persistence**: Use **SQLModel** (SQLAlchemy + Pydantic) for ORM and data validation, with **SQLite** as the storage engine.
+- **LLM Access**: Use **LiteLlm** uniformly for all LLM calls. Model strings encode the provider (e.g. `gemini/gemini-1.5-pro`, `vertex_ai/gemini-1.5-pro`, `openrouter/anthropic/claude-3-opus`).
+- **Web Stack**: **FastAPI** + **Uvicorn** for the web dashboard. **HTMX** + **Jinja2** templates for the frontend (no SPA build pipeline). **Server-Sent Events (SSE)** for real-time browser push; standard POST requests for user actions.
+- **TUI Stack**: **Textual** for the terminal interface.
 
 The [source is on Github](https://github.com/google/adk-python) and there is
 [documentation for agentic development by LLMs](https://github.com/google/adk-python/blob/main/llms.txt).
 
+## Agent Base Class & Mixin
+
+Rather than a mandatory `VPOCAgent` base class, VPOC uses a **`VPOCMixin`** so each agent can extend the appropriate ADK type directly:
+
+```python
+class VPOCMixin:
+    project_id: Optional[str] = Field(default=None)
+    storage_manager: Optional[StorageManager] = Field(default=None)
+    event_bus: Optional[EventBus] = Field(default=None)
+
+class OrchestratorAgent(VPOCMixin, LlmAgent): ...
+class SourceReviewAgent(VPOCMixin, BaseAgent): ...
+```
+
+`agents/base.py` contains only `VPOCMixin`.
+
+## Agent Dispatch & Communication
+
+- **Dispatch**: The Orchestrator invokes sub-agents via **ADK Runner + InMemorySessionService**. Each sub-agent is a proper ADK agent instance managed by a dedicated runner.
+- **Inter-Agent Communication**: Agents communicate through ADK's built-in runner/session machinery (not the EventBus).
+- **UI Fanout**: The **EventBus** (`core/events.py`) is used **exclusively** for broadcasting state to UI subscribers (TUI, Web). Agents publish events to the bus; they do not subscribe to it for operational signals.
+
 ## Agent Roles & Intelligence Profiles
 
-Each agent in VPOC combines **Deterministic Logic** (for reliability and speed) with **LLM-Driven Intelligence** (for reasoning and complex synthesis).
+Each agent combines **Deterministic Logic** (for reliability and speed) with **LLM-Driven Intelligence** (for reasoning and complex synthesis).
 
-### 1. Orchestrator Agent
-- **Deterministic**: State machine management, budget enforcement, finding lifecycle transitions, database transactions, and event broadcasting (Pub/Sub).
-- **LLM-Driven**: Interpreting broad user hints to adjust project-wide strategy and resolving conflicts between agent findings.
+### 1. Orchestrator Agent (`LlmAgent`)
+- **Deterministic**: State machine management, budget enforcement, finding lifecycle transitions, database transactions, and event broadcasting (Pub/Sub). Handles `CommandEvent` (quick actions) deterministically.
+- **LLM-Driven**: Interpreting broad user `HintEvent` messages to adjust project-wide strategy and resolving conflicts between agent findings.
 
-### 2. Attack Surface Mapper (Recon Agent)
+### 2. Attack Surface Mapper / Recon Agent (`BaseAgent`)
 - **Tool-Driven**: Static analysis of routing files (e.g., `routes.rb`, `urls.py`), configuration files (`docker-compose.yml`), and dependency manifests.
 - **LLM-Driven**: Reasoning about the *semantic importance* of endpoints (e.g., identifying high-value targets like authentication or payment flows) and inferring hidden parameters from naming conventions.
 
-### 3. Environment Architect (Build Agent)
+### 3. Environment Architect / Build Agent (`BaseAgent`)
 - **Tool-Driven**: Executing build commands (`make`, `npm install`, `cmake`), capturing exit codes, and parsing standard error output.
 - **LLM-Driven**: Interpreting complex compiler/linker errors to suggest missing system libraries and synthesizing build hints from unstructured `README.md` or `INSTALL` files.
 
-### 4. Source Review Agent
-- **Tool-Driven**: Orchestrating static analysis tools (Semgrep, CodeQL, Joern), sharding codebases, and deduplicating raw findings.
-- **LLM-Driven**: Pre-screening tool findings to filter out false positives and correlating disparate "weak signals" into a coherent vulnerability hypothesis.
+### 4. Source Review Agent (`BaseAgent`)
+- **Tool-Driven**: Orchestrating static analysis tools (Semgrep, CodeQL, Joern), sharding codebases per-file, and deduplicating raw findings.
+- **LLM-Driven**: Pre-screening tool findings to filter out false positives, assigning a **confidence score** (0.0–1.0), estimating a **CVSS 3.1 base score + vector string**, and correlating disparate "weak signals" into a coherent vulnerability hypothesis.
 
-### 5. PoC Agent
-- **Tool-Driven**: Staging files to the filesystem and triggering Docker image builds.
-- **LLM-Driven**: Generating the exploit script (Python/Bash) and synthesizing specialized Dockerfiles to install dependencies for the specific exploit.
+### 5. PoC Agent (`LlmAgent`)
+- **Tool-Driven**: Staging artifacts to `workspace/artifacts/<finding_id>/` and triggering Docker image builds.
+- **LLM-Driven**: Generating the exploit script (`exploit.py` or `exploit.sh`) and a specialized `Dockerfile`. Produces `metadata.json` with the vulnerability type and exploit-specific context (but NOT success criteria — those belong to the Validation Agent).
+- **Artifact Structure** per finding:
+  ```
+  artifacts/<finding_id>/
+    exploit.py          # or exploit.sh
+    Dockerfile          # environment for the exploit
+    metadata.json       # vuln_type, target_language, exploit hints
+    llm_transcript.jsonl  # append-only log of all LLM calls (not in report)
+  ```
 
-### 6. Validation Agent
-- **Tool-Driven**: Managing the hardened Docker sandbox (gVisor/seccomp), monitoring container resource usage (CPU/RAM peaks), and capturing execution logs.
-- **LLM-Driven**: Analyzing the *outcome* of a PoC execution (e.g., "The heap dump confirms a buffer overflow" vs "The 500 error was a generic timeout").
+### 6. Validation Agent (`BaseAgent`)
+- **Tool-Driven**: Managing the hardened Docker sandbox via `SandboxRunner` (`core/sandbox.py`), monitoring container resource usage (CPU/RAM peaks), and capturing execution logs.
+- **LLM-Driven**: Analyzing the *outcome* of a PoC execution to determine success. Success criteria vary by vulnerability type (e.g. RCE success looks different from SQLi or XSS). The Validation Agent owns this determination entirely.
 
-### 7. Reporting Agent
-- **Tool-Driven**: Markdown/PDF template rendering and finding-log aggregation.
-- **LLM-Driven**: Synthesizing technical logs into human-readable executive summaries, impact assessments, and remediation advice.
+### 7. Reporting Agent (`LlmAgent`)
+- **Tool-Driven**: Markdown template rendering and finding-log aggregation.
+- **LLM-Driven**: Synthesizing technical logs into human-readable executive summaries, per-finding rationale summaries, impact assessments, and remediation advice.
+- **Output**: Markdown only (`workspace/artifacts/report.md`). Full LLM transcripts are saved per-finding in `llm_transcript.jsonl` but are not included in the report.
 
 ## Finding Lifecycle & Streaming
 
-To maximize efficiency, VPOC employs a **pipelined analysis** model rather than a batch process.
-- **Streaming Handoff**: The Orchestrator does not wait for the Source Review Agent to complete the entire project. As soon as a "Potential Finding" is promoted, it is placed in a **priority-weighted queue**.
-- **Concurrent Processing**: The PoC Agent and Validation Agent begin working on findings as they arrive, allowing vulnerability discovery and PoC validation to occur in parallel.
-- **Priority Scoring**: Findings are prioritized based on their projected impact (e.g., RCE > XSS) and confidence scores from the Source Review tools.
+VPOC employs a **pipelined analysis** model rather than a batch process.
 
-## Sandbox Hardening (The "Hardened Sandbox")
+### Finding States
 
-To safely execute autonomous PoCs, the **Validation Agent** enforces a strict security profile for all target containers:
-1. **Runtime Isolation**: Prefer **gVisor (`runsc`)** or **Kata Containers** to provide a strong security boundary between the container and the host kernel. If unavailable, use a restrictive custom **seccomp** profile and **AppArmor/SELinux** policies.
-2. Network Isolation: 
-    - **Build Phase**: During environment setup and dependency resolution, containers MAY be granted restricted external network access to reach official package registries (e.g., npm, PyPI, crates.io).
-    - **PoC/Validation Phase**: Egress is strictly prohibited (`--network none`) during the execution of PoCs to prevent data exfiltration or unintended impact. If a multi-container target is required, the Orchestrator creates a transient, isolated private bridge with no external egress/ingress. Exceptions are only permitted if the vulnerability specifically requires network interaction, and must be explicitly flagged for human approval.
+```
+POTENTIAL        # Discovered by a static analysis tool
+SCREENED         # LLM pre-screening passed; queued for PoC generation
+REJECTED         # LLM pre-screening failed (false positive)
+POC_GENERATING   # PoC Agent is writing exploit + Dockerfile
+POC_READY        # Artifacts staged; queued for validation
+POC_FAILED       # Exploit generation or Docker build failed
+VALIDATING       # Running in the hardened sandbox
+VALIDATED        # Confirmed exploitable
+INCONCLUSIVE     # Sandbox ran but result was ambiguous
+AWAITING_HUMAN   # Flagged for human review (e.g. requires network egress exception)
+```
 
+Defined as a `FindingStatus` enum in `core/models.py`.
+
+### Priority Scoring
+
+Each finding receives a numeric **priority score** computed at promotion from `POTENTIAL` to `SCREENED`:
+
+```
+priority_score = impact_weight[vuln_type] * llm_confidence + recency_bonus
+```
+
+- `impact_weight`: Fixed table in `core/models.py` (e.g. RCE=100, SQLi=80, SSRF=70, AuthBypass=70, XSS=40, InfoDisclosure=20).
+- `llm_confidence`: Float 0.0–1.0 set by the Source Review Agent's LLM pre-screening step.
+- `recency_bonus`: Small constant (+5) to favor freshly discovered findings.
+- `cvss_score`: Best-effort CVSS 3.1 base score (float) estimated by the LLM pre-screening step.
+- `cvss_vector`: Corresponding CVSS 3.1 vector string.
+
+All four fields (`priority_score`, `llm_confidence`, `cvss_score`, `cvss_vector`) are stored on the `Finding` model.
+
+### Streaming Handoff
+- As soon as a finding is promoted to `SCREENED`, it enters the **priority-weighted queue**.
+- The PoC Agent and Validation Agent work concurrently on queued findings without waiting for Source Review to complete.
+
+## Source Retrieval
+
+Source retrieval is handled by `SourceFetcher` in `core/source_fetcher.py` — not an agent. The Orchestrator calls it during kickoff.
+
+- **Git**: `git clone --depth=1` (shallow) into `workspace/source/`. **Public repositories only** for MVP. Token-based auth is not supported.
+- **Download URL**: `httpx` async download → unpack with `tarfile`/`zipfile` into `workspace/source/`. **Maximum 100MB**.
+- **File Upload**: TUI accepts a local path; web interface accepts a multipart POST. Both copy/unpack into `workspace/source/`. **Maximum 100MB**.
+
+## Language Detection
+
+`LanguageDetector` in `core/utils.py` auto-detects project language(s) by counting file extensions, excluding `vendor/`, `node_modules/`, `.git/`, and similar third-party directories.
+
+- A language is included if its files exceed **5% of the total non-vendored file count**.
+- Returns a ranked list; **all detected languages** receive their full tool suite concurrently.
+- Kickoff config's `target_language` overrides auto-detection if set.
+
+| Extensions | Language | Tools |
+|---|---|---|
+| `.php` | PHP | Semgrep + Psalm (`--taint-analysis`) |
+| `.c`, `.cpp`, `.h` | C/C++ | Semgrep + Joern + CodeQL |
+| `.go` | Go | Semgrep + govulncheck |
+| `.rs` | Rust | Semgrep + cargo-audit |
+| `.lua` | Lua | Semgrep |
+
+## Sandbox Hardening
+
+PoC execution uses `SandboxRunner` in `core/sandbox.py` — a dedicated class separate from `ContainerTool`. It enforces:
+
+1. **Runtime Isolation**: gVisor (`runsc`) by default. Whether gVisor is required is controlled by `[sandbox] require_gvisor` in `config.toml` (default: `true`). If `require_gvisor = true` and gVisor is absent, VPOC exits with a hard error at startup. If `require_gvisor = false` and gVisor is absent, VPOC falls back to seccomp-only with a prominent warning.
+2. **Network Isolation**:
+    - **Build Phase**: Containers MAY have restricted external network access for official package registries.
+    - **PoC/Validation Phase**: `--network none` strictly enforced. Multi-container targets use a transient isolated private bridge with no external egress/ingress. Network exceptions require explicit human approval (`AWAITING_HUMAN` state).
 3. **Privilege Reduction**:
-    - Containers MUST run as a non-root user.
-    - All capabilities are dropped (`--cap-drop ALL`).
-    - The root filesystem is mounted as **read-only** (`--read-only`), with only specific, temporary `tmpfs` mounts for required writable paths.
+    - Non-root user only.
+    - `--cap-drop ALL`.
+    - `--read-only` root filesystem with `tmpfs` mounts for required writable paths.
 4. **Resource Constraints**:
     - **CPU**: Hard limit (default: 0.5 cores).
     - **RAM**: Hard limit (default: 512MB).
-    - **PIDs**: Limit the maximum number of processes to prevent fork bombs.
+    - **PIDs**: Hard limit to prevent fork bombs.
+
+`ContainerTool` (a subclass of `AsyncTool`) is used **only** for static analysis tools (Semgrep, CodeQL, Joern). It mounts `workspace/source/` read-only and does not apply sandbox hardening.
+
+## Human Interaction & Hints
+
+Users communicate with the Orchestrator mid-run via two channels:
+
+- **Free-form hints** (Chat screen / web chat): Published as `HintEvent` on the EventBus (topic: `orchestrator.hint`, payload: `{project_id, text}`). The Orchestrator feeds these into its LLM context on the next reasoning cycle without interrupting in-flight work.
+- **Quick actions** (buttons in TUI/Web): Published as `CommandEvent` (topic: `orchestrator.command`, payload: `{project_id, command, args}`). Handled deterministically. Available commands: `PAUSE`, `RESUME`, `SKIP_FINDING`, `PRIORITIZE_RCE`, `MARK_FALSE_POSITIVE`.
+
+Both event types are persisted to a `HintLog` table in `project.db` for inclusion in the audit trail and resumption context.
 
 ## Project Initialization (Kickoff)
 
-Every review session must start with a human-guided kickoff phase. This is handled via a wizard in the web interface or a specialized TUI mode for single projects. It captures:
+Every review session starts with a human-guided kickoff wizard, available in both the TUI and web interface. It captures:
+
+- **Project Name**: Human-readable label.
 - **Target Description**: Free-text context about the application's purpose and threat model.
-- **Source Retrieval**: Supports git URLs, download URLs (e.g., zip/tarball), or direct file uploads.
+- **Source Retrieval**: Public git URL, download URL (zip/tarball, max 100MB), or local file path/web upload (max 100MB).
 - **High-Value Targets**: Specific files, directories, or endpoints to prioritize.
 - **Build/Environment Hints**: Custom commands for dependency installation or build steps.
+- **Target Language Override**: Optional; overrides `LanguageDetector` auto-detection.
 - **Exclusions**: Paths or vulnerability types to ignore.
+
+On completion, kickoff:
+1. Creates a `Project` record in `~/.vpoc/global.db`.
+2. Writes `workspace/<project_id>/config.toml` from wizard inputs (validated as `ProjectConfig`).
+3. Calls `SourceFetcher` to populate `workspace/<project_id>/source/`.
+4. Instantiates and starts an `OrchestratorAgent` runner for the project.
 
 ## TUI Mode
 
-VPOC provides a terminal-based interface optimized for single-project analysis. It supports multiple "screens" for interactive sessions:
-- **Status Screen**: Real-time overview of agent activity, tool progress, and budget status.
-- **Chat Screen**: Interactive communication with the Orchestrator for providing hints and guiding analysis.
-- **Findings Screen**: View, triage, and explore potential and validated findings.
-- **Log Screen**: Real-time, multiplexed execution logs from all active agents and tools, synchronized via an internal Pub/Sub event bus.
+Built with **Textual**. Supports the same kickoff wizard as the web interface (TUI is first-class, not read-only). Screens:
+
+- **Kickoff Screen**: Project initialization wizard.
+- **Status Screen**: `DataTable` of agents with current stage and progress indicators; budget status.
+- **Chat Screen**: `Input` widget for free-form hints + quick-action buttons. Publishes `HintEvent`/`CommandEvent` to EventBus.
+- **Findings Screen**: Filterable `DataTable` of findings with detail panel (CVSS score, priority score, LLM rationale summary, state). Supports Mark False Positive, Skip actions.
+- **Log Screen**: `RichLog` widget scrolling raw event bus messages in real time.
 
 ## Global Server Configuration (`config.toml`)
 
-VPOC uses a top-level `config.toml` file to manage global settings and defaults. This configuration MUST be validated using a centralized Pydantic model (`ServerConfig`) defined in `core/models.py`.
+Validated by `ServerConfig` Pydantic model in `core/models.py`. The `config.toml` at the repo root sets global defaults; per-project kickoff config is stored in `workspace/<project_id>/config.toml` as `ProjectConfig`.
 
-### 1. Configuration Schema
-The global configuration should include the following sections and entries:
+### Configuration Schema
 
 - **[server]**:
-    - `host`: The interface for the web dashboard to bind to (default: `127.0.0.1`).
-    - `port`: The port for the web dashboard (default: `8080`).
-    - `debug`: Boolean flag to enable verbose debugging logs and TUI features.
+    - `host`: Web dashboard bind interface (default: `127.0.0.1`).
+    - `port`: Web dashboard port (default: `8080`).
+    - `debug`: Boolean; enables verbose logs.
 - **[storage]**:
-    - `workspaces_dir`: The base path where all project analysis data is stored (default: `~/.vpoc/workspaces/`).
+    - `workspaces_dir`: Base path for all project workspaces (default: `~/.vpoc/workspaces/`).
+    - `global_db`: Path to the global database (default: `~/.vpoc/global.db`).
 - **[llm]**:
-    - `default_provider`: The preferred AI platform (e.g., `vertexai`, `openai`).
-    - `model_mapping`: A table mapping agent names to specific model versions (e.g., `SourceReviewAgent = "gemini-1.5-pro"`).
-    - `daily_budget_limit`: A hard numeric cap on total token expenditure across all projects.
+    - `default_model`: Default LiteLlm model string (e.g. `gemini/gemini-1.5-flash`). Provider is encoded in the string.
+    - `model_mapping`: Table mapping agent names to LiteLlm model strings (e.g. `SourceReviewAgent = "gemini/gemini-1.5-pro"`).
+    - `daily_budget_limit`: Initial default daily token budget (numeric). The live limit is stored in `global.db` and can be updated via any UI without editing this file.
 - **[sandbox]**:
-    - `runtime`: The container runtime to use (default: `runsc` for gVisor).
+    - `require_gvisor`: Boolean; hard-error at startup if gVisor is absent (default: `true`).
+    - `runtime`: Container runtime to use (default: `runsc`).
     - `max_concurrent_containers`: Global limit on concurrent validation sandboxes.
-    - `default_cpu_limit`: Default CPU core allocation for validation containers.
-    - `default_memory_limit`: Default RAM allocation for validation containers.
+    - `default_cpu_limit`: Default CPU cores for validation containers (default: `0.5`).
+    - `default_memory_limit`: Default RAM for validation containers (default: `512m`).
 - **[logging]**:
-    - `level`: Minimum log level (e.g., `INFO`, `DEBUG`).
-    - `format`: Logging format (e.g., `text` or `json`).
+    - `level`: Minimum log level (e.g. `INFO`, `DEBUG`).
+    - `format`: Log format (`text` or `json`).
 
 ## System Architecture & Interfaces
 
-VPOC operates as a **single unified process** that houses the Orchestrator, all active agents, and the user interfaces.
+VPOC operates as a **single unified process**. Multiple projects can be architecturally supported (no global singletons, all state scoped to `project_id`); MVP runs one project at a time in practice.
 
-### 1. Interface Activation
-The user controls which interfaces are active via command-line flags:
-- `--tui`: Launches the Terminal User Interface for the current project.
-- `--web`: Starts the Web Dashboard server.
-- Both can be active simultaneously, synchronized via an internal **Pub/Sub Event Bus**.
+### Interface Activation
+- `--tui`: Launches the Textual TUI.
+- `--web`: Starts the FastAPI/Uvicorn web dashboard.
+- Both can be active simultaneously, synchronized via the EventBus.
 
-### 2. Pub/Sub Event Bus (`core/events.py`)
-VPOC uses an asynchronous, in-process event bus based on `asyncio.Queue` for real-time synchronization:
-- **Fan-Out Architecture**: Every subscriber (TUI, Web, Orchestrator) receives its own dedicated queue.
-- **Async-First**: Native support for the ADK `asyncio` loop, with thread-safe publishing for synchronous agents.
-- **Event Schema**: All messages follow a strict Pydantic-based `Event` model (topic, payload, timestamp).
+### Pub/Sub Event Bus (`core/events.py`)
+- **Fan-Out**: Every UI subscriber gets its own `asyncio.Queue`.
+- **Async-First**: Native asyncio with thread-safe publishing.
+- **Scope**: UI fanout only. Not used for agent-to-agent signaling.
+- **Event Schema**: Pydantic `Event` model (topic, payload, timestamp, event_id).
+- **Key Topics**: `orchestrator.hint`, `orchestrator.command`, `finding.updated`, `agent.status`, `log.line`, `budget.alert`.
 
-### 3. Concurrency & Integrity
-- **Single Process**: All components share a single memory space for the Event Bus, ensuring real-time responsiveness.
-- **Transactional DB**: All state transitions in the `project.db` (findings triage, budget updates, agent checkpoints) MUST be performed within ACID-compliant transactions to prevent race conditions between the TUI, Web, and background agents.
+### Web Real-Time Updates
+- **Server-Sent Events (SSE)**: FastAPI SSE endpoint subscribes to the EventBus and streams filtered events to each connected browser. HTMX `hx-ext="sse"` handles client-side updates.
+- **User Actions**: Standard HTMX POST requests (hints, quick actions, budget updates).
 
 ## Data Storage & Persistence
 
-To ensure isolation and traceability, VPOC employs a **Project Workspace** architecture. Each analysis session is isolated within its own directory and database.
+### Global Storage (`~/.vpoc/global.db`) — `GlobalStorageManager`
+Shared across all projects. Contains:
+- **`Project`**: Project ID, name, status (`INITIALIZING`, `RUNNING`, `PAUSED`, `COMPLETE`, `FAILED`), created/updated timestamps.
+- **`TokenUsage`**: Per-call token records with `project_id`, `agent_name`, `model`, `tokens_in`, `tokens_out`, `timestamp`. Queried by date for daily budget totals.
+- **`BudgetConfig`**: Live daily limit (updated via UI without config file edits). Resets at midnight UTC.
 
-### 1. Workspace Structure
-Workspaces are stored in a configurable base directory (default: `~/.vpoc/workspaces/`):
+### Project Storage (`workspace/<project_id>/project.db`) — `StorageManager`
+Isolated per project. Contains:
+- **`Finding`**: Full finding record including `FindingStatus`, `priority_score`, `llm_confidence`, `cvss_score`, `cvss_vector`, evidence, and summarized LLM rationale.
+- **`ExecutionLog`**: PoC generation and validation attempts with container IDs, exit codes, and output logs.
+- **`AgentCheckpoint`**: Resumption state per agent. Fields: `agent_name`, `finding_id` (nullable), `stage`, `state_json`, `updated_at`. Source Review uses per-file granularity (`stage="FILE_COMPLETE"`, `state_json={"file": "...", "tool": "...", "finding_ids": [...]}`).
+- **`HintLog`**: All `HintEvent` and `CommandEvent` records for audit trail and resumption.
+
+### Workspace Structure
 ```text
-/workspaces/
-  <project_id>/
-    source/             # Target source code
-    artifacts/          # Generated Dockerfiles, exploits, logs
-    project.db          # SQLite database (SQLModel)
-    config.toml         # Kickoff configuration
+~/.vpoc/
+  global.db                   # Global storage (projects, budget, token usage)
+  workspaces/
+    <project_id>/
+      source/                 # Target source code
+      artifacts/
+        report.md             # Final Markdown report
+        <finding_id>/
+          exploit.py          # Generated exploit script
+          Dockerfile          # Exploit environment
+          metadata.json       # vuln_type, hints (not success criteria)
+          llm_transcript.jsonl  # Append-only LLM call log
+      project.db              # Per-project SQLite database
+      config.toml             # ProjectConfig (kickoff inputs)
 ```
 
-### 2. State Management & Resumption
-A core mandate of VPOC is **state durability**. Every agent execution must record enough state to allow for seamless resumption after a stop or crash.
-- **Checkpointing**: Agents periodically save their current progress, context, and tool outputs to the `project.db`.
-- **Stateless Re-entry**: Upon restart, the Orchestrator reads the last recorded state and re-initializes agents at their last known point of progress without significant loss of quality or redundant token usage.
+### Concurrency
+SQLite configured in **WAL mode** for all databases. Orchestrator is instanced per-project with no global singletons.
 
-### 3. Centralized Storage Manager (`StorageManager`)
-A dedicated `StorageManager` class handles all database interactions:
-- **Findings**: Stores potential, validated, and rejected findings with full LLM rationale and tool metadata.
-- **Executions**: Logs PoC generation and validation attempts, including container IDs and exit codes.
-- **Budgeting**: Tracks token usage (input/output) per agent and model for deterministic cost control.
+## Budget Enforcement
 
-### 4. Concurrency
-SQLite is configured in **WAL (Write-Ahead Logging)** mode to support concurrent read/write operations from multiple specialized agents (Orchestrator, Source Review, PoC, etc.).
+`BudgetManager` in `core/budget.py`:
+- Loads today's token spend from `global.db` on init.
+- `check_budget(estimated_tokens) -> bool` called before each LLM invocation.
+- Raises `BudgetExhaustedError` if the cap would be exceeded.
+- When exhausted: in-flight LLM calls complete, then all agents stop cleanly. All connected UIs display a budget prompt with a field to set a new daily limit.
+- Token counts sourced from LiteLlm response metadata; written to `global.db` after each call.
+
+## Prompt Management
+
+`PromptLoader` in `core/utils.py`:
+- Loads prompts from `prompts/<agent_name>.md` or `prompts/<agent_name>/<prompt_name>.md`.
+- Uses `{placeholder}` Python string formatting.
+- **Strict validation**: Raises `PromptRenderError` (listing all missing variables) if any placeholder is unsatisfied.
+- Caches file reads in memory after first load.
 
 ## Coding Style
 
-- All code should conform to PEP-8.
-- All public functions and methods should have pydoc-ready docstrings.
-- Private functions and methods should begin with `_`.
-- Use classes wherever it makes sense to encapsulate things. Build as if it is
-  object-oriented whenever it makes sense.
-- Prefer importing modules over importing individual classes (e.g., `import os` instead of `from os import path`).
-- Ensure granular exception handling (avoid broad `except Exception` blocks).
-- Build unit tests for any complex code.
-- Always stub out calls to real LLMs in Unit Tests.
-- Use python typing. (PEP 484, etc.) All functions, methods, and class variables MUST have explicit type hints.
-- Prompts for agents MUST be loaded from separate `.md` (Markdown) files and NOT in-lined into the source code.
-    - Path structure: `prompts/<agent_name>.md` or `prompts/<agent_name>/<prompt_name>.md` for multi-prompt agents.
-    - Implementation: Use a centralized `PromptLoader` utility in `core/utils.py`.
-- Tool Execution Strategy:
-    - Tools MUST support both host-based execution and Docker-based isolation.
-    - Implement `ContainerTool` as a subclass of `AsyncTool` for tools requiring sandbox isolation.
-- Error Handling & Tool Failures:
-    - Tools MUST NOT fail silently. Use a standardized `ToolError` schema.
-    - A `ToolError` should include: `tool_name`, `error_type` (e.g., BUILD_FAILURE, RUNTIME_ERROR, TIMEOUT), `stderr_tail`, and `suggested_fix` (optionally provided by an LLM).
-- Configuration Management:
-    - All project configurations MUST be validated using a centralized Pydantic model (`ProjectConfig`) defined in `core/models.py`.
-    - TOML (`config.toml`) is the required format for persistent configuration files to ensure human readability and structural integrity.
-    - This model is the single source of truth for `build_hints`, `excluded_paths`, and `target_language`.
-- Place individual agents in `agents/`.
-- Place tools in `tools/`.
+- All code must conform to PEP-8.
+- All public functions and methods must have pydoc-ready docstrings.
+- Private functions and methods begin with `_`.
+- Use classes to encapsulate state and behavior; prefer OOP.
+- Prefer importing modules over individual names (e.g. `import os` not `from os import path`).
+- Granular exception handling — no broad `except Exception` blocks.
+- Unit tests for all complex logic. Stub all LLM calls in tests.
+- Type hints required on all functions, methods, and class variables (PEP 484).
+- Prompts loaded from `.md` files via `PromptLoader`; never inlined.
+- Tools placed in `tools/`; agents placed in `agents/`.
+
+### Tool Execution Strategy
+- `AsyncTool` (base): Abstract base for all tools.
+- `ContainerTool` (subclass of `AsyncTool`): For static analysis tools only (Semgrep, CodeQL, Joern). Mounts `workspace/source/` read-only. No sandbox hardening.
+- `SandboxRunner` (`core/sandbox.py`): For PoC execution only. Applies full sandbox hardening profile.
+
+### Error Handling & Tool Failures
+- Tools MUST NOT fail silently. Use the standardized `ToolError` schema.
+- `ToolError` includes: `tool_name`, `error_type` (`BUILD_FAILURE`, `RUNTIME_ERROR`, `TIMEOUT`), `stderr_tail`, `suggested_fix` (optional, LLM-provided).
+
+### Configuration Management
+- `ServerConfig` (in `core/models.py`): Validates global `config.toml`.
+- `ProjectConfig` (in `core/models.py`): Validates per-project kickoff `config.toml`. Single source of truth for `build_hints`, `excluded_paths`, `target_language`, `high_value_targets`.
 
 ## Maintenance & Process
 
@@ -195,71 +332,55 @@ SQLite is configured in **WAL (Write-Ahead Logging)** mode to support concurrent
 
 ## Tool Integration Strategy: Source Analysis
 
-To enhance vulnerability discovery, VPOC integrates industry-standard static analysis tools as ADK-compatible tools orchestrated by the **Source Review Agent**.
-
 ### 1. Semgrep Integration (`tools/semgrep.py`)
 - **Purpose**: Fast, pattern-based scanning for security anti-patterns and known vulnerabilities.
-- **Workflow**: Runs `semgrep scan --json` on the target source and parses findings into the VPOC internal schema.
-- **Strength**: High speed and broad coverage for multi-language configurations.
+- **Workflow**: Runs `semgrep scan --json` with language-appropriate rulesets; parses findings into VPOC internal schema.
+- **Execution**: Via `ContainerTool` (Docker-isolated).
 
 ### 2. CodeQL Integration (`tools/codeql.py`)
-- **Purpose**: Deep semantic analysis and data-flow tracing to find complex vulnerabilities (e.g., untrusted source to dangerous sink).
-- **Workflow**:
-    1. **Database Creation**: Uses build hints from the kickoff phase to generate a CodeQL database.
-    2. **Analysis**: Executes standard security query suites (`codeql database analyze`).
-    3. **Parsing**: Converts SARIF output into the VPOC internal schema.
-- **Strength**: Precision in identifying reachability and complex logic flaws.
+- **Purpose**: Deep semantic analysis and data-flow tracing.
+- **Workflow**: Database creation (using kickoff build hints) → `codeql database analyze` → SARIF → VPOC schema.
+- **Execution**: Via `ContainerTool`.
 
 ### 3. Joern Integration (`tools/joern.py`)
-- **Purpose**: Graph-based code analysis via Code Property Graphs (CPG).
-- **Workflow**: Generates a CPG and allows the **Source Review Agent** to perform complex reachability queries (e.g., source-to-sink analysis for C/C++ and Go).
-- **Strength**: Unrivaled for mapping structural relationships and data flow in compiled languages.
+- **Purpose**: Graph-based Code Property Graph analysis for C/C++ and Go.
+- **Workflow**: CPG generation → reachability queries (source-to-sink).
+- **Execution**: Via `ContainerTool`.
 
 ### 4. Language-Specific Tools
-- **PHP**: **Psalm** with `--taint-analysis` for fast, PHP-specialized vulnerability discovery.
-- **Go**: **govulncheck** for finding reachable vulnerabilities in dependencies.
-- **Rust**: **cargo-audit** to identify known security advisories in the crate graph.
+- **PHP**: Psalm `--taint-analysis`.
+- **Go**: govulncheck.
+- **Rust**: cargo-audit.
 
-### 5. Orchestration Logic
-The **Source Review Agent** acts as the synthesis layer:
-- **Selection**: Auto-detects project language and invokes the relevant tool(s).
-- **Deduplication**: Merges overlapping findings from different tools.
-- **LLM Pre-screening**: Uses an LLM to validate the context of findings before promoting them to the PoC Agent, reducing false positives.
+### 5. Orchestration Logic (`LanguageDetector` + Source Review Agent)
+- `LanguageDetector` selects applicable tools based on detected language(s).
+- All applicable tools run concurrently (Fan-Out).
+- Results are deduplicated, correlated, and LLM-pre-screened (Fan-In).
 
 ## Parallel Analysis Architecture
 
-To achieve high-performance scanning, VPOC employs a **Fan-Out / Fan-In** pattern for source analysis:
+### Fan-Out
+- Source Review Agent runs all applicable tools concurrently via `asyncio.Semaphore`.
+- Pattern tools (Semgrep, Psalm) additionally shard the codebase by file for parallelism.
+- Deep-analysis tools (CodeQL, Joern) maintain global context while running in parallel.
 
-### 1. The Source Review Agent (`agents/source_review_agent.py`)
-- Manages an asynchronous task queue for tool execution.
-- Dynamically scales workers based on available system resources and project size using `asyncio.Semaphore`.
-
-### 2. Tool Parallelization (Fan-Out)
-- Executes multiple static analysis tools (Semgrep, CodeQL, Joern) concurrently using `asyncio` and the agent's internal task runner.
-- Isolates tool-specific dependencies by running them within specialized Docker containers where appropriate.
-
-### 3. Codebase Sharding
-- For pattern-based tools, the **Source Review Agent** shards the codebase into logical directories/packages to analyze them in parallel.
-- Deep-analysis tools (CodeQL/Joern) maintain global context while running in parallel with other tools.
-
-### 4. Result Synthesis (Fan-In)
-- A central aggregation engine collects findings from all workers.
-- **Deduplication**: Merges overlapping findings from different shards or tools.
-- **Correlation**: Cross-references findings (e.g., a Semgrep pattern match confirmed by a Joern data-flow path) to increase confidence scores.
+### Fan-In
+- Central aggregation deduplicates findings across tools and shards.
+- Correlation cross-references findings (e.g. Semgrep pattern + Joern data-flow path → higher confidence).
+- LLM pre-screening assigns `llm_confidence` and `cvss_score` before promotion to `SCREENED`.
 
 ## Building Features
 
-When asked to build a feature, only build out what's been requested and the
-appropriate tests. Ask before continuing on.
+When asked to build a feature, only build out what has been requested and the appropriate tests. Ask before continuing.
 
 ### Validation Requirements
-Every change **must** be validated using the following tools before completion:
-1. **Linting**: Use `flake8` for style violations and `mypy` for static type checking.
-2. **Testing**: Use `pytest` for unit and integration tests.
-3. **Mise Integration**: Prefer running `mise run check` to execute all validation steps (linting + testing) concurrently.
+Every change **must** be validated before completion:
+1. **Linting**: `flake8` + `mypy`.
+2. **Testing**: `pytest`.
+3. **Preferred**: `mise run check` (lint + test concurrently).
 
 **Available Mise Tasks:**
 - `mise run lint`: Runs `flake8` and `mypy`.
 - `mise run test`: Runs `pytest`.
-- `mise run fix`: Auto-formats code (using `black`).
+- `mise run fix`: Auto-formats with `black`.
 - `mise run check`: Combined lint and test.

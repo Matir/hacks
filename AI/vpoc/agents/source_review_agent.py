@@ -1,13 +1,17 @@
 import asyncio
+import logging
 import typing
+from google.adk import Agent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
 from google.genai import types
-from .base import VPOCAgent
+from .base import VPOCMixin
 from tools import base as tools_base
 
+logger = logging.getLogger(__name__)
 
-class SourceReviewAgent(VPOCAgent):
+
+class SourceReviewAgent(VPOCMixin, Agent):
     """
     Source Review Agent responsible for orchestrating static analysis tools
     and performing LLM-based pre-screening.
@@ -30,7 +34,6 @@ class SourceReviewAgent(VPOCAgent):
         In ADK, this is the entry point for the agent.
         """
         # TODO: Implement full agent logic including LLM pre-screening.
-        # For now, it could yield a starting event.
         yield Event(
             author=self.name,
             content=types.Content(
@@ -43,32 +46,39 @@ class SourceReviewAgent(VPOCAgent):
     ) -> typing.List[typing.Dict[str, typing.Any]]:
         """
         Runs multiple tools concurrently and aggregates findings.
-        This preserves the AnalysisRunner logic but inside an agent.
+
+        :param tools: List of tools to run in parallel.
+        :param project_path: Path to the workspace source directory.
+        :return: Aggregated list of findings from all tools.
         """
         tasks = [self._run_single_tool(tool, project_path) for tool in tools]
         results = await asyncio.gather(*tasks)
-        return self._aggregate_findings(results)
+        return self._aggregate_findings(list(results))
 
     async def _run_single_tool(
         self, tool: tools_base.AsyncTool, project_path: str
     ) -> typing.Dict[str, typing.Any]:
-        """Runs a single tool with concurrency control."""
+        """Runs a single tool with concurrency control.
+
+        :raises tools_base.ToolError: Propagated from the tool on failure.
+        """
         async with self._semaphore:
             try:
-                # Log tool start (could use a real logger or yield an event)
-                print(f"[SourceReviewAgent] Starting {tool.name} on {project_path}")
+                logger.info("Starting %s on %s", tool.name, project_path)
                 result = await tool.run_async(project_path)
-                print(f"[SourceReviewAgent] Completed {tool.name}")
+                logger.info("Completed %s", tool.name)
                 return result
-            except Exception as e:
-                print(f"[SourceReviewAgent] Tool {tool.name} failed: {e}")
+            except tools_base.ToolError as e:
+                logger.error(
+                    "Tool %s failed [%s]: %s", tool.name, e.error_type, e.stderr_tail
+                )
                 return {"tool": tool.name, "findings": [], "error": str(e)}
 
     def _aggregate_findings(
         self, results: typing.List[typing.Dict[str, typing.Any]]
     ) -> typing.List[typing.Dict[str, typing.Any]]:
         """Synthesizes results from different tools into a unified list."""
-        all_findings = []
+        all_findings: typing.List[typing.Dict[str, typing.Any]] = []
         for result in results:
             findings = result.get("findings", [])
             for f in findings:
