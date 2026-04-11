@@ -56,7 +56,10 @@ To maximize efficiency, VPOC employs a **pipelined analysis** model rather than 
 
 To safely execute autonomous PoCs, the **Validation Agent** enforces a strict security profile for all target containers:
 1. **Runtime Isolation**: Prefer **gVisor (`runsc`)** or **Kata Containers** to provide a strong security boundary between the container and the host kernel. If unavailable, use a restrictive custom **seccomp** profile and **AppArmor/SELinux** policies.
-2. **Network Isolation**: Default to `--network none`. If a multi-container target is required, the Orchestrator creates a transient, isolated private bridge with no external egress/ingress.
+2. Network Isolation: 
+    - **Build Phase**: During environment setup and dependency resolution, containers MAY be granted restricted external network access to reach official package registries (e.g., npm, PyPI, crates.io).
+    - **PoC/Validation Phase**: Egress is strictly prohibited (`--network none`) during the execution of PoCs to prevent data exfiltration or unintended impact. If a multi-container target is required, the Orchestrator creates a transient, isolated private bridge with no external egress/ingress. Exceptions are only permitted if the vulnerability specifically requires network interaction, and must be explicitly flagged for human approval.
+
 3. **Privilege Reduction**:
     - Containers MUST run as a non-root user.
     - All capabilities are dropped (`--cap-drop ALL`).
@@ -83,6 +86,32 @@ VPOC provides a terminal-based interface optimized for single-project analysis. 
 - **Findings Screen**: View, triage, and explore potential and validated findings.
 - **Log Screen**: Real-time, multiplexed execution logs from all active agents and tools, synchronized via an internal Pub/Sub event bus.
 
+## Global Server Configuration (`config.toml`)
+
+VPOC uses a top-level `config.toml` file to manage global settings and defaults. This configuration MUST be validated using a centralized Pydantic model (`ServerConfig`) defined in `core/models.py`.
+
+### 1. Configuration Schema
+The global configuration should include the following sections and entries:
+
+- **[server]**:
+    - `host`: The interface for the web dashboard to bind to (default: `127.0.0.1`).
+    - `port`: The port for the web dashboard (default: `8080`).
+    - `debug`: Boolean flag to enable verbose debugging logs and TUI features.
+- **[storage]**:
+    - `workspaces_dir`: The base path where all project analysis data is stored (default: `~/.vpoc/workspaces/`).
+- **[llm]**:
+    - `default_provider`: The preferred AI platform (e.g., `vertexai`, `openai`).
+    - `model_mapping`: A table mapping agent names to specific model versions (e.g., `SourceReviewAgent = "gemini-1.5-pro"`).
+    - `daily_budget_limit`: A hard numeric cap on total token expenditure across all projects.
+- **[sandbox]**:
+    - `runtime`: The container runtime to use (default: `runsc` for gVisor).
+    - `max_concurrent_containers`: Global limit on concurrent validation sandboxes.
+    - `default_cpu_limit`: Default CPU core allocation for validation containers.
+    - `default_memory_limit`: Default RAM allocation for validation containers.
+- **[logging]**:
+    - `level`: Minimum log level (e.g., `INFO`, `DEBUG`).
+    - `format`: Logging format (e.g., `text` or `json`).
+
 ## System Architecture & Interfaces
 
 VPOC operates as a **single unified process** that houses the Orchestrator, all active agents, and the user interfaces.
@@ -93,7 +122,13 @@ The user controls which interfaces are active via command-line flags:
 - `--web`: Starts the Web Dashboard server.
 - Both can be active simultaneously, synchronized via an internal **Pub/Sub Event Bus**.
 
-### 2. Concurrency & Integrity
+### 2. Pub/Sub Event Bus (`core/events.py`)
+VPOC uses an asynchronous, in-process event bus based on `asyncio.Queue` for real-time synchronization:
+- **Fan-Out Architecture**: Every subscriber (TUI, Web, Orchestrator) receives its own dedicated queue.
+- **Async-First**: Native support for the ADK `asyncio` loop, with thread-safe publishing for synchronous agents.
+- **Event Schema**: All messages follow a strict Pydantic-based `Event` model (topic, payload, timestamp).
+
+### 3. Concurrency & Integrity
 - **Single Process**: All components share a single memory space for the Event Bus, ensuring real-time responsiveness.
 - **Transactional DB**: All state transitions in the `project.db` (findings triage, budget updates, agent checkpoints) MUST be performed within ACID-compliant transactions to prevent race conditions between the TUI, Web, and background agents.
 
@@ -109,7 +144,7 @@ Workspaces are stored in a configurable base directory (default: `~/.vpoc/worksp
     source/             # Target source code
     artifacts/          # Generated Dockerfiles, exploits, logs
     project.db          # SQLite database (SQLModel)
-    config.json         # Kickoff configuration
+    config.toml         # Kickoff configuration
 ```
 
 ### 2. State Management & Resumption
@@ -137,7 +172,20 @@ SQLite is configured in **WAL (Write-Ahead Logging)** mode to support concurrent
 - Ensure granular exception handling (avoid broad `except Exception` blocks).
 - Build unit tests for any complex code.
 - Always stub out calls to real LLMs in Unit Tests.
-- Use python typing. (PEP 484, etc.)
+- Use python typing. (PEP 484, etc.) All functions, methods, and class variables MUST have explicit type hints.
+- Prompts for agents MUST be loaded from separate `.md` (Markdown) files and NOT in-lined into the source code.
+    - Path structure: `prompts/<agent_name>.md` or `prompts/<agent_name>/<prompt_name>.md` for multi-prompt agents.
+    - Implementation: Use a centralized `PromptLoader` utility in `core/utils.py`.
+- Tool Execution Strategy:
+    - Tools MUST support both host-based execution and Docker-based isolation.
+    - Implement `ContainerTool` as a subclass of `AsyncTool` for tools requiring sandbox isolation.
+- Error Handling & Tool Failures:
+    - Tools MUST NOT fail silently. Use a standardized `ToolError` schema.
+    - A `ToolError` should include: `tool_name`, `error_type` (e.g., BUILD_FAILURE, RUNTIME_ERROR, TIMEOUT), `stderr_tail`, and `suggested_fix` (optionally provided by an LLM).
+- Configuration Management:
+    - All project configurations MUST be validated using a centralized Pydantic model (`ProjectConfig`) defined in `core/models.py`.
+    - TOML (`config.toml`) is the required format for persistent configuration files to ensure human readability and structural integrity.
+    - This model is the single source of truth for `build_hints`, `excluded_paths`, and `target_language`.
 - Place individual agents in `agents/`.
 - Place tools in `tools/`.
 
@@ -182,12 +230,12 @@ The **Source Review Agent** acts as the synthesis layer:
 
 To achieve high-performance scanning, VPOC employs a **Fan-Out / Fan-In** pattern for source analysis:
 
-### 1. The Orchestrator (`AnalysisRunner`)
+### 1. The Source Review Agent (`agents/source_review_agent.py`)
 - Manages an asynchronous task queue for tool execution.
-- Dynamically scales workers based on available system resources and project size.
+- Dynamically scales workers based on available system resources and project size using `asyncio.Semaphore`.
 
 ### 2. Tool Parallelization (Fan-Out)
-- Executes multiple static analysis tools (Semgrep, CodeQL, Joern) concurrently using `asyncio` and `ProcessPoolExecutor`.
+- Executes multiple static analysis tools (Semgrep, CodeQL, Joern) concurrently using `asyncio` and the agent's internal task runner.
 - Isolates tool-specific dependencies by running them within specialized Docker containers where appropriate.
 
 ### 3. Codebase Sharding

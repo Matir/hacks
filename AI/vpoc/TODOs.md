@@ -2,12 +2,17 @@
 
 - [ ] **P0: Core Workflow Engine**
   - [ ] [P0] **Bootstrap ADK Framework**
-    - [ ] Define base `VPOCAgent` class (Inheriting from ADK `Agent`)
+    - [x] Define base `VPOCAgent` class (Inheriting from ADK `Agent`)
+    - [ ] [P0] **Core Infrastructure Utilities**:
+      - [ ] Implement `PromptLoader` in `core/utils.py` (loads from `prompts/`)
+      - [ ] Define `ProjectConfig` and `ServerConfig` Pydantic models in `core/models.py`
+      - [ ] Implement `ToolError` schema and standardized exception handlers
     - [ ] Implement Orchestrator-to-Agent command protocol
     - [ ] Set up ADK-compatible event loop and message passing
   - [ ] [P0] **Source Review Agent**
-    - [x] Implement `AnalysisRunner` for parallel tool execution
-    - [ ] [P0] **SemgrepTool** Integration:
+    - [x] Implement parallel tool orchestration (via `VPOCAgent`)
+    - [ ] [P0] **Tool Base Classes**:
+      - [ ] Extend `AsyncTool` with `ContainerTool` subclass for Docker-based tools
       - [ ] Implement Semgrep JSON output parser
       - [ ] Implement rule-set selection logic based on language detection
       - [ ] Implement `FindingExtractor` to convert tool results to VPOC schema
@@ -47,7 +52,7 @@
     - [ ] Project Initialization Wizard (git/URL/upload)
     - [ ] Dashboard: High-level view of project status and finding counts
   - [ ] [P1] **Project Configuration**:
-    - [ ] Implement `config.json` loader/saver
+    - [ ] Implement `config.toml` loader/saver
     - [ ] Define Registry of Docker base containers for supported languages
 
 - [ ] **P2: Management & Reporting**
