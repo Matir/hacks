@@ -6,7 +6,6 @@ from core.models import (
     Finding,
     FindingStatus,
     HintLog,
-    TokenUsage,
     _utcnow,
 )
 
@@ -50,9 +49,7 @@ class StorageManager:
             statement = select(Finding).where(Finding.status == status)
             return list(session.exec(statement).all())
 
-    def update_finding_status(
-        self, finding_id: int, status: FindingStatus
-    ) -> Finding:
+    def update_finding_status(self, finding_id: int, status: FindingStatus) -> Finding:
         """Updates the status of a finding and refreshes its updated_at timestamp.
 
         :param finding_id: Primary key of the finding to update.
@@ -81,18 +78,6 @@ class StorageManager:
             session.commit()
             session.refresh(log)
             return log
-
-    # ------------------------------------------------------------------
-    # Token usage
-    # ------------------------------------------------------------------
-
-    def track_token_usage(self, usage: TokenUsage) -> TokenUsage:
-        """Records LLM token consumption for budgeting."""
-        with Session(self.engine) as session:
-            session.add(usage)
-            session.commit()
-            session.refresh(usage)
-            return usage
 
     # ------------------------------------------------------------------
     # Agent checkpoints

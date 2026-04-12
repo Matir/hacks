@@ -19,6 +19,16 @@ class FindingStatus(str, enum.Enum):
     AWAITING_HUMAN = "AWAITING_HUMAN"
 
 
+class ProjectStatus(str, enum.Enum):
+    """Status of a project in the global database."""
+
+    INITIALIZING = "INITIALIZING"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    COMPLETE = "COMPLETE"
+    FAILED = "FAILED"
+
+
 # Fixed impact weight table used for priority score calculation.
 # priority_score = IMPACT_WEIGHT[vuln_type] * llm_confidence + RECENCY_BONUS
 IMPACT_WEIGHT: typing.Dict[str, int] = {
@@ -72,18 +82,6 @@ class ExecutionLog(SQLModel, table=True):
     output_log: typing.Optional[str] = None
 
 
-class TokenUsage(SQLModel, table=True):
-    """Tracks LLM token usage for budgeting and cost control."""
-
-    id: typing.Optional[int] = Field(default=None, primary_key=True)
-    project_id: str = Field(index=True)
-    agent_name: str
-    model: str
-    tokens_in: int
-    tokens_out: int
-    timestamp: datetime.datetime = Field(default_factory=_utcnow)
-
-
 class AgentCheckpoint(SQLModel, table=True):
     """Stores per-agent resumption state for stateless re-entry after a crash.
 
@@ -110,4 +108,48 @@ class HintLog(SQLModel, table=True):
     event_type: str  # "hint" or "command"
     content: str  # Free-form hint text or command name
     args_json: typing.Optional[str] = None  # JSON-encoded args for commands
+    timestamp: datetime.datetime = Field(default_factory=_utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Global storage models (stored in ~/.vpoc/global.db)
+# ---------------------------------------------------------------------------
+
+
+class Project(SQLModel, table=True):
+    """Represents a security review project in the global database."""
+
+    id: typing.Optional[int] = Field(default=None, primary_key=True)
+    project_id: str = Field(index=True, unique=True)
+    name: str
+    status: ProjectStatus = Field(default=ProjectStatus.INITIALIZING, index=True)
+    created_at: datetime.datetime = Field(default_factory=_utcnow)
+    updated_at: datetime.datetime = Field(default_factory=_utcnow)
+
+
+class BudgetConfig(SQLModel, table=True):
+    """Stores the live daily token budget limit per project.
+
+    Resets at midnight UTC. The live limit can be updated via UI
+    without editing config files.
+    """
+
+    id: typing.Optional[int] = Field(default=None, primary_key=True)
+    project_id: str = Field(index=True, unique=True)
+    daily_limit: int  # Token count
+    updated_at: datetime.datetime = Field(default_factory=_utcnow)
+
+
+class GlobalTokenUsage(SQLModel, table=True):
+    """Tracks LLM token usage across all projects for budgeting.
+
+    Stored in global.db and queried by date for daily budget totals.
+    """
+
+    id: typing.Optional[int] = Field(default=None, primary_key=True)
+    project_id: str = Field(index=True)
+    agent_name: str
+    model: str
+    tokens_in: int
+    tokens_out: int
     timestamp: datetime.datetime = Field(default_factory=_utcnow)
