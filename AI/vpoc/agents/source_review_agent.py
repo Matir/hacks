@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
+import re
 import typing
+from pydantic import PrivateAttr
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
@@ -28,12 +30,13 @@ class SourceReviewAgent(VPOCMixin, BaseAgent):
         "Orchestrates static analysis tools and filters potential vulnerabilities."
     )
     max_concurrent: int = 4
+    _prompt_loader: PromptLoader = PrivateAttr()
 
     def __init__(self, **data: typing.Any):
         super().__init__(**data)
         self._semaphore = asyncio.Semaphore(self.max_concurrent)
         self.language_detector = LanguageDetector()
-        self.prompt_loader = PromptLoader()
+        self._prompt_loader = PromptLoader()
 
     async def _run_async_impl(
         self, ctx: InvocationContext
@@ -73,8 +76,8 @@ class SourceReviewAgent(VPOCMixin, BaseAgent):
         Assigns confidence, CVSS, and determines if it should be SCREENED or REJECTED.
         """
         # 1. Prepare prompt
-        template = self.prompt_loader.load_prompt("source_review_agent")
-        prompt = self.prompt_loader.render(
+        template = self._prompt_loader.load_prompt("source_review_agent")
+        prompt = self._prompt_loader.render(
             template,
             vuln_type=raw.get("vuln_type", "Unknown"),
             file_path=raw.get("file", "unknown"),
@@ -84,32 +87,41 @@ class SourceReviewAgent(VPOCMixin, BaseAgent):
             evidence=json.dumps(raw, indent=2)
         )
 
-        # 2. TODO: Implement actual LiteLlm call
-        # results = await self.call_llm(prompt)
-        # res = json.loads(results)
-        
-        # For now, deterministic placeholder logic:
-        confidence = 0.8
-        vuln_type = raw.get("vuln_type", "Unknown")
-        impact = IMPACT_WEIGHT.get(vuln_type, 10)
-        priority = (impact * confidence) + RECENCY_BONUS
+        try:
+            # 2. Call LLM
+            response = await self.call_llm(prompt)
+            # Extract JSON from response
+            match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
+            json_str = match.group(1).strip() if match else response.strip()
+            res = json.loads(json_str)
+            
+            confidence = res.get("confidence", 0.0)
+            action = res.get("action", "REJECTED").upper()
+            vuln_type = raw.get("vuln_type", "Unknown")
+            
+            # Calculate priority
+            impact = IMPACT_WEIGHT.get(vuln_type, 10)
+            priority = (impact * confidence) + RECENCY_BONUS
 
-        finding = Finding(
-            project_id=self.project_id,
-            vuln_type=vuln_type,
-            file_path=raw.get("file", "unknown"),
-            line_number=raw.get("line", 0),
-            severity=raw.get("severity", "medium"),
-            status=FindingStatus.SCREENED if confidence > 0.5 else FindingStatus.REJECTED,
-            discovery_tool=raw.get("discovery_tool", "unknown"),
-            evidence=json.dumps(raw),
-            llm_confidence=confidence,
-            priority_score=priority,
-            cvss_score=7.5,
-            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-            llm_rationale="Simulated pre-screening rationale."
-        )
-        return finding
+            finding = Finding(
+                project_id=self.project_id,
+                vuln_type=vuln_type,
+                file_path=raw.get("file", "unknown"),
+                line_number=raw.get("line", 0),
+                severity=raw.get("severity", "medium"),
+                status=FindingStatus.SCREENED if action == "SCREENED" else FindingStatus.REJECTED,
+                discovery_tool=raw.get("discovery_tool", "unknown"),
+                evidence=json.dumps(raw),
+                llm_confidence=confidence,
+                priority_score=priority,
+                cvss_score=res.get("cvss_score", 0.0),
+                cvss_vector=res.get("cvss_vector", ""),
+                llm_rationale=res.get("rationale", "No rationale provided.")
+            )
+            return finding
+        except Exception as e:
+            logger.error("Pre-screening failed for raw finding: %s", e)
+            return None
 
     async def run_analysis(
         self, tools: typing.List[tools_base.AsyncTool], project_path: str
@@ -155,3 +167,5 @@ class SourceReviewAgent(VPOCMixin, BaseAgent):
                 f["discovery_tool"] = result.get("tool", "unknown")
                 all_findings.append(f)
         return all_findings
+
+SourceReviewAgent.model_rebuild()

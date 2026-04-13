@@ -47,6 +47,7 @@ class ServerConfig(BaseModel):
     default_model: str = "gemini/gemini-1.5-flash"
     model_mapping: typing.Dict[str, str] = PydanticField(default_factory=dict)
     daily_budget_limit: int = 1000000  # Default 1M tokens
+    enable_validation: bool = True  # Globally enable PoC/Validation
     require_gvisor: bool = True
     runtime: str = "runsc"
     max_concurrent_containers: int = 5
@@ -67,6 +68,7 @@ class ProjectConfig(BaseModel):
     build_hints: typing.Optional[str] = None
     excluded_paths: typing.List[str] = PydanticField(default_factory=list)
     # Overrides for global settings
+    enable_validation: typing.Optional[bool] = None  # Override global setting
     model_mapping: typing.Dict[str, str] = PydanticField(default_factory=dict)
     cpu_limit: typing.Optional[float] = None
     memory_limit: typing.Optional[str] = None

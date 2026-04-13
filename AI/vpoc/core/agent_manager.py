@@ -3,8 +3,7 @@ import logging
 import typing
 from dataclasses import dataclass, field
 
-from google.adk import Agent
-from google.adk.runners.runner import Runner
+from google.adk import Agent, Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 
 # Circular imports avoid with top-level but late binding if needed, 
@@ -38,11 +37,13 @@ class AgentManager:
         self,
         project_config: ProjectConfig,
         storage_manager: StorageManager,
+        budget_manager: typing.Optional["BudgetManager"] = None,
         event_bus: typing.Optional[EventBus] = None,
         max_concurrent_findings: int = 2,
     ) -> None:
         self.config = project_config
         self.storage = storage_manager
+        self.budget_manager = budget_manager
         self.event_bus = event_bus
         self.max_concurrent = max_concurrent_findings
         self.queue: asyncio.PriorityQueue[PrioritizedFinding] = asyncio.PriorityQueue()
@@ -102,14 +103,25 @@ class AgentManager:
     async def _process_finding(self, finding: Finding) -> None:
         """Coordinates PoC generation and Validation for a single finding."""
 
+        # Check if validation is enabled
+        if not self.config.enable_validation:
+            logger.info("Validation disabled for project %s, skipping PoC/Validation for finding %d", 
+                        self.config.project_id, finding.id)
+            return
+
         # 1. PoC Generation
         self.storage.update_finding_status(finding.id, FindingStatus.POC_GENERATING)
         poc_runner = await self.get_or_create_runner(PocAgent, "PocAgent")
         
-        # In ADK, we trigger a run on the runner.
-        # We need to pass the finding context. For now, we'll use a simple invocation.
-        # TODO: Refine how finding data is passed to the agent (e.g., via session or initial event)
-        async for event in poc_runner.run():
+        # In ADK, we can pass context to run(). 
+        # We'll use a hack for MVP: set it on the agent or ctx if possible.
+        # More idiomatic is using the session state.
+        
+        # For now, let's inject it into the runner's agent instance directly 
+        # (risky with concurrency, but runners are 1:1 with agents in this manager for now)
+        poc_runner.agent.finding_id = finding.id
+        
+        async for event in await poc_runner.run():
             logger.debug("PoC Agent: %s", event)
 
         # Assume PoC is ready for now (in reality, we'd check events/artifact existence)
@@ -118,8 +130,9 @@ class AgentManager:
         # 2. Validation
         self.storage.update_finding_status(finding.id, FindingStatus.VALIDATING)
         val_runner = await self.get_or_create_runner(ValidationAgent, "ValidationAgent")
+        val_runner.agent.finding_id = finding.id
         
-        async for event in val_runner.run():
+        async for event in await val_runner.run():
             logger.debug("Validation Agent: %s", event)
 
         # Final status based on validation outcome
@@ -134,10 +147,16 @@ class AgentManager:
         # Inject VPOC dependencies if it's a VPOCMixin agent
         if hasattr(agent, "project_id"):
             agent.project_id = self.config.project_id
+        if hasattr(agent, "project_config"):
+            agent.project_config = self.config
         if hasattr(agent, "storage_manager"):
             agent.storage_manager = self.storage
         if hasattr(agent, "event_bus"):
             agent.event_bus = self.event_bus
+        if hasattr(agent, "budget_manager"):
+            agent.budget_manager = self.budget_manager
+        if hasattr(agent, "agent_manager"):
+            agent.agent_manager = self
 
         runner = Runner(agent=agent, session_service=self._session_service)
         self._runners[name] = runner

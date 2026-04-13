@@ -57,27 +57,27 @@
     - [x] Implement parallel tool orchestration (via `VPOCAgent`) *(to be updated for VPOCMixin)*
     - [ ] [P0] **Tool Base Classes**:
       - [ ] Extend `AsyncTool` with `ContainerTool` subclass for static analysis tools (mounts `source/` read-only, no sandbox hardening)
-      - [ ] Implement `SandboxRunner` in `core/sandbox.py` for PoC execution (gVisor/seccomp, `--cap-drop ALL`, `--read-only`, `--network none`, PID limits)
+      - [x] Implement `SandboxRunner` in `core/sandbox.py` for PoC execution (gVisor/seccomp, `--cap-drop ALL`, `--read-only`, `--network none`, PID limits)
       - [ ] Implement gVisor availability check at startup; hard error if `require_gvisor = true` and absent
-      - [ ] Implement Semgrep JSON output parser
+      - [x] Implement Semgrep JSON output parser
       - [ ] Implement rule-set selection logic based on `LanguageDetector` output
       - [ ] Implement `FindingExtractor` to convert tool results to VPOC schema
     - [ ] [P1] Implement `CodeQLTool` integration
   - [ ] [P0] **PoC Agent**
-    - [ ] Implement **ExploitGenerator** (LLM-driven Python/Bash script creation via `LlmAgent`)
-    - [ ] Implement **DockerfileGenerator** (Dynamic specialization of base images)
-    - [ ] Implement **ArtifactStaging** (Writing `exploit.py`, `Dockerfile`, `metadata.json`, `llm_transcript.jsonl` to `artifacts/<finding_id>/`)
+    - [x] Implement **ExploitGenerator** (LLM-driven Python/Bash script creation via `LlmAgent`)
+    - [x] Implement **DockerfileGenerator** (Dynamic specialization of base images)
+    - [x] Implement **ArtifactStaging** (Writing `exploit.py`, `Dockerfile`, `metadata.json`, `llm_transcript.jsonl` to `artifacts/<finding_id>/`)
   - [ ] [P0] **Validation Agent**
-    - [ ] Implement **SandboxRunner** execution (docker-py, gVisor/seccomp profile)
+    - [x] Implement **SandboxRunner** execution (docker-py, gVisor/seccomp profile)
     - [ ] Implement **ResultMonitor** (Capturing exit codes, stdout/stderr, CPU/RAM peaks)
-    - [ ] Implement **OutcomeAnalyzer** (LLM determines success per vuln type; owns success criteria)
+    - [x] Implement **OutcomeAnalyzer** (LLM determines success per vuln type; owns success criteria)
     - [ ] Implement **CleanupHandler** (Force-removing containers and networks on exit/resume)
   - [ ] [P0] **Orchestrator & State Management**
     - [x] Implement `StorageManager` and database schema
-    - [ ] [P0] **Finding Lifecycle Manager** (Full state transitions per `FindingStatus` enum)
-    - [ ] [P0] **Priority-Weighted Queue**:
-      - [ ] Implement `FindingStreamer` (Real-time handoff to PoC Agent on SCREENED promotion)
-      - [ ] Implement `WorkerPool` for parallel finding processing
+    - [x] [P0] **Finding Lifecycle Manager** (Full state transitions per `FindingStatus` enum)
+    - [x] [P0] **Priority-Weighted Queue**:
+      - [x] Implement `FindingStreamer` (Real-time handoff to PoC Agent on SCREENED promotion)
+      - [x] Implement `WorkerPool` for parallel finding processing
     - [ ] [P0] **Checkpointing**:
       - [x] Define `AgentCheckpoint` SQLModel in `project.db` (agent_name, finding_id, stage, state_json, updated_at)
       - [ ] Implement per-file checkpoint writes in Source Review Agent
@@ -89,9 +89,9 @@
 
 - [ ] **P1: Usability & Configuration**
   - [ ] [P1] **Attack Surface Mapper** (Recon Agent):
-    - [ ] Implement **EndpointFinder** (Identifying API routes, controllers, and exposed services)
-    - [ ] Implement **ConfigurationAnalyzer** (Parsing `.env`, `docker-compose.yml`, and build files for secrets/misconfigs)
-    - [ ] Implement **High-Value Target Ranker** (Prioritizing files based on entry-point proximity)
+    - [x] Implement **EndpointFinder** (Identifying API routes, controllers, and exposed services)
+    - [x] Implement **ConfigurationAnalyzer** (Parsing `.env`, `docker-compose.yml`, and build files for secrets/misconfigs)
+    - [x] Implement **High-Value Target Ranker** (Prioritizing files based on entry-point proximity)
   - [ ] [P1] **Environment Architect** (Build Agent):
     - [ ] Implement **DependencyResolver** (Iterative detection and installation of required libraries/dev-packages)
     - [ ] Implement **CodeQLDatabaseGenerator** (Automated generation of databases for deep analysis)
@@ -123,8 +123,8 @@
     - [ ] [P2] Finding triage (Approve/Reject, Provide hints, Mark False Positive)
     - [ ] [P2] Show running/paused project status
   - [ ] [P2] **Reporting Agent**:
-    - [ ] Markdown report generation (`artifacts/report.md`)
-    - [ ] Sections: Executive Summary, Finding Detail per vuln (CVSS, evidence, rationale summary, remediation), Appendix (token usage, tools run, scan duration)
+    - [x] Markdown report generation (`artifacts/report.md`)
+    - [x] Sections: Executive Summary, Finding Detail per vuln (CVSS, evidence, rationale summary, remediation), Appendix (token usage, tools run, scan duration)
     - [ ] LLM transcripts saved to `artifacts/<finding_id>/llm_transcript.jsonl` (not in report)
 
 - [ ] **P3: Advanced Features**
@@ -137,3 +137,4 @@
   - [x] Initialize project environment with `uv` and `virtualenv`
   - [x] Add `sqlmodel` dependency
   - [x] Add code quality tools (flake8, mypy, black) and `mise` tasks
+  - [x] Implement comprehensive unit tests for core logic and agents

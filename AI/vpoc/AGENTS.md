@@ -212,6 +212,7 @@ Validated by `ServerConfig` Pydantic model in `core/models.py`. The `config.toml
     - `host`: Web dashboard bind interface (default: `127.0.0.1`).
     - `port`: Web dashboard port (default: `8080`).
     - `debug`: Boolean; enables verbose logs.
+    - `enable_validation`: Boolean; globally enable/disable PoC and validation (default: `true`).
 - **[storage]**:
     - `workspaces_dir`: Base path for all project workspaces (default: `~/.vpoc/workspaces/`).
     - `global_db`: Path to the global database (default: `~/.vpoc/global.db`).

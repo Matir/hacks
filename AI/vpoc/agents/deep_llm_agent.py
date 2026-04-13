@@ -2,7 +2,9 @@ import asyncio
 import json
 import logging
 import typing
+import re
 from pathlib import Path
+from pydantic import PrivateAttr
 
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -23,9 +25,11 @@ class DeepLlmAgent(VPOCMixin, BaseAgent):
     """
     description: str = "Performs deep LLM-based security audits of high-value targets."
 
+    _prompt_loader: PromptLoader = PrivateAttr()
+
     def __init__(self, **data: typing.Any):
         super().__init__(**data)
-        self.prompt_loader = PromptLoader()
+        self._prompt_loader = PromptLoader()
 
     async def _run_async_impl(
         self, ctx: InvocationContext
@@ -50,6 +54,9 @@ class DeepLlmAgent(VPOCMixin, BaseAgent):
 
         yield Event(author=self.name, content=types.Content(parts=[types.Part(text=f"Auditing {len(hvts)} high-value targets...")]),)
 
+        target_desc = self.project_config.target_description if self.project_config else "N/A"
+        entry_points = ", ".join([r.file_path for r in recon_results if r.result_type == "ENTRY_POINT"])
+
         # 2. Deep Audit Loop
         for hvt in hvts:
             file_path = Path(hvt.file_path)
@@ -62,25 +69,51 @@ class DeepLlmAgent(VPOCMixin, BaseAgent):
                 continue
 
             try:
+                yield Event(author=self.name, content=types.Content(parts=[types.Part(text=f"Auditing {file_path.name}...")]),)
                 content = file_path.read_text(errors="ignore")[:15000] # Slightly larger cap for deep review
                 
                 # Load and render prompt
-                template = self.prompt_loader.load_prompt("deep_llm_agent")
-                # TODO: Retrieve target_description and entry_points from project state
-                prompt = self.prompt_loader.render(
+                template = self._prompt_loader.load_prompt("deep_llm_agent")
+                prompt = self._prompt_loader.render(
                     template,
                     file_path=str(file_path),
-                    target_description="Security review project",
-                    entry_points="N/A",
+                    target_description=target_desc,
+                    entry_points=entry_points or "None identified yet",
                     content=content
                 )
 
-                # TODO: Implement LiteLlm call to get structured JSON output
-                # results = await self.call_llm(prompt)
-                # findings_data = json.loads(results).get("findings", [])
+                response = await self.call_llm(prompt)
+                res_data = self._extract_json(response)
                 
-                # For now, deterministic placeholder to simulate LLM finding a logical flaw:
-                yield Event(author=self.name, content=types.Content(parts=[types.Part(text=f"Audited {file_path.name}: No findings.")]))
+                findings_data = res_data.get("findings", [])
+                
+                if not findings_data:
+                    yield Event(author=self.name, content=types.Content(parts=[types.Part(text=f"Audited {file_path.name}: No findings.")]))
+                    continue
+
+                for f_data in findings_data:
+                    confidence = f_data.get("llm_confidence", 0.0)
+                    vuln_type = f_data.get("vuln_type", "Unknown")
+                    impact = IMPACT_WEIGHT.get(vuln_type, 10)
+                    priority = (impact * confidence) + RECENCY_BONUS
+
+                    finding = Finding(
+                        project_id=self.project_id,
+                        vuln_type=vuln_type,
+                        file_path=str(file_path),
+                        line_number=f_data.get("line_number", 0),
+                        severity=f_data.get("severity", "medium"),
+                        status=FindingStatus.POTENTIAL, # Deep review findings need triage by Orchestrator
+                        discovery_tool=self.name,
+                        evidence=f_data.get("evidence", ""),
+                        llm_confidence=confidence,
+                        priority_score=priority,
+                        cvss_score=f_data.get("cvss_score", 0.0),
+                        cvss_vector=f_data.get("cvss_vector", ""),
+                        llm_rationale=f_data.get("rationale", "No rationale provided.")
+                    )
+                    self.storage_manager.add_finding(finding)
+                    yield Event(author=self.name, content=types.Content(parts=[types.Part(text=f"Discovered {vuln_type} in {file_path.name}")]),)
                 
             except Exception as e:
                 logger.error("Deep Review: Failed to audit %s: %s", file_path, e)
@@ -89,3 +122,15 @@ class DeepLlmAgent(VPOCMixin, BaseAgent):
             author=self.name,
             content=types.Content(parts=[types.Part(text="Deep LLM Review complete.")]),
         )
+
+    def _extract_json(self, text: str) -> typing.Dict[str, typing.Any]:
+        """Extracts JSON from triple backticks or direct text."""
+        match = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
+        json_str = match.group(1).strip() if match else text.strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            logger.error("Failed to parse JSON from response: %s", text)
+            return {}
+
+DeepLlmAgent.model_rebuild()
