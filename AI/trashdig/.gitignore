@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+
+# Mise
+.mise.toml
+
+# Project
+findings/
+trashdig.db

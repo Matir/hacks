@@ -1,0 +1,11 @@
+[tasks.test]
+run = "uv run pytest tests"
+
+[tasks.lint]
+run = "uv run ruff check ."
+
+[tasks.format]
+run = "uv run ruff format ."
+
+[tasks.run]
+run = "uv run python src/trashdig/main.py"

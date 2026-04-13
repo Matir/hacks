@@ -1,0 +1,24 @@
+# TrashDig Configuration
+
+[ui]
+# Options: "textual" (uses rich), "prompt_toolkit"
+interface = "textual"
+
+[agents.archaeologist]
+model = "gemini-2.0-flash"
+provider = "google"
+
+[agents.hunter]
+model = "gemini-2.0-flash"
+provider = "google"
+
+[agents.validator]
+model = "gemini-2.0-flash"
+provider = "google"
+
+[providers.google]
+# api_key = "..." # Better to use environment variables
+
+[providers.openrouter]
+# api_key = "..."
+# base_url = "https://openrouter.ai/api/v1"

@@ -1,0 +1,38 @@
+[
+  {
+    "cwe_id": "CWE-89",
+    "title": "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')",
+    "description": "The application constructs an SQL query using external input without proper sanitization, allowing an attacker to manipulate the query logic.",
+    "examples": [
+      {
+        "language": "python",
+        "vulnerable_code": "cursor.execute(f\"SELECT * FROM users WHERE username = '{username}'\")",
+        "secure_code": "cursor.execute(\"SELECT * FROM users WHERE username = %s\", (username,))"
+      }
+    ]
+  },
+  {
+    "cwe_id": "CWE-79",
+    "title": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+    "description": "The application includes untrusted data in a web page without proper encoding, allowing an attacker to execute malicious scripts in the victim's browser.",
+    "examples": [
+      {
+        "language": "javascript",
+        "vulnerable_code": "document.getElementById('welcome').innerHTML = 'Hello ' + user_input;",
+        "secure_code": "document.getElementById('welcome').textContent = 'Hello ' + user_input;"
+      }
+    ]
+  },
+  {
+    "cwe_id": "CWE-918",
+    "title": "Server-Side Request Forgery (SSRF)",
+    "description": "The application fetches a URL provided by a user without validating the destination, allowing an attacker to make requests to internal or unauthorized servers.",
+    "examples": [
+      {
+        "language": "python",
+        "vulnerable_code": "requests.get(user_url)",
+        "secure_code": "if is_allowed_url(user_url):\n    requests.get(user_url)"
+      }
+    ]
+  }
+]
