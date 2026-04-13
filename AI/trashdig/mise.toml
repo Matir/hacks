@@ -7,5 +7,8 @@ run = "uv run ruff check ."
 [tasks.format]
 run = "uv run ruff format ."
 
+[tasks.coverage]
+run = "uv run pytest --cov=src/trashdig tests"
+
 [tasks.run]
 run = "uv run python src/trashdig/main.py"

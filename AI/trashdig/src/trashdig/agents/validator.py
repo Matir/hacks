@@ -5,7 +5,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool, google_search
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import read_file_content
-from trashdig.tools import ripgrep_search, bash_tool, web_fetch
+from trashdig.tools import ripgrep_search, bash_tool, container_bash_tool, web_fetch
 from trashdig.findings import Finding
 
 def load_prompt(file_path: str) -> str:
@@ -37,7 +37,7 @@ class ValidatorAgent(LlmAgent):
             f"File Content:\n{file_content}\n\n"
             f"Instructions:\n"
             f"1. Generate a PoC (Python script, curl command, etc.).\n"
-            f"2. Execute the PoC using `bash_tool`.\n"
+            f"2. Execute the PoC using `container_bash_tool`. This tool runs the command inside a temporary Docker container.\n"
             f"3. Analyze the results.\n"
             f"4. Provide a JSON response with: 'status' (Verified/False Positive), "
             f"'poc_code' (the script/command used), and 'reasoning' (why it was confirmed or refuted)."
@@ -67,9 +67,10 @@ def create_validator_agent(config: AgentConfig = None) -> ValidatorAgent:
         name="validator",
         model=config.model,
         instruction=instruction,
-        description="Generates and executes PoCs to verify potential vulnerabilities.",
+        description="Generates and executes PoCs to verify potential vulnerabilities in isolated containers.",
         tools=[
             FunctionTool(ripgrep_search),
+            FunctionTool(container_bash_tool),
             FunctionTool(bash_tool),
             FunctionTool(read_file_content),
             FunctionTool(web_fetch),

@@ -5,7 +5,7 @@ from textual.widgets import Header, Footer, Tree, Static, Label, Input, RichLog
 from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
 from textual.events import Key
-from textual_autocomplete import AutoComplete, Dropdown, DropdownItem
+from textual_autocomplete import AutoComplete, DropdownItem
 
 from trashdig.agents.coordinator import Coordinator
 from trashdig.agents.utils import get_project_structure
@@ -62,7 +62,7 @@ class REPLPane(Vertical):
         # Setup Autocomplete for the Input
         yield AutoComplete(
             Input(placeholder="Type a command (e.g., 'scan api/', 'help')...", id="repl_input"),
-            Dropdown(items=[DropdownItem(cmd) for cmd in self.commands], id="repl_dropdown"),
+            candidates=[DropdownItem(cmd) for cmd in self.commands],
             id="repl_autocomplete"
         )
 
