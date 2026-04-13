@@ -5,15 +5,15 @@
 interface = "textual"
 
 [agents.archaeologist]
-model = "gemini-2.0-flash"
+model = "gemini-3-flash-preview"
 provider = "google"
 
 [agents.hunter]
-model = "gemini-2.0-flash"
+model = "gemini-3-flash-preview"
 provider = "google"
 
 [agents.validator]
-model = "gemini-2.0-flash"
+model = "gemini-3-flash-preview"
 provider = "google"
 
 [providers.google]

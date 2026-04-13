@@ -7,7 +7,7 @@
 - [x] Build a knowledge database of CWE entries with examples for agent reference.
 - [x] Implement `bash_tool` for secure command execution (Phase 1).
 - [x] Integrate `google_search` and `web_fetch` for automated security research.
-- [ ] **[HIGH]** Setup SQLite Project Database for persistent knowledge and session management (Phase 4).
+- [x] **[HIGH]** Setup SQLite Project Database for persistent knowledge and session management (Phase 4).
 - [ ] **[MEDIUM]** Implement Parallel Task Execution in `Coordinator` using `asyncio.gather`.
 
 ## Archaeologist Agent Enhancements
@@ -20,7 +20,7 @@
 - [x] Initial taint analysis guidance.
 - [x] Implement recursive **Hypothesis-Driven** loop (Phase 2).
 - [x] Upgrade to true AST-aware taint analysis (Phase 3).
-- [ ] **[HIGH]** Enhanced Taint Analysis: Trace data flows across multiple files from entry points to sinks.
+- [x] **[HIGH]** Enhanced Taint Analysis: Trace data flows across multiple files from entry points to sinks.
 
 ## Validation & Verification (Phase 1)
 - [x] Create `ValidatorAgent` for PoC generation.

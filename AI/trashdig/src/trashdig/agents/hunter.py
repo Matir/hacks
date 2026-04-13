@@ -15,7 +15,8 @@ from trashdig.tools import (
     find_references,
     get_scope_info,
     trace_variable_semantic,
-    web_fetch
+    trace_taint_cross_file,
+    web_fetch,
 )
 from trashdig.findings import Finding
 
@@ -130,6 +131,7 @@ def create_hunter_agent(config: AgentConfig = None) -> HunterAgent:
             FunctionTool(find_references),
             FunctionTool(get_scope_info),
             FunctionTool(trace_variable_semantic),
+            FunctionTool(trace_taint_cross_file),
             FunctionTool(web_fetch),
             google_search
         ],

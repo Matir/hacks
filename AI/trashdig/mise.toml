@@ -11,4 +11,4 @@ run = "uv run ruff format ."
 run = "uv run pytest --cov=src/trashdig tests"
 
 [tasks.run]
-run = "uv run python src/trashdig/main.py"
+run = "uv run trashdig"
