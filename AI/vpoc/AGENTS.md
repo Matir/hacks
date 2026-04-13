@@ -1,6 +1,8 @@
 # VPOC - Vulnerability Scanner
 
 - See @README.md for an overview of the goals and purpose of the project.
+- See @adk-doc-llms.txt for information on using the Google ADK for building
+  graph-based LLM-driven workflows.
 - See @TODOs.md for a list of standing TODOs.
 
 ## Framework & Environment
@@ -34,33 +36,33 @@ class SourceReviewAgent(VPOCMixin, BaseAgent): ...
 
 ## Agent Dispatch & Communication
 
-- **Dispatch**: The Orchestrator invokes sub-agents via **ADK Runner + InMemorySessionService**. Each sub-agent is a proper ADK agent instance managed by a dedicated runner.
-- **Inter-Agent Communication**: Agents communicate through ADK's built-in runner/session machinery (not the EventBus).
-- **UI Fanout**: The **EventBus** (`core/events.py`) is used **exclusively** for broadcasting state to UI subscribers (TUI, Web). Agents publish events to the bus; they do not subscribe to it for operational signals.
+- **Dispatch**: The Orchestrator manages sub-agents using **ADK Workflow Agents** (e.g., `SequentialAgent`, `ParallelAgent`). Each sub-agent is a proper ADK agent instance managed by a dedicated runner.
+- **Inter-Agent Communication**: Agents communicate through ADK's built-in **Session Service** (e.g., `InMemorySessionService`) and **State** (Session Scratchpad) to maintain context.
+- **UI Fanout**: The **EventBus** (`core/events.py`) is supplemented or replaced by **ADK Callbacks** for broadcasting state to UI subscribers (TUI, Web). Agents publish events to the bus; they do not subscribe to it for operational signals.
 
 ## Agent Roles & Intelligence Profiles
 
-Each agent combines **Deterministic Logic** (for reliability and speed) with **LLM-Driven Intelligence** (for reasoning and complex synthesis).
+Each agent combines **Deterministic Logic** (for reliability and speed) with **LLM-Driven Intelligence** (for reasoning and complex synthesis), extending the most appropriate ADK base class.
 
-### 1. Orchestrator Agent (`LlmAgent`)
-- **Deterministic**: State machine management, budget enforcement, finding lifecycle transitions, database transactions, and event broadcasting (Pub/Sub). Handles `CommandEvent` (quick actions) deterministically.
-- **LLM-Driven**: Interpreting broad user `HintEvent` messages to adjust project-wide strategy and resolving conflicts between agent findings.
+### 1. Orchestrator Agent (`SequentialAgent`)
+- **Deterministic**: An ADK `SequentialAgent` that manages the project lifecycle (Recon → Build → Review → PoC → Validation → Reporting). Handles `CommandEvent` (quick actions) deterministically.
+- **LLM-Driven**: Inherits `LlmAgent` capabilities to interpret broad user `HintEvent` messages and adjust project-wide strategy.
 
 ### 2. Attack Surface Mapper / Recon Agent (`BaseAgent`)
-- **Tool-Driven**: Static analysis of routing files (e.g., `routes.rb`, `urls.py`), configuration files (`docker-compose.yml`), and dependency manifests.
-- **LLM-Driven**: Reasoning about the *semantic importance* of endpoints (e.g., identifying high-value targets like authentication or payment flows) and inferring hidden parameters from naming conventions.
+- **Tool-Driven**: A `BaseAgent` performing static analysis of routing files (e.g., `routes.rb`, `urls.py`) and configuration manifests.
+- **LLM-Driven**: Invokes LLM-driven reasoning via ADK's model integration to identify high-value targets (HVTs).
 
 ### 3. Environment Architect / Build Agent (`BaseAgent`)
-- **Tool-Driven**: Executing build commands (`make`, `npm install`, `cmake`), capturing exit codes, and parsing standard error output.
-- **LLM-Driven**: Interpreting complex compiler/linker errors to suggest missing system libraries and synthesizing build hints from unstructured `README.md` or `INSTALL` files.
+- **Tool-Driven**: A `BaseAgent` executing build commands and capturing output.
+- **LLM-Driven**: Interprets compiler/linker errors to suggest fixes.
 
-### 4. Source Review Agent (`BaseAgent`)
-- **Tool-Driven**: Orchestrating static analysis tools (Semgrep, CodeQL, Joern), sharding codebases per-file, and deduplicating raw findings.
-- **LLM-Driven**: Pre-screening tool findings to filter out false positives, assigning a **confidence score** (0.0–1.0), estimating a **CVSS 3.1 base score + vector string**, and correlating disparate "weak signals" into a coherent vulnerability hypothesis.
+### 4. Source Review Agent (`ParallelAgent`)
+- **Tool-Driven**: An ADK `ParallelAgent` orchestrating concurrent static analysis tools (Semgrep, CodeQL, Joern).
+- **LLM-Driven**: Pre-screens findings to filter false positives and assign confidence scores.
 
 ### 5. PoC Agent (`LlmAgent`)
-- **Tool-Driven**: Staging artifacts to `workspace/artifacts/<finding_id>/` and triggering Docker image builds.
-- **LLM-Driven**: Generating the exploit script (`exploit.py` or `exploit.sh`) and a specialized `Dockerfile`. Produces `metadata.json` with the vulnerability type and exploit-specific context (but NOT success criteria — those belong to the Validation Agent).
+- **Tool-Driven**: Staging artifacts and triggering Docker builds.
+- **LLM-Driven**: An ADK `LlmAgent` generating exploit scripts and Dockerfiles based on finding context.
 - **Artifact Structure** per finding:
   ```
   artifacts/<finding_id>/
@@ -71,12 +73,12 @@ Each agent combines **Deterministic Logic** (for reliability and speed) with **L
   ```
 
 ### 6. Validation Agent (`BaseAgent`)
-- **Tool-Driven**: Managing the hardened Docker sandbox via `SandboxRunner` (`core/sandbox.py`), monitoring container resource usage (CPU/RAM peaks), and capturing execution logs.
-- **LLM-Driven**: Analyzing the *outcome* of a PoC execution to determine success. Success criteria vary by vulnerability type (e.g. RCE success looks different from SQLi or XSS). The Validation Agent owns this determination entirely.
+- **Tool-Driven**: A `BaseAgent` managing the hardened sandbox and monitoring resource usage.
+- **LLM-Driven**: Analyzes PoC execution outcomes to determine success.
 
 ### 7. Reporting Agent (`LlmAgent`)
-- **Tool-Driven**: Markdown template rendering and finding-log aggregation.
-- **LLM-Driven**: Synthesizing technical logs into human-readable executive summaries, per-finding rationale summaries, impact assessments, and remediation advice.
+- **Tool-Driven**: Template rendering and finding aggregation.
+- **LLM-Driven**: An ADK `LlmAgent` synthesizing technical logs into executive summaries and remediation advice.
 - **Output**: Markdown only (`workspace/artifacts/report.md`). Full LLM transcripts are saved per-finding in `llm_transcript.jsonl` but are not included in the report.
 
 ## Finding Lifecycle & Streaming
@@ -310,6 +312,7 @@ SQLite configured in **WAL mode** for all databases. Orchestrator is instanced p
 - Granular exception handling — no broad `except Exception` blocks.
 - Unit tests for all complex logic. Stub all LLM calls in tests.
 - Type hints required on all functions, methods, and class variables (PEP 484).
+- All imports should be at the top of the file unless there's an architectural reason why it cannot be.
 - Prompts loaded from `.md` files via `PromptLoader`; never inlined.
 - Tools placed in `tools/`; agents placed in `agents/`.
 

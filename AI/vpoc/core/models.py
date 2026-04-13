@@ -1,6 +1,8 @@
 import datetime
 import enum
 import typing
+
+from pydantic import BaseModel, Field as PydanticField
 from sqlmodel import SQLModel, Field
 
 
@@ -27,6 +29,47 @@ class ProjectStatus(str, enum.Enum):
     PAUSED = "PAUSED"
     COMPLETE = "COMPLETE"
     FAILED = "FAILED"
+
+
+# ---------------------------------------------------------------------------
+# Configuration Models (Pydantic)
+# ---------------------------------------------------------------------------
+
+
+class ServerConfig(BaseModel):
+    """Global server configuration (config.toml at repo root)."""
+
+    host: str = "127.0.0.1"
+    port: int = 8080
+    debug: bool = False
+    workspaces_dir: str = "~/.vpoc/workspaces/"
+    global_db: str = "~/.vpoc/global.db"
+    default_model: str = "gemini/gemini-1.5-flash"
+    model_mapping: typing.Dict[str, str] = PydanticField(default_factory=dict)
+    daily_budget_limit: int = 1000000  # Default 1M tokens
+    require_gvisor: bool = True
+    runtime: str = "runsc"
+    max_concurrent_containers: int = 5
+    default_cpu_limit: float = 0.5
+    default_memory_limit: str = "512m"
+    log_level: str = "INFO"
+    log_format: str = "text"
+
+
+class ProjectConfig(BaseModel):
+    """Per-project configuration (workspace/<project_id>/config.toml)."""
+
+    project_id: str
+    name: str
+    target_description: typing.Optional[str] = None
+    target_language: typing.Optional[str] = None
+    high_value_targets: typing.List[str] = PydanticField(default_factory=list)
+    build_hints: typing.Optional[str] = None
+    excluded_paths: typing.List[str] = PydanticField(default_factory=list)
+    # Overrides for global settings
+    model_mapping: typing.Dict[str, str] = PydanticField(default_factory=dict)
+    cpu_limit: typing.Optional[float] = None
+    memory_limit: typing.Optional[str] = None
 
 
 # Fixed impact weight table used for priority score calculation.
@@ -109,6 +152,19 @@ class HintLog(SQLModel, table=True):
     content: str  # Free-form hint text or command name
     args_json: typing.Optional[str] = None  # JSON-encoded args for commands
     timestamp: datetime.datetime = Field(default_factory=_utcnow)
+
+
+class ReconResult(SQLModel, table=True):
+    """Stores identified entry points and high-value files from Recon phase."""
+
+    id: typing.Optional[int] = Field(default=None, primary_key=True)
+    project_id: str = Field(index=True)
+    file_path: str = Field(index=True)
+    result_type: str  # "ENTRY_POINT", "CONFIG", "HIGH_VALUE_FILE"
+    description: typing.Optional[str] = None
+    priority: str = "MEDIUM"  # "LOW", "MEDIUM", "HIGH"
+    metadata_json: typing.Optional[str] = None  # JSON blob for extra context
+    created_at: datetime.datetime = Field(default_factory=_utcnow)
 
 
 # ---------------------------------------------------------------------------

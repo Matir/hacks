@@ -5,17 +5,26 @@
     - [x] Define base `VPOCAgent` class (Inheriting from ADK `Agent`) *(superseded by VPOCMixin)*
     - [x] Replace `VPOCAgent` with `VPOCMixin` in `agents/base.py`; update `SourceReviewAgent` to extend `VPOCMixin, BaseAgent` directly
     - [ ] [P0] **Core Infrastructure Utilities**:
-      - [ ] Implement `PromptLoader` in `core/utils.py` (strict `{placeholder}` validation, raises `PromptRenderError`, cached reads)
-      - [ ] Implement `LanguageDetector` in `core/utils.py` (extension counting, >5% threshold, excludes vendor dirs)
-      - [ ] Implement `SourceFetcher` in `core/source_fetcher.py` (public git shallow clone, httpx download, file copy; 100MB cap)
-      - [ ] Define `ProjectConfig` and `ServerConfig` Pydantic models in `core/models.py`
+      - [x] Implement `PromptLoader` in `core/utils.py` (strict `{placeholder}` validation, raises `PromptRenderError`, cached reads)
+      - [x] Implement `LanguageDetector` in `core/utils.py` (extension counting, >5% threshold, excludes vendor dirs)
+      - [x] Implement `SourceFetcher` in `core/source_fetcher.py` (public git shallow clone, httpx download, file copy; 100MB cap)
+      - [x] Define `ProjectConfig` and `ServerConfig` Pydantic models in `core/models.py`
       - [x] Define `FindingStatus` enum in `core/models.py` (POTENTIAL, SCREENED, REJECTED, POC_GENERATING, POC_READY, POC_FAILED, VALIDATING, VALIDATED, INCONCLUSIVE, AWAITING_HUMAN)
       - [x] Add scoring fields to `Finding` model: `priority_score`, `llm_confidence`, `cvss_score`, `cvss_vector`
       - [x] Add `impact_weight` table to `core/models.py` (RCE=100, SQLi=80, SSRF=70, AuthBypass=70, XSS=40, InfoDisclosure=20)
       - [x] Implement `ToolError` schema and standardized exception handlers
-    - [ ] Implement Orchestrator-to-Agent command protocol via ADK Runner + InMemorySessionService
-    - [ ] Set up ADK-compatible event loop and message passing
-  - [x] [P0] **Existing Code Compliance** (standards gaps in current codebase):
+    - [x] Implement Orchestrator-to-Agent command protocol via ADK Runner + InMemorySessionService
+    - [x] Set up ADK-compatible event loop and message passing
+
+- [ ] **ADK Alignment & Idioms (Gaps from Documentation)**
+  - [x] [P1] **Refactor Agent Inheritance**: Ensure agents use the most appropriate base class (e.g., `BaseAgent` for custom deterministic logic, `LlmAgent` for chat-driven logic). Fixed all agents to inherit from `BaseAgent` as they override `_run_async_impl` for manual orchestration/execution.
+  - [ ] [P1] **Leverage Workflow Agents**: Evaluate replacing manual orchestration in `OrchestratorAgent` with `SequentialAgent` and tool orchestration in `SourceReviewAgent` with `ParallelAgent`. (Current design uses `BaseAgent` for manual control/parallelism).
+  - [x] [P1] **Idiomatic Event Handling**: Replace or supplement manual `EventBus` publishing with ADK `Callbacks` for piping agent events to the UI. (Orchestrator already pipes events from sub-runners idiomatic to ADK).
+  - [ ] [P2] **Evaluation Framework**: Integrate `adk eval` for benchmarking finding accuracy and agent performance.
+  - [ ] [P2] **MCP Tooling**: Consider exposing security tools via Model Context Protocol (MCP) for better modularity and interoperability within ADK.
+  - [ ] [P2] **State & Memory Integration**: Explore using ADK's `MemoryService` and `State` (Session Scratchpad) to complement or replace custom SQLModel-based persistence where appropriate for LLM context.
+
+- [ ] **P0: Existing Code Compliance** (standards gaps in current codebase):
     - [x] `core/models.py`: Replace `datetime.datetime.utcnow()` with `datetime.datetime.now(datetime.UTC)` (deprecated in Python 3.12+; already triggers test warnings)
     - [x] `core/models.py`: Replace `from typing import Optional` with `import typing` per coding style; use `typing.Optional` throughout
     - [x] `core/models.py`: Tighten `Finding.status` field type to `FindingStatus` once enum is defined (currently untyped `str`)
@@ -34,15 +43,16 @@
     - [x] Add `litellm` (LLM provider abstraction for all agents)
     - [x] Add `httpx` (async HTTP for `SourceFetcher` download URLs)
     - [x] Add `docker` (docker-py, for `ContainerTool` and `SandboxRunner`)
-  - [ ] [P0] **Global Storage** (`~/.vpoc/global.db`):
-    - [ ] Implement `GlobalStorageManager` in `core/global_storage.py`
-    - [ ] Define `Project` SQLModel (id, name, status, created_at, updated_at)
-    - [ ] Move `TokenUsage` to global DB (keep `project_id` field for attribution)
-    - [ ] Define `BudgetConfig` SQLModel (daily_limit, updated_at) for live budget management
-  - [ ] [P0] **Budget Enforcement**:
-    - [ ] Implement `BudgetManager` in `core/budget.py` (daily totals from global DB, midnight UTC reset)
-    - [ ] Implement `BudgetExhaustedError` and graceful stop (in-flight calls complete, then halt)
-    - [ ] Broadcast `budget.alert` event to all UIs with prompt for new limit
+  - [x] [P0] **Global Storage** (`~/.vpoc/global.db`):
+    - [x] Implement `GlobalStorageManager` in `core/global_storage.py`
+    - [x] Define `Project` SQLModel (id, name, status, created_at, updated_at)
+    - [x] Move `TokenUsage` to global DB (keep `project_id` field for attribution)
+    - [x] Define `BudgetConfig` SQLModel (daily_limit, updated_at) for live budget management
+  - [x] [P0] **Budget Enforcement**:
+    - [x] Implement `BudgetManager` in `core/budget.py` (daily totals from global DB, midnight UTC reset)
+    - [x] Implement `BudgetExhaustedError` and graceful stop (in-flight calls complete, then halt)
+    - [x] Broadcast `budget.alert` event to all UIs with prompt for new limit
+
   - [ ] [P0] **Source Review Agent**
     - [x] Implement parallel tool orchestration (via `VPOCAgent`) *(to be updated for VPOCMixin)*
     - [ ] [P0] **Tool Base Classes**:

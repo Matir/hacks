@@ -6,6 +6,7 @@ from core.models import (
     Finding,
     FindingStatus,
     HintLog,
+    ReconResult,
     _utcnow,
 )
 
@@ -130,4 +131,22 @@ class StorageManager:
                 .where(HintLog.project_id == project_id)
                 .order_by(col(HintLog.timestamp))
             )
+            return list(session.exec(statement).all())
+
+    # ------------------------------------------------------------------
+    # Recon results
+    # ------------------------------------------------------------------
+
+    def add_recon_result(self, result: ReconResult) -> ReconResult:
+        """Adds a new recon result to the project database."""
+        with Session(self.engine) as session:
+            session.add(result)
+            session.commit()
+            session.refresh(result)
+            return result
+
+    def get_recon_results(self, project_id: str) -> typing.List[ReconResult]:
+        """Retrieves all recon results for the project."""
+        with Session(self.engine) as session:
+            statement = select(ReconResult).where(ReconResult.project_id == project_id)
             return list(session.exec(statement).all())

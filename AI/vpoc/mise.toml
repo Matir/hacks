@@ -5,6 +5,10 @@ uv = "latest"
 description = "Run all unit tests"
 run = "uv run pytest tests/"
 
+[tasks.coverage]
+description = "Run tests with coverage report"
+run = "uv run pytest --cov=core --cov=agents --cov=tools tests/"
+
 [tasks.lint]
 description = "Run flake8 and mypy for code quality and type safety"
 run = [

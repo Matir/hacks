@@ -1,6 +1,14 @@
 import abc
+import asyncio
 import enum
+import logging
 import typing
+from pathlib import Path
+
+import docker
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class ToolErrorType(str, enum.Enum):
@@ -58,3 +66,60 @@ class AsyncTool(abc.ABC):
 
     def __repr__(self) -> str:
         return f"<AsyncTool(name='{self.name}')>"
+
+
+class ContainerTool(AsyncTool):
+    """Base for tools that run inside a Docker container.
+
+    Used primarily for static analysis tools (Semgrep, CodeQL, Joern).
+    Mounts the source directory read-only. Does not apply sandbox hardening.
+    """
+
+    def __init__(self, name: str, image: str, command_template: str) -> None:
+        super().__init__(name)
+        self.image = image
+        self.command_template = command_template
+        self._client = docker.from_env()
+
+    async def run_async(
+        self, target_path: str, **kwargs: typing.Any
+    ) -> typing.Dict[str, typing.Any]:
+        """
+        Executes the tool via docker-py.
+        """
+        # Ensure target_path is absolute for mounting
+        abs_target = str(Path(target_path).resolve())
+
+        # Format the command if needed (e.g. for sharding or specific targets)
+        command = self.command_template
+
+        logger.info("Running container tool %s with image %s", self.name, self.image)
+
+        try:
+            # Run the container synchronously in a thread pool to not block asyncio
+            container_output = await asyncio.to_thread(
+                self._client.containers.run,
+                image=self.image,
+                command=command,
+                volumes={abs_target: {"bind": "/src", "mode": "ro"}},
+                remove=True,
+                stderr=True,
+            )
+            # This is a basic capture; specific tools (like SemgrepTool) 
+            # should override this to parse actual output files.
+            return {"tool": self.name, "raw_output": container_output.decode()}
+
+        except docker.errors.ContainerError as e:
+            logger.error("Container tool %s failed: %s", self.name, e.stderr)
+            raise ToolError(
+                tool_name=self.name,
+                error_type=ToolErrorType.RUNTIME_ERROR,
+                stderr_tail=e.stderr.decode()[-500:]
+            )
+        except Exception as e:
+            logger.exception("Unexpected error running container tool %s: %s", self.name, e)
+            raise ToolError(
+                tool_name=self.name,
+                error_type=ToolErrorType.RUNTIME_ERROR,
+                stderr_tail=str(e)
+            )

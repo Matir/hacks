@@ -6,14 +6,35 @@ It focuses on source-available security analysis, combining LLM-driven vulnerabi
 
 ## Architecture
 
-VPOC employs a single-process, multi-agent orchestration pattern, where each agent combines **deterministic tool-driven logic** with **LLM-driven reasoning**:
-- **Orchestrator Agent**: Manages the lifecycle of findings, project-wide state, and budget transitions.
-- **Attack Surface Mapper (Recon Agent)**: Maps the target's entry points and reasons about the semantic value of endpoints.
-- **Environment Architect (Build Agent)**: Automates and troubleshoots the build environment by interpreting error logs.
-- **Source Review Agent**: Performs deep static analysis and pre-screens tool findings for false positives.
-- **PoC Agent**: Dynamically generates specialized exploit scripts and Docker environments.
-- **Validation Agent**: Executes PoCs in a sandboxed environment and analyzes the security impact of results.
-- **Reporting Agent**: Aggregates findings and synthesizes logs into human-readable security reports.
+VPOC employs a multi-agent orchestration pattern built on the **Google Agent Development Kit (ADK)**. It leverages **ADK Workflow Agents** (e.g., `SequentialAgent`, `ParallelAgent`) to manage the analysis pipeline, where each agent combines **deterministic tool-driven logic** with **LLM-driven reasoning**.
+
+### Agent Roles
+
+- **Orchestrator Agent**: An **ADK SequentialAgent** that acts as the central controller. It manages the project lifecycle by coordinating specialized sub-agents, enforcing budgets, and interpreting user hints to adjust strategy.
+- **Attack Surface Mapper (Recon Agent)**: A **BaseAgent** that maps entry points by analyzing routing files and configurations. It identifies high-value targets (HVTs) for focused analysis.
+- **Environment Architect (Build Agent)**: A **BaseAgent** that automates the setup of the target application's build environment, resolving dependencies and interpreting compiler errors.
+- **Source Review Agent**: A **ParallelAgent** that orchestrates a suite of static analysis tools. It uses LLM reasoning to pre-screen findings and prioritize vulnerabilities.
+- **Deep LLM Review Agent**: An **LlmAgent** that performs meticulous security audits of HVTs, focusing on complex logical flaws missed by automated tools.
+- **PoC Agent**: An **LlmAgent** that dynamically generates proof-of-concept (PoC) exploit scripts and Docker environments.
+- **Validation Agent**: A **BaseAgent** that executes PoCs within a hardened, isolated sandbox and analyzes results.
+- **Reporting Agent**: An **LlmAgent** that synthesizes findings and logs into a comprehensive security report.
+
+### Workflow
+
+```mermaid
+graph TD
+    User([User]) -->|Kickoff/Hints| Orchestrator
+    Orchestrator -->|Directs| Recon
+    Orchestrator -->|Directs| Build
+    Recon -->|HVTs/Entry Points| SourceReview
+    Recon -->|HVTs/Entry Points| DeepReview
+    Build -->|Build Artifacts| SourceReview
+    DeepReview -->|Logical Findings| PoC
+    SourceReview -->|Screened Findings| PoC
+    PoC -->|Exploit & Dockerfile| Validation
+    Validation -->|Validated Results| Reporting
+    Reporting -->|Security Report| User
+```
 
 ## Features
 
