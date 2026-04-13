@@ -21,6 +21,7 @@ class Config:
     interface: str = "textual"
     agents: Dict[str, AgentConfig] = field(default_factory=dict)
     providers: Dict[str, ProviderConfig] = field(default_factory=dict)
+    db_path: str = ".trashdig/trashdig.db"
 
 def load_config(file_path: str = "config.toml") -> Config:
     """Loads the TrashDig configuration from a TOML file.
@@ -57,8 +58,11 @@ def load_config(file_path: str = "config.toml") -> Config:
             base_url=provider_data.get("base_url")
         )
 
+    db_path = data.get("database", {}).get("path", ".trashdig/trashdig.db")
+
     return Config(
         interface=ui_interface,
         agents=agents,
-        providers=providers
+        providers=providers,
+        db_path=db_path,
     )

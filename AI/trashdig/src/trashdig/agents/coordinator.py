@@ -4,28 +4,36 @@ from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.validator import create_validator_agent
 from trashdig.agents.types import Task, TaskType, TaskStatus, Hypothesis
 from trashdig.config import Config
+from trashdig.database import ProjectDatabase
 from trashdig.findings import Finding
 
 class Coordinator:
     """Coordinatates the hypothesis-driven workflow between agents."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, project_path: str = "."):
         """Initializes the Coordinator with the given configuration.
 
         Args:
             config: The project configuration object.
+            project_path: Root directory of the project being scanned.
+                Used as the key for all database records.
         """
         self.config = config
+        self.project_path = project_path
         self.archaeologist = create_archaeologist_agent(config.agents.get("archaeologist"))
         self.hunter = create_hunter_agent(config.agents.get("hunter"))
         self.validator = create_validator_agent(config.agents.get("validator"))
-        
+
         self.task_queue: List[Task] = []
         self.completed_tasks: List[Task] = []
         self.scan_results: Dict[str, Any] = {}
         self.tech_stack: str = ""
         self.findings: List[Finding] = []
-        
+
+        # Persistent knowledge store
+        db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
+        self.db = ProjectDatabase(db_path)
+
         # Callback for TUI updates
         self.on_task_event: Optional[Callable[[str], None]] = None
 
@@ -79,24 +87,29 @@ class Coordinator:
             task: The scan task to handle.
         """
         results = await self.archaeologist.scan_project(task.target)
-        
+
         # Handle new format {"mapping": ..., "hypotheses": ...}
         mapping: Dict[str, Any] = results.get("mapping", results)
         hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
-        
+
         self.scan_results = mapping
         if "tech_stack" in results:
             self.tech_stack = results["tech_stack"]
-        
+
+        # Persist the project profile
+        self.db.save_project_profile(self.project_path, self.tech_stack, mapping)
+
         # Spawn HUNT tasks from hypotheses
         for hypo in hypotheses:
-            self.spawn_task(Hypothesis(
+            hypo_task = Hypothesis(
                 type=TaskType.HUNT,
                 target=hypo.get("target", ""),
                 description=hypo.get("description", ""),
                 confidence=hypo.get("confidence", 0.5),
                 parent_id=task.id
-            ))
+            )
+            self.db.save_hypothesis(self.project_path, hypo_task)
+            self.spawn_task(hypo_task)
 
         # Automatically spawn HUNT tasks for high-value targets if requested
         if task.context.get("auto_hunt"):
@@ -110,26 +123,38 @@ class Coordinator:
         Args:
             task: The hunt task to handle.
         """
+        # Mark the hypothesis as running if it came from the DB
+        if isinstance(task, Hypothesis):
+            self.db.update_hypothesis_status(task.id, "running")
+
         results = await self.hunter.hunt_vulnerabilities([task.target], project_root=".")
-        
+
         # Process findings
         findings = results.get("findings", [])
         for finding in findings:
             self.findings.append(finding)
+            self.db.save_finding(self.project_path, finding)
             self.log(f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]")
             # Automatically spawn verification task
             self.spawn_task(Task(TaskType.VERIFY, finding.title, context={"finding": finding}, parent_id=task.id))
-            
+
+        # Mark hypothesis complete/failed based on whether findings were found
+        if isinstance(task, Hypothesis):
+            status = "completed" if findings else "failed"
+            self.db.update_hypothesis_status(task.id, status, result={"finding_count": len(findings)})
+
         # Process new hypotheses (Recursive Loop)
         hypotheses = results.get("hypotheses", [])
         for hypo in hypotheses:
-            self.spawn_task(Hypothesis(
+            hypo_task = Hypothesis(
                 type=TaskType.HUNT,
                 target=hypo.get("target", ""),
                 description=hypo.get("description", ""),
                 confidence=hypo.get("confidence", 0.5),
                 parent_id=task.id
-            ))
+            )
+            self.db.save_hypothesis(self.project_path, hypo_task)
+            self.spawn_task(hypo_task)
 
     async def _handle_verify(self, task: Task) -> None:
         """Runs the Validator on a finding.
@@ -140,7 +165,7 @@ class Coordinator:
         finding: Optional[Finding] = task.context.get("finding")
         if not finding:
             return
-            
+
         result = await self.validator.verify_finding(finding, self.tech_stack)
         if result.get("status"):
             finding.verification_status = result["status"]
@@ -148,6 +173,15 @@ class Coordinator:
         if result.get("poc_code"):
             finding.poc = result["poc_code"]
         finding.save()
+
+        # Sync the updated status back to the database
+        self.db.update_finding_status(
+            self.project_path,
+            finding.title,
+            finding.file_path,
+            finding.verification_status,
+            finding.poc,
+        )
 
     # Backward compatibility for existing TUI methods
     async def run_archaeologist(self, path: str = ".") -> Dict[str, Any]:
