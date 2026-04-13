@@ -34,7 +34,7 @@ def load_prompt(file_path: str) -> str:
 class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
 
-    async def hunt_vulnerabilities(self, targets: List[str], project_root: str = ".") -> List[Finding]:
+    async def hunt_vulnerabilities(self, targets: List[str], project_root: str = ".") -> Dict[str, Any]:
         """Deep-dive into specific files to identify vulnerabilities.
 
         Args:
@@ -42,9 +42,10 @@ class HunterAgent(LlmAgent):
             project_root: Root directory of the project.
 
         Returns:
-            A list of Finding objects.
+            A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
         """
         all_findings = []
+        all_hypotheses = []
         
         for target in targets:
             content = read_file_content(os.path.join(project_root, target))
@@ -54,15 +55,13 @@ class HunterAgent(LlmAgent):
                 f"Analyze the following file for potential security vulnerabilities:\n\n"
                 f"File: {target}\n"
                 f"Content:\n{content}\n\n"
-                f"Identify and document each finding with the following fields in a JSON list of objects:\n"
-                f"- title: (Short title of the vulnerability)\n"
-                f"- description: (Detailed description)\n"
-                f"- severity: (Critical, High, Medium, Low, Info)\n"
-                f"- vulnerable_code: (The exact snippet of vulnerable code)\n"
-                f"- impact: (Potential impact)\n"
-                f"- exploitation_path: (How it could be exploited)\n"
-                f"- remediation: (How to fix it)\n"
-                f"- cwe_id: (Optional CWE ID, e.g., CWE-89)\n"
+                f"Identify and document each finding or follow-up hypothesis in a JSON response with two keys:\n"
+                f"1. 'findings': A list of vulnerability objects:\n"
+                f"   - title, description, severity, vulnerable_code, impact, exploitation_path, remediation, cwe_id\n"
+                f"2. 'hypotheses': A list of follow-up tasks if you need to trace data flow into other files:\n"
+                f"   - target: (The file path or symbol to investigate next)\n"
+                f"   - description: (Why you need to look there)\n"
+                f"   - confidence: (0.0 to 1.0)\n"
             )
             
             try:
@@ -70,7 +69,10 @@ class HunterAgent(LlmAgent):
                 if cleaned_response.startswith("```json"):
                     cleaned_response = cleaned_response[7:-3].strip()
                 
-                raw_findings = json.loads(cleaned_response)
+                data = json.loads(cleaned_response)
+                
+                # Handle findings
+                raw_findings = data.get("findings", [])
                 if not isinstance(raw_findings, list):
                     raw_findings = [raw_findings]
                     
@@ -89,10 +91,14 @@ class HunterAgent(LlmAgent):
                     # Automatically save to the findings/ directory
                     finding.save(os.path.join(project_root, "findings"))
                     all_findings.append(finding)
+
+                # Handle hypotheses
+                all_hypotheses.extend(data.get("hypotheses", []))
+
             except (json.JSONDecodeError, AttributeError):
                 continue
                 
-        return all_findings
+        return {"findings": all_findings, "hypotheses": all_hypotheses}
 
 def create_hunter_agent(config: AgentConfig = None) -> HunterAgent:
     """Creates a Hunter agent.

@@ -1,26 +1,51 @@
-# Context
+# TrashDig: Agent Foundation & Mandates
 
-- Read @README.md for the human-centric context.
-- Read @adk-llms.txt for ADK documentation.
+TrashDig is an AI-powered, language-agnostic vulnerability scanner and security research assistant. It uses a multi-agent system built on the **Agent Development Kit (ADK)** to map codebases, trace data flows, and verify security findings.
 
-## Architecture
+## 🏗 Architecture & Agent Personas
 
-This project is built using Google's **Agent Development Kit (ADK)**. It implements a multi-agent system consisting of an **Archaeologist** agent for mapping/summarization and a **Hunter** agent for deep-dive vulnerability analysis.
+TrashDig operates as a coordinated team of specialized agents:
 
-### Model Flexibility & Provider Independence
+1.  **Archaeologist Agent**:
+    *   **Role**: Mapper and Scout.
+    *   **Tasks**: Detects framework/tech stacks, respects `.gitignore`, and generates file summaries.
+    *   **Goal**: Identify "high-value targets" (entry points, sensitive configurations, risky controllers).
+2.  **Hunter Agent**:
+    *   **Role**: Deep-Dive Researcher.
+    *   **Tasks**: Performs hypothesis-driven analysis, AST-aware taint analysis, and cross-file symbol tracing.
+    *   **Goal**: Connect untrusted user input to dangerous sinks.
+3.  **Validator Agent**:
+    *   **Role**: Proof-of-Concept Specialist.
+    *   **Tasks**: Generates PoC scripts to confirm Hunter's findings.
+    *   **Goal**: Prove exploitability and eliminate false positives.
+4.  **TUI (Human-in-the-Loop)**:
+    *   **Role**: Steering & Prioritization.
+    *   **Interface**: Built with `Textual`.
+    *   **Goal**: Allow researchers to "star" files and guide the Hunter agent.
 
-TrashDig is designed to be provider-independent for its LLM backend. Each agent's model can be individually configured via `config.toml`, supporting:
-- **Google/VertexAI**: Via direct ADK support.
-- **OpenRouter**: Or other OpenAI-compatible providers.
-- **Custom Providers**: Configured through base URLs and API keys in the configuration.
+## 🛠 Technical Stack
 
-## Rules
+*   **Language**: Python 3.14+ (using `uv` and `mise`).
+*   **Agent Framework**: Google ADK.
+*   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
+*   **UI**: `textual` for the TUI, `prompt_toolkit` for the REPL.
 
-- Always provide unit tests.
-- Always use type hints.
-- Use uv for managing a virtual environment and dependencies.
-- Use mise for tasks and non-python dependencies.
-- Ask before adding new imports.
-- Add docstrings to all code.
-- Keep prompts in separate .md files to be edited.
-- Every sub-agent must have a configurable model choice in `config.toml`.
+## 📜 Engineering Standards (The Rules)
+
+These rules are foundational. Adhere to them for all modifications:
+
+1.  **Testing**: Always provide unit tests in the `tests/` directory. Aim for high coverage of agent logic.
+2.  **Typing**: Strict type hints are mandatory (`pyright`/`mypy` clean).
+3.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.
+4.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
+5.  **Imports**: Always check `pyproject.toml` before adding new dependencies. Ask the user before adding a new top-level import.
+6.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory. Do not hardcode long prompts.
+7.  **Model Configuration**: Every agent must be configurable via `config.toml`. Support for Google/VertexAI and OpenRouter is required.
+8.  **Security**: Never hardcode API keys. Use environment variables. Ensure `bash_tool` or PoC execution is scoped and safe.
+
+## 📂 Contextual References
+
+*   `README.md`: High-level project goals and user workflow.
+*   `TODO.md`: Current progress and upcoming milestones (Phase 1-4).
+*   `config.toml`: Central configuration for UI and Agent models.
+*   `prompts/`: Directory containing the "brains" of each agent.

@@ -1,7 +1,7 @@
 import subprocess
 import os
 import json
-from typing import List, Optional
+from typing import List, Optional, Any, Dict, Callable
 
 def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]] = None) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
@@ -45,8 +45,15 @@ def semgrep_scan(path: str = ".", config: str = "p/security-audit") -> str:
     except FileNotFoundError:
         return "Error: semgrep not found in PATH."
 
-def _get_ts_language(language: str):
-    """Helper to get tree-sitter language objects."""
+def _get_ts_language(language: str) -> Any:
+    """Helper to get tree-sitter language objects.
+
+    Args:
+        language: Programming language string.
+
+    Returns:
+        The tree-sitter language object or None if not supported.
+    """
     import tree_sitter_python
     import tree_sitter_javascript
     import tree_sitter_go
@@ -84,7 +91,7 @@ def get_ast_summary(file_path: str, language: str = "python") -> str:
         parser.set_language(ts_lang)
         tree = parser.parse(content)
         
-        summary = []
+        summary: List[str] = []
         root_node = tree.root_node
         
         for node in root_node.children:
@@ -109,7 +116,7 @@ def get_symbol_definition(symbol_name: str, path: str = ".") -> str:
         The file path and a snippet of the definition if found.
     """
     patterns = [f"def {symbol_name}", f"class {symbol_name}", f"async def {symbol_name}"]
-    results = []
+    results: List[str] = []
     
     for pattern in patterns:
         res = ripgrep_search(f"\\b{pattern}\\b", path, extra_args=["-C", "5"])
@@ -161,7 +168,15 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
         # Tree-sitter line numbers are 0-indexed.
         target_line = line_number - 1
         
-        def find_enclosing_function(node):
+        def find_enclosing_function(node: Any) -> Optional[Any]:
+            """Helper to find the function node enclosing a line number.
+
+            Args:
+                node: The starting node for traversal.
+
+            Returns:
+                The enclosing function node or None.
+            """
             if node.type in ("function_definition", "method_definition"):
                 if node.start_point[0] <= target_line <= node.end_point[0]:
                     return node
@@ -179,7 +194,7 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
         func_name = name_node.text.decode('utf-8') if name_node else "anonymous"
         
         params_node = func_node.child_by_field_name("parameters")
-        params = []
+        params: List[str] = []
         if params_node:
             # Simple parameter extraction
             for p in params_node.children:
@@ -215,8 +230,13 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
         parser.set_language(ts_lang)
         tree = parser.parse(content)
         
-        usages = []
-        def walk(node):
+        usages: List[str] = []
+        def walk(node: Any) -> None:
+            """Recursively traverses the AST to find variable usages.
+
+            Args:
+                node: The current node in the traversal.
+            """
             if node.type == "identifier" and node.text.decode('utf-8') == variable_name:
                 parent = node.parent
                 category = "USAGE"
@@ -237,11 +257,27 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
         return f"Error tracing variable: {str(e)}"
 
 def trace_variable(variable_name: str, file_path: str) -> str:
-    """Finds all occurrences of a variable in a file to trace its flow."""
+    """Finds all occurrences of a variable in a file to trace its flow.
+
+    Args:
+        variable_name: Name of the variable to trace.
+        file_path: Path to the file.
+
+    Returns:
+        The results of the ripgrep search for the variable.
+    """
     return ripgrep_search(f"\\b{variable_name}\\b", file_path, extra_args=["--line-number", "--column"])
 
 def bash_tool(command: str, timeout: int = 30) -> str:
-    """Executes a bash command or script and returns the output."""
+    """Executes a bash command or script and returns the output.
+
+    Args:
+        command: The bash command to execute.
+        timeout: Execution timeout in seconds.
+
+    Returns:
+        A formatted string containing stdout, stderr, and the exit code.
+    """
     try:
         result = subprocess.run(
             command,
@@ -251,7 +287,7 @@ def bash_tool(command: str, timeout: int = 30) -> str:
             timeout=timeout,
             check=False
         )
-        output = []
+        output: List[str] = []
         if result.stdout:
             output.append(f"STDOUT:\n{result.stdout}")
         if result.stderr:
@@ -303,7 +339,7 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
             timeout=timeout,
             check=False
         )
-        output = []
+        output: List[str] = []
         if result.stdout:
             output.append(f"STDOUT:\n{result.stdout}")
         if result.stderr:
@@ -356,12 +392,19 @@ async def web_fetch(url: str) -> str:
         return f"Error fetching URL: {str(e)}"
 
 def query_cwe_database(query: str) -> str:
-    """Queries the built-in CWE knowledge base for descriptions and examples."""
+    """Queries the built-in CWE knowledge base for descriptions and examples.
+
+    Args:
+        query: The search query (CWE ID, title, or description keyword).
+
+    Returns:
+        A formatted string containing matching CWE entries and examples.
+    """
     try:
         data_path = os.path.join(os.path.dirname(__file__), "data", "cwe_db.json")
         with open(data_path, "r", encoding="utf-8") as f:
-            cwe_data = json.load(f)
-        results = []
+            cwe_data: List[Dict[str, Any]] = json.load(f)
+        results: List[str] = []
         q = query.lower()
         for item in cwe_data:
             if (q in item["cwe_id"].lower() or q in item["title"].lower() or q in item["description"].lower()):
@@ -372,3 +415,4 @@ def query_cwe_database(query: str) -> str:
         return "\n".join(results) if results else f"No results found for query: {query}"
     except Exception as e:
         return f"Error querying CWE database: {str(e)}"
+

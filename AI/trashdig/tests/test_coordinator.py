@@ -61,7 +61,19 @@ async def test_coordinator_handle_hunt(mock_create_val, mock_create_hunt, mock_c
         vulnerable_code="code", file_path="test.py", 
         impact="impact", exploitation_path="path", remediation="rem"
     )
-    mock_hunter.hunt_vulnerabilities = AsyncMock(return_value=[finding])
+    # Use side_effect to return hypotheses on first call, but none on subsequent calls
+    # to avoid infinite recursion in run_loop.
+    mock_hunter.hunt_vulnerabilities = AsyncMock()
+    mock_hunter.hunt_vulnerabilities.side_effect = [
+        {
+            "findings": [finding],
+            "hypotheses": [{"target": "other.py", "description": "trace", "confidence": 0.5}]
+        },
+        {
+            "findings": [],
+            "hypotheses": []
+        }
+    ]
     mock_create_hunt.return_value = mock_hunter
     
     coord = Coordinator(mock_config)
@@ -75,8 +87,13 @@ async def test_coordinator_handle_hunt(mock_create_val, mock_create_hunt, mock_c
     
     assert len(coord.findings) == 1
     assert coord.findings[0].title == "SQLi"
+    # Should have spawned VERIFY and HUNT (for new hypothesis) tasks
     # Verify task should have been spawned
-    assert any(t.type == TaskType.VERIFY for t in coord.completed_tasks) or coord.task_queue
+    # Task queue will contain the new tasks spawned by _handle_hunt, 
+    # but run_loop will process them too unless we stop it.
+    # The simplest check is the completed_tasks list.
+    assert any(t.type == TaskType.VERIFY for t in coord.completed_tasks)
+    assert any(t.target == "other.py" for t in coord.completed_tasks)
 
 @pytest.mark.anyio
 @patch("trashdig.agents.coordinator.create_archaeologist_agent")
@@ -88,7 +105,7 @@ async def test_coordinator_api_methods(mock_create_val, mock_create_hunt, mock_c
     mock_create_arch.return_value = mock_arch
     
     mock_hunter = MagicMock()
-    mock_hunter.hunt_vulnerabilities = AsyncMock(return_value=[])
+    mock_hunter.hunt_vulnerabilities = AsyncMock(return_value={"findings": [], "hypotheses": []})
     mock_create_hunt.return_value = mock_hunter
     
     mock_validator = MagicMock()

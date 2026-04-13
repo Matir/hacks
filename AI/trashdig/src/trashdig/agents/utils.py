@@ -10,13 +10,13 @@ def get_project_structure(root_path: str = ".") -> List[str]:
         root_path: The root directory to walk.
 
     Returns:
-        A list of file paths relative to the root.
+        A list of file paths relative to the root, sorted alphabetically.
     """
     files: List[str] = []
     
     # Load .gitignore patterns
     gitignore_path = os.path.join(root_path, ".gitignore")
-    spec = None
+    spec: Optional[PathSpec] = None
     if os.path.exists(gitignore_path):
         with open(gitignore_path, "r", encoding="utf-8") as f:
             spec = PathSpec.from_lines(GitWildMatchPattern, f.readlines())
@@ -44,10 +44,10 @@ def read_file_content(file_path: str, max_chars: int = 2000) -> str:
 
     Args:
         file_path: Path to the file.
-        max_chars: Maximum number of characters to read.
+        max_chars: Maximum number of characters to read. Defaults to 2000.
 
     Returns:
-        The file content (potentially truncated).
+        The file content (potentially truncated), or an error message.
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -61,12 +61,13 @@ def detect_frameworks(file_list: List[str], project_root: str = ".") -> Dict[str
 
     Args:
         file_list: List of project files.
-        project_root: Project root directory.
+        project_root: Project root directory. Defaults to ".".
 
     Returns:
-        A dictionary mapping categories (e.g., 'web_frameworks', 'databases') to lists of detected technologies.
+        A dictionary mapping categories (e.g., 'web_frameworks', 'databases') to lists 
+        of detected technology names.
     """
-    stack = {
+    stack: Dict[str, List[str]] = {
         "web_frameworks": [],
         "databases": [],
         "auth_libraries": [],
@@ -94,3 +95,4 @@ def detect_frameworks(file_list: List[str], project_root: str = ".") -> Dict[str
                             stack[category].append(name)
                             
     return stack
+

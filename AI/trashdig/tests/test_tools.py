@@ -89,6 +89,37 @@ def test_bash_tool(mock_run):
     assert "STDERR:\nerror" in result
     assert "Exit Code: 0" in result
 
+@patch("subprocess.run")
+def test_container_bash_tool_docker_available(mock_run):
+    # Mock first call for docker --version
+    mock_run.side_effect = [
+        MagicMock(returncode=0), # docker --version
+        MagicMock(stdout="container output", stderr="", returncode=0) # docker run ...
+    ]
+    from trashdig.tools import container_bash_tool
+    result = container_bash_tool("ls")
+    assert "STDOUT:\ncontainer output" in result
+    assert "Exit Code: 0" in result
+    assert mock_run.call_count == 2
+    # Check that docker run was called
+    args = mock_run.call_args_list[1][0][0]
+    assert "docker" in args
+    assert "run" in args
+    assert "--rm" in args
+
+@patch("subprocess.run")
+def test_container_bash_tool_no_docker(mock_run):
+    # Mock first call for docker --version failing
+    mock_run.side_effect = [
+        FileNotFoundError, # docker not found
+        MagicMock(stdout="host output", stderr="", returncode=0) # fallback to bash_tool
+    ]
+    from trashdig.tools import container_bash_tool
+    result = container_bash_tool("ls")
+    assert "Warning: Docker not found" in result
+    assert "STDOUT:\nhost output" in result
+    assert mock_run.call_count == 2
+
 @patch("json.load")
 @patch("builtins.open")
 def test_query_cwe_database(mock_open, mock_json_load):

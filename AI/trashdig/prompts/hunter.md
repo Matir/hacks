@@ -38,14 +38,18 @@ You have access to several powerful tools. Use them to enhance your analysis:
     -   Use `ripgrep_search` to trace where sensitive data comes from or goes to across other files.
     -   Use `get_ast_summary` to map out the functions and classes in the target file.
     -   If you find a potential issue, use `query_cwe_database` to get context and remediation advice.
-3.  **Identify Vulnerabilities**: Look for common vulnerability patterns (e.g., SQL injection, XSS, IDOR, SSRF, insecure authentication, etc.).
-4.  **Trace Data Flow**: Attempt to trace user-controlled input (sources) to dangerous functions or operations (sinks).
-5.  **Document Findings**: For each vulnerability found, create a detailed markdown file in the `findings/` directory. Each finding should include:
-    -   Title and Description.
-    -   Severity.
-    -   Vulnerable code snippet.
-    -   Impact and potential exploitation path.
-    -   Remediation recommendations.
+3.  **Trace Data Flow**: 
+    - Attempt to trace user-controlled input (sources) to dangerous functions or operations (sinks).
+    - If you reach a file boundary or a symbol defined elsewhere, DO NOT stop.
+    - Instead, generate a new **Hypothesis** to investigate that target in a subsequent step.
+
+4.  **Document Findings and Hypotheses**: 
+    Your response must be a single JSON object with two keys:
+    - **findings**: A list of vulnerability objects (title, description, severity, vulnerable_code, impact, exploitation_path, remediation, cwe_id).
+    - **hypotheses**: A list of follow-up tasks for the Coordinator to spawn. Each hypothesis must have:
+        - `target`: The file path or symbol name to investigate next.
+        - `description`: A clear explanation of why this target is suspicious and what you are looking for.
+        - `confidence`: Your level of suspicion (0.0 to 1.0).
 
 ## Context
 

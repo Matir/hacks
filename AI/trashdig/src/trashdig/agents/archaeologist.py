@@ -27,7 +27,12 @@ def load_prompt(file_path: str) -> str:
         return f.read()
 
 class ArchaeologistAgent(LlmAgent):
-    """Archaeologist Agent for TrashDig."""
+    """Archaeologist Agent for TrashDig.
+    
+    This agent is responsible for mapping the project structure, identifying
+    high-value targets (entry points, controllers, etc.), and generating
+    initial vulnerability hypotheses.
+    """
 
     async def scan_project(self, root_path: str = ".") -> Dict[str, Any]:
         """Scans the project structure and provides summaries.
@@ -36,7 +41,10 @@ class ArchaeologistAgent(LlmAgent):
             root_path: Root directory of the project to scan.
 
         Returns:
-            A dictionary mapping file paths to their summaries and flags.
+            A dictionary containing:
+                - mapping: A dict of file paths to {summary, is_high_value}.
+                - hypotheses: A list of proposed security hypotheses.
+                - tech_stack: A string description of detected technologies.
         """
         file_list = get_project_structure(root_path)
         tech_stack = detect_frameworks(file_list, root_path)
@@ -69,20 +77,27 @@ class ArchaeologistAgent(LlmAgent):
             if cleaned_response.startswith("```json"):
                 cleaned_response = cleaned_response[7:-3].strip()
             
-            data = json.loads(cleaned_response)
+            data: Dict[str, Any] = json.loads(cleaned_response)
             # Support both old and new formats for robustness
             if "mapping" in data:
+                data["tech_stack"] = stack_str
                 return data
-            return {"mapping": data, "hypotheses": []}
+            return {"mapping": data, "hypotheses": [], "tech_stack": stack_str}
         except (json.JSONDecodeError, AttributeError):
             # Fallback or error handling
-            return {"error": "Failed to parse Archaeologist response", "raw": response.text if hasattr(response, 'text') else str(response)}
+            return {
+                "mapping": {}, 
+                "hypotheses": [], 
+                "tech_stack": stack_str,
+                "error": "Failed to parse Archaeologist response", 
+                "raw": response.text if hasattr(response, 'text') else str(response)
+            }
 
-def create_archaeologist_agent(config: AgentConfig = None) -> ArchaeologistAgent:
-    """Creates an Archaeologist agent.
+def create_archaeologist_agent(config: Optional[AgentConfig] = None) -> ArchaeologistAgent:
+    """Creates and configures an Archaeologist agent.
 
     Args:
-        config: Optional agent configuration.
+        config: Optional agent configuration. If None, default config is used.
 
     Returns:
         A configured ArchaeologistAgent instance.
@@ -108,3 +123,4 @@ def create_archaeologist_agent(config: AgentConfig = None) -> ArchaeologistAgent
             google_search
         ],
     )
+

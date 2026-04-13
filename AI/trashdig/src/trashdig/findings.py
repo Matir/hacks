@@ -4,7 +4,22 @@ from datetime import datetime
 
 @dataclass
 class Finding:
-    """Represents a vulnerability finding."""
+    """Represents a vulnerability finding discovered by the Hunter agent.
+
+    Attributes:
+        title: A short, descriptive title for the finding.
+        description: A detailed explanation of the vulnerability.
+        severity: The risk level (Critical, High, Medium, Low, Info).
+        vulnerable_code: A snippet of the problematic code.
+        file_path: Path to the file containing the vulnerability.
+        impact: Description of the potential consequences if exploited.
+        exploitation_path: Step-by-step description of how to exploit.
+        remediation: Instructions on how to fix the vulnerability.
+        cwe_id: Optional CWE identifier.
+        verification_status: Current status (Unverified, Verified, False Positive).
+        poc: Optional Proof of Concept code.
+        timestamp: ISO formatted string of when the finding was created.
+    """
     title: str
     description: str
     severity: str  # e.g., Critical, High, Medium, Low, Info
@@ -19,7 +34,11 @@ class Finding:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def to_markdown(self) -> str:
-        """Converts the finding to a formatted Markdown string."""
+        """Converts the finding to a formatted Markdown string.
+
+        Returns:
+            A string containing the Markdown representation of the finding.
+        """
         md = f"# {self.title}\n\n"
         md += f"**Severity:** {self.severity}\n"
         md += f"**Status:** {self.verification_status}\n"
@@ -52,10 +71,13 @@ class Finding:
         return md
 
     def save(self, output_dir: str = "findings") -> str:
-        """Saves the finding as a Markdown file.
+        """Saves the finding as a Markdown file in the specified directory.
+
+        Args:
+            output_dir: The directory where the finding should be saved.
 
         Returns:
-            The path to the saved file.
+            The absolute path to the saved file.
         """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -69,3 +91,4 @@ class Finding:
             f.write(self.to_markdown())
             
         return file_path
+

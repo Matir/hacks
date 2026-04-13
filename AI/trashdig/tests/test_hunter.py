@@ -17,22 +17,34 @@ async def test_hunter_hunt_vulnerabilities(mock_read):
         
         with patch.object(HunterAgent, "run_async", new_callable=AsyncMock) as mock_run:
             mock_response = MagicMock()
-            mock_response.text = json.dumps([{
-                "title": "SQL Injection",
-                "description": "desc",
-                "severity": "High",
-                "vulnerable_code": "code",
-                "impact": "impact",
-                "exploitation_path": "path",
-                "remediation": "rem"
-            }])
+            mock_response.text = json.dumps({
+                "findings": [{
+                    "title": "SQL Injection",
+                    "description": "desc",
+                    "severity": "High",
+                    "vulnerable_code": "code",
+                    "impact": "impact",
+                    "exploitation_path": "path",
+                    "remediation": "rem"
+                }],
+                "hypotheses": [{
+                    "target": "other.py",
+                    "description": "need to trace x",
+                    "confidence": 0.8
+                }]
+            })
             mock_run.return_value = mock_response
             
             agent = HunterAgent(name="hunter", model="gemini-2.0-flash")
-            findings = await agent.hunt_vulnerabilities(["test.py"], project_root=tmpdir)
+            results = await agent.hunt_vulnerabilities(["test.py"], project_root=tmpdir)
+            
+            findings = results["findings"]
+            hypotheses = results["hypotheses"]
             
             assert len(findings) == 1
             assert findings[0].title == "SQL Injection"
+            assert len(hypotheses) == 1
+            assert hypotheses[0]["target"] == "other.py"
             assert os.path.exists(findings_dir)
             # Check if a file was saved in findings_dir
             assert len(os.listdir(findings_dir)) == 1
