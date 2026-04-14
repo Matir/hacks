@@ -1,0 +1,37 @@
+# TrashDig Configuration
+
+# Global model defaults
+model = "gemini-2.0-flash"
+provider = "google"
+
+[ui]
+interface = "textual"
+
+[rate_limit]
+rpm = 15
+# tpm = 1000000
+
+[database]
+# Path to the data directory (internal state, cache, logs)
+# Supports tokens: {workspace}, {date}, {datetime}, {tmpdir}, {name}
+data_dir = "{workspace}/.trashdig"
+# path = "{workspace}/.trashdig/trashdig.db"
+
+[providers.google]
+# api_key = "YOUR_GOOGLE_API_KEY"
+
+[providers.openrouter]
+# api_key = "YOUR_OPENROUTER_API_KEY"
+# base_url = "https://openrouter.ai/api/v1"
+
+[agents.archaeologist]
+# model = "gemini-2.0-flash"
+# provider = "google"
+
+[agents.hunter]
+# model = "gemini-2.0-pro-exp-02-05"
+# provider = "google"
+
+[agents.validator]
+# model = "gemini-2.0-flash"
+# provider = "google"

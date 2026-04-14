@@ -40,7 +40,7 @@ These rules are foundational. Adhere to them for all modifications:
 4.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
 5.  **Imports**: Always check `pyproject.toml` before adding new dependencies. Ensure all imports are placed at the top of the file. Ask the user before adding a new top-level import.
 6.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory. Do not hardcode long prompts.
-7.  **Model Configuration**: Every agent must be configurable via `config.toml`. Support for Google/VertexAI and OpenRouter is required.
+7.  **Model Configuration**: Every agent must be configurable via `trashdig.toml`. Support for Google/VertexAI and OpenRouter is required.
 8.  **Security**: Never hardcode API keys. Use environment variables. Ensure `bash_tool` or PoC execution is scoped and safe.
 9.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for LLM returns and inter-agent communication whenever possible.
 
@@ -48,5 +48,5 @@ These rules are foundational. Adhere to them for all modifications:
 
 *   `README.md`: High-level project goals and user workflow.
 *   `TODO.md`: Current progress and upcoming milestones (Phase 1-4).
-*   `config.toml`: Central configuration for UI and Agent models.
+*   `trashdig.toml`: Central configuration for UI and Agent models.
 *   `prompts/`: Directory containing the "brains" of each agent.

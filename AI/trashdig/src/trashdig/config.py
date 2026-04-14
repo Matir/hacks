@@ -3,7 +3,7 @@ import os
 import tempfile
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Any, List
 
 @dataclass
 class ProviderConfig:
@@ -43,8 +43,8 @@ class Config:
             return self.agents[name]
         return AgentConfig(model=self.default_model, provider=self.default_provider)
 
-def _resolve_data_dir(data_dir: str, workspace_root: str) -> str:
-    """Resolves tokens in the data_dir string.
+def _resolve_path(path: str, workspace_root: str) -> str:
+    """Resolves tokens in a path string.
 
     Tokens:
     - {workspace}: The workspace directory path.
@@ -62,46 +62,124 @@ def _resolve_data_dir(data_dir: str, workspace_root: str) -> str:
         "{name}": os.path.basename(workspace_root.rstrip(os.sep)) or "root",
     }
     
-    resolved = data_dir
+    resolved = path
     for token, value in tokens.items():
         resolved = resolved.replace(token, value)
     
     return os.path.abspath(resolved)
 
-def load_config(file_path: str = "config.toml", data_dir: str | None = None, workspace_root: str = ".") -> Config:
-    """Loads the TrashDig configuration from a TOML file.
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merges two dictionaries."""
+    merged = base.copy()
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
-    Args:
-        file_path: Path to the configuration file.
-        data_dir: Optional override for the data directory.
-        workspace_root: The root directory of the workspace.
+def _find_user_config() -> str | None:
+    """Search for the first valid user configuration file."""
+    # 1. TRASHDIG_USER_CONFIG env var
+    env_config = os.environ.get("TRASHDIG_USER_CONFIG")
+    if env_config and os.path.exists(env_config):
+        return env_config
 
-    Returns:
-        A Config instance.
-    """
-    if not os.path.exists(file_path):
-        # Even if config doesn't exist, we still respect data_dir
-        c = Config()
-        raw_data_dir = data_dir or os.path.join(workspace_root, ".trashdig")
-        c.data_dir = _resolve_data_dir(raw_data_dir, workspace_root)
-        c.db_path = os.path.join(c.data_dir, "trashdig.db")
-        return c
-
-    with open(file_path, "rb") as f:
-        data = tomllib.load(f)
-
-    ui_interface = data.get("ui", {}).get("interface", "textual")
-
-    # Global Model Defaults
-    global_model = data.get("model", "gemini-2.0-flash")
-    global_provider = data.get("provider", "google")
+    # 2. XDG_CONFIG_HOME/trashdig/trashdig.toml
+    xdg_config = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config:
+        path = os.path.join(xdg_config, "trashdig", "trashdig.toml")
+        if os.path.exists(path):
+            return path
     
-    # Rate Limits
-    rpm_limit = data.get("rate_limit", {}).get("rpm")
-    tpm_limit = data.get("rate_limit", {}).get("tpm")
+    # 3. $HOME/.config/trashdig/trashdig.toml
+    home = os.path.expanduser("~")
+    path = os.path.join(home, ".config", "trashdig", "trashdig.toml")
+    if os.path.exists(path):
+        return path
+
+    # 4. $HOME/.trashdig.toml
+    path = os.path.join(home, ".trashdig.toml")
+    if os.path.exists(path):
+        return path
+
+    return None
+
+def _find_project_config(
+    flag_config: str | None, 
+    data_dir: str, 
+    workspace_root: str
+) -> str | None:
+    """Search for the first valid project configuration file."""
+    # 1. --config flag
+    if flag_config and os.path.exists(flag_config):
+        return flag_config
+
+    # 2. {data_directory}/trashdig.toml
+    path = os.path.join(data_dir, "trashdig.toml")
+    if os.path.exists(path):
+        return path
+
+    # 3. {workspace}/.trashdig.toml
+    path = os.path.join(workspace_root, ".trashdig.toml")
+    if os.path.exists(path):
+        return path
+
+    # 4. {workspace}/trashdig.toml
+    path = os.path.join(workspace_root, "trashdig.toml")
+    if os.path.exists(path):
+        return path
+
+    return None
+
+def _parse_toml_to_config_data(file_path: str) -> Dict[str, Any]:
+    """Reads a TOML file and returns its content as a dictionary."""
+    if not os.path.exists(file_path):
+        return {}
+    with open(file_path, "rb") as f:
+        return tomllib.load(f)
+
+def load_config(
+    config_flag: str | None = None, 
+    data_dir_flag: str | None = None, 
+    workspace_root: str = "."
+) -> Config:
+    """Layered configuration loader.
+
+    1. Finds and loads a User Config.
+    2. Resolves the data directory.
+    3. Finds and loads a Project Config.
+    4. Merges Project Config into User Config.
+    5. Returns a unified Config object.
+    """
+    workspace_root = os.path.abspath(workspace_root)
+    
+    # Load User Config
+    user_config_path = _find_user_config()
+    user_data = _parse_toml_to_config_data(user_config_path) if user_config_path else {}
+
+    # Resolve Data Directory
+    # Priority: Flag > User Config > Default
+    toml_user_data_dir = user_data.get("database", {}).get("data_dir")
+    raw_data_dir = data_dir_flag or toml_user_data_dir or os.path.join(workspace_root, ".trashdig")
+    resolved_data_dir = _resolve_path(raw_data_dir, workspace_root)
+
+    # Load Project Config
+    project_config_path = _find_project_config(config_flag, resolved_data_dir, workspace_root)
+    project_data = _parse_toml_to_config_data(project_config_path) if project_config_path else {}
+
+    # Deep merge project settings into user settings
+    final_data = _deep_merge(user_data, project_data)
+
+    # Build Config object from merged data
+    ui_interface = final_data.get("ui", {}).get("interface", "textual")
+    global_model = final_data.get("model", "gemini-2.0-flash")
+    global_provider = final_data.get("provider", "google")
+    rpm_limit = final_data.get("rate_limit", {}).get("rpm")
+    tpm_limit = final_data.get("rate_limit", {}).get("tpm")
 
     # Load Agents
-    agents_data = data.get("agents", {})
+    agents_data = final_data.get("agents", {})
     agents = {}
     for name, agent_data in agents_data.items():
         if isinstance(agent_data, dict):
@@ -111,7 +189,7 @@ def load_config(file_path: str = "config.toml", data_dir: str | None = None, wor
             )
 
     # Load Providers
-    providers_data = data.get("providers", {})
+    providers_data = final_data.get("providers", {})
     providers = {}
     for name, provider_data in providers_data.items():
         providers[name] = ProviderConfig(
@@ -119,21 +197,10 @@ def load_config(file_path: str = "config.toml", data_dir: str | None = None, wor
             base_url=provider_data.get("base_url")
         )
 
-    # Data directory priority:
-    # 1. Argument data_dir (CLI flag)
-    # 2. TOML database.data_dir
-    # 3. Default ".trashdig" relative to workspace_root
-    
-    toml_data_dir = data.get("database", {}).get("data_dir")
-    toml_db_path = data.get("database", {}).get("path")
-    
-    raw_data_dir = data_dir or toml_data_dir or os.path.join(workspace_root, ".trashdig")
-    resolved_data_dir = _resolve_data_dir(raw_data_dir, workspace_root)
-
-    if toml_db_path and not data_dir and not toml_data_dir:
-        # If ONLY toml_db_path is provided, derive data_dir from it
-        resolved_db_path = _resolve_data_dir(toml_db_path, workspace_root)
-        resolved_data_dir = os.path.dirname(resolved_db_path) or ".trashdig"
+    # Database Path Resolution (Post-Merge)
+    toml_db_path = final_data.get("database", {}).get("path")
+    if toml_db_path:
+        resolved_db_path = _resolve_path(toml_db_path, workspace_root)
     else:
         resolved_db_path = os.path.join(resolved_data_dir, "trashdig.db")
 
@@ -148,4 +215,3 @@ def load_config(file_path: str = "config.toml", data_dir: str | None = None, wor
         rpm_limit=rpm_limit,
         tpm_limit=tpm_limit,
     )
-

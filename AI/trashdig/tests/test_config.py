@@ -65,3 +65,22 @@ def test_load_config_global_defaults(tmp_path):
     validator_cfg = config.get_agent_config("validator")
     assert validator_cfg.model == "global-model"
     assert validator_cfg.provider == "global-provider"
+
+def test_load_config_priority(tmp_path, monkeypatch):
+    """Tests that trashdig.toml is preferred over config.toml."""
+    monkeypatch.chdir(tmp_path)
+    
+    config_toml = tmp_path / "config.toml"
+    config_toml.write_text('model = "from-config"')
+    
+    trashdig_toml = tmp_path / "trashdig.toml"
+    trashdig_toml.write_text('model = "from-trashdig"')
+    
+    # Should load trashdig.toml
+    config = load_config()
+    assert config.default_model == "from-trashdig"
+    
+    # Remove trashdig.toml, should load config.toml
+    trashdig_toml.unlink()
+    config = load_config()
+    assert config.default_model == "from-config"

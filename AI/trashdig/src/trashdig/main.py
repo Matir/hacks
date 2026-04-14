@@ -21,16 +21,27 @@ def main():
         "--data-dir",
         help="Location for internal data (default: {workspace}/.trashdig)",
     )
+    parser.add_argument(
+        "--config",
+        help="Path to a project configuration TOML file",
+    )
     args = parser.parse_args()
 
     workspace_root = os.path.abspath(args.root)
     if not os.path.isdir(workspace_root):
         parser.error(f"Not a directory: {workspace_root}")
 
-    config = load_config(data_dir=args.data_dir, workspace_root=workspace_root)
+    config = load_config(
+        config_flag=args.config, 
+        data_dir_flag=args.data_dir, 
+        workspace_root=workspace_root
+    )
     
     from trashdig.rate_limiter import init_rate_limiter
+    from trashdig.tools import init_artifact_manager
+    
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)
+    init_artifact_manager(data_dir=config.data_dir)
 
     app = TrashDigApp(config=config, workspace_root=workspace_root)
     app.run()

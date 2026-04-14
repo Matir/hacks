@@ -2,8 +2,96 @@ import re
 import subprocess
 import os
 import json
-from typing import List, Optional, Any, Dict, Set, Tuple
+import hashlib
+import asyncio
+import inspect
+from typing import List, Optional, Any, Dict, Set, Tuple, Callable
+from functools import wraps
 
+# ---------------------------------------------------------------------------
+# Artifact System
+# ---------------------------------------------------------------------------
+
+_ARTIFACT_DIR: str = ".trashdig/artifacts"
+
+def init_artifact_manager(data_dir: str):
+    """Initializes the artifact directory based on the global data directory.
+
+    Args:
+        data_dir: The global data directory (e.g., '.trashdig').
+    """
+    global _ARTIFACT_DIR
+    _ARTIFACT_DIR = os.path.join(data_dir, "artifacts")
+    os.makedirs(_ARTIFACT_DIR, exist_ok=True)
+
+def _process_tool_result(func_name: str, result: Any, max_chars: int) -> str:
+    """Internal helper to process a tool result and create an artifact if needed.
+
+    Args:
+        func_name: Name of the tool function.
+        result: The raw result from the tool.
+        max_chars: Threshold for truncation.
+
+    Returns:
+        The processed (potentially truncated) result string.
+    """
+    if not isinstance(result, str) or len(result) <= max_chars:
+        return result
+
+    # Generate a stable filename based on the content hash
+    content_hash = hashlib.sha256(result.encode("utf-8")).hexdigest()[:12]
+    filename = f"{func_name}_{content_hash}.txt"
+    artifact_path = os.path.join(_ARTIFACT_DIR, filename)
+
+    # Ensure the directory exists (might have been deleted)
+    os.makedirs(_ARTIFACT_DIR, exist_ok=True)
+    
+    with open(artifact_path, "w", encoding="utf-8") as f:
+        f.write(result)
+
+    # Construct the summary response
+    summary = (
+        f"[TRUNCATED: Showing first {max_chars} characters]\n"
+        f"{result[:max_chars]}\n"
+        f"---\n"
+        f"Output truncated for context efficiency.\n"
+        f"Full output saved as artifact: {artifact_path}\n"
+        f"Total Size: {len(result)} characters.\n"
+        f"To see more, use: 'ripgrep_search' or 'read_file' on the artifact path."
+    )
+    return summary
+
+def artifact_tool(max_chars: int = 5000):
+    """A decorator that automatically saves large tool outputs as artifacts.
+
+    Supports both synchronous and asynchronous functions.
+
+    Args:
+        max_chars: Threshold for truncation and artifact creation.
+
+    Returns:
+        The decorated tool function.
+    """
+    def decorator(func: Callable):
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs) -> str:
+                result = await func(*args, **kwargs)
+                return _process_tool_result(func.__name__, result, max_chars)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs) -> str:
+                result = func(*args, **kwargs)
+                return _process_tool_result(func.__name__, result, max_chars)
+            return sync_wrapper
+    return decorator
+
+# ---------------------------------------------------------------------------
+# Client Tools
+# ---------------------------------------------------------------------------
+
+@artifact_tool(max_chars=4000)
 def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]] = None) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
 
@@ -25,6 +113,7 @@ def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]
     except FileNotFoundError:
         return "Error: ripgrep (rg) not found in PATH."
 
+@artifact_tool(max_chars=8000)
 def semgrep_scan(path: str = ".", config: str = "p/security-audit") -> str:
     """Scans the codebase for security patterns using semgrep.
 
@@ -86,6 +175,7 @@ def _make_parser(language: str) -> Any:
         return None
     return tree_sitter.Parser(lang)
 
+@artifact_tool(max_chars=5000)
 def get_ast_summary(file_path: str, language: str = "python") -> str:
     """Generates a simplified AST summary of a file using tree-sitter.
 
@@ -122,6 +212,7 @@ def get_ast_summary(file_path: str, language: str = "python") -> str:
     except Exception as e:
         return f"Error analyzing AST: {str(e)}"
 
+@artifact_tool(max_chars=5000)
 def get_symbol_definition(symbol_name: str, path: str = ".") -> str:
     """Finds the definition of a function or class across the project.
 
@@ -142,6 +233,7 @@ def get_symbol_definition(symbol_name: str, path: str = ".") -> str:
             
     return "\n---\n".join(results) if results else f"Definition for '{symbol_name}' not found."
 
+@artifact_tool(max_chars=5000)
 def find_references(symbol_name: str, path: str = ".") -> str:
     """Finds all references (call sites, usages) of a symbol in the project.
 
@@ -221,6 +313,7 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
     except Exception as e:
         return f"Error analyzing scope: {str(e)}"
 
+@artifact_tool(max_chars=5000)
 def trace_variable_semantic(variable_name: str, file_path: str, language: str = "python") -> str:
     """Traces a variable through a file using AST awareness.
 
@@ -516,7 +609,7 @@ def _resolve_param_name(
         return params[arg_index]
     return None
 
-
+@artifact_tool(max_chars=8000)
 def trace_taint_cross_file(
     variable: str,
     source_file: str,
@@ -628,7 +721,7 @@ def trace_taint_cross_file(
     )
     return "\n".join(report_lines)
 
-
+@artifact_tool(max_chars=5000)
 def trace_variable(variable_name: str, file_path: str) -> str:
     """Finds all occurrences of a variable in a file to trace its flow.
 
@@ -641,6 +734,7 @@ def trace_variable(variable_name: str, file_path: str) -> str:
     """
     return ripgrep_search(f"\\b{variable_name}\\b", file_path, extra_args=["--line-number", "--column"])
 
+@artifact_tool(max_chars=5000)
 def bash_tool(command: str, timeout: int = 30) -> str:
     """Executes a bash command or script and returns the output.
 
@@ -673,6 +767,7 @@ def bash_tool(command: str, timeout: int = 30) -> str:
     except Exception as e:
         return f"Error executing command: {str(e)}"
 
+@artifact_tool(max_chars=5000)
 def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: int = 60) -> str:
     """Executes a bash command or script inside a temporary Docker container.
     This provides an isolated environment for running Proof of Concepts.
@@ -727,6 +822,7 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
     except Exception as e:
         return f"Error executing command in container: {str(e)}"
 
+@artifact_tool(max_chars=8000)
 async def web_fetch(url: str) -> str:
     """Fetches the content of a web page and returns its text.
     Use this to read specific articles, documentation, or CVE details.
@@ -759,11 +855,12 @@ async def web_fetch(url: str) -> str:
                 chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
                 text = "\n".join(chunk for chunk in chunks if chunk)
                 
-                # Truncate to avoid context overflow
-                return text[:10000]
+                # We return the whole text, the artifact_tool will handle truncation if needed
+                return text
     except Exception as e:
         return f"Error fetching URL: {str(e)}"
 
+@artifact_tool(max_chars=5000)
 def query_cwe_database(query: str) -> str:
     """Queries the built-in CWE knowledge base for descriptions and examples.
 
