@@ -1,0 +1,101 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+	font-size: 16px;
+	line-height: 1.5;
+	word-wrap: break-word;
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 45px;
+	color: #24292e;
+}
+
+code {
+	padding: .2em .4em;
+	margin: 0;
+	font-size: 85%;
+	background-color: rgba(27,31,35,.05);
+	border-radius: 3px;
+}
+
+pre {
+	padding: 16px;
+	overflow: auto;
+	font-size: 85%;
+	line-height: 1.45;
+	background-color: #f6f8fa;
+	border-radius: 3px;
+}
+
+pre code {
+	background-color: transparent;
+}
+
+table {
+	border-spacing: 0;
+	border-collapse: collapse;
+}
+
+td, th {
+	padding: 6px 13px;
+	border: 1px solid #dfe2e5;
+}
+
+tr:nth-child(2n) {
+	background-color: #f6f8fa;
+}
+
+</style></head><body>
+<h1 id="mdtool">mdtool</h1>
+<p>mdtool is a tool for rendering markdown files as HTML.</p>
+<h2 id="usage">Usage</h2>
+<p>There are two modes: conversion mode and server mode. Conversion mode is a batch
+process, server mode does realtime conversions.</p>
+<h3 id="conversion-mode">Conversion Mode</h3>
+<p>In conversion mode, it takes either a single file or a directory of files to
+convert.</p>
+<pre><code>mdtool [flags] &lt;inpath&gt; [outpath]
+</code></pre>
+<p>If <code>outpath</code> is omitted:</p>
+<ul>
+<li>When <code>inpath</code> is a file, the <code>outpath</code> becomes the <code>inpath</code> with <code>.md</code>
+replaced by <code>.html</code>.</li>
+<li>When <code>inpath</code> is a directory, each <code>.md</code> file is treated as above within the
+<code>inpath</code> directory.</li>
+</ul>
+<p>If <code>outpath</code> is specified:</p>
+<ul>
+<li>When <code>inpath</code> is a file, if <code>outpath</code> specifies a non-existent path or a path
+to a file, it is written to that path. Directories are not created. If
+<code>outpath</code> specifies a directory, then the base name of <code>inpath</code> is used with
+<code>.html</code> replacing <code>.md</code>. If <code>.md</code> is missing, then <code>.html</code> is just appended.</li>
+<li>When <code>inpath</code> is a directory, <code>outpath</code> must be a directory. Markdown files
+will be created with the same directory structure, creating subdirectories as
+necessary.</li>
+</ul>
+<h3 id="server-mode">Server Mode</h3>
+<p>In server mode, we run a local webserver to serve a directory structure of
+markdown files.</p>
+<pre><code>mdtool [flags] -serve [directory]
+</code></pre>
+<p>By default, we bind to <code>127.0.0.1:7768</code>. If no directory is specified, we use
+the current working directory. Files ending in <code>.md</code> are rendered as HTML when
+requested. Any other files in the directory are served directly, unless the
+<code>-only-md</code> flag is passed, in which case only <code>.md</code> files will be served.</p>
+<h2 id="supported-markdown-features">Supported Markdown Features</h2>
+<ul>
+<li>code blocks (inline and fenced) with syntax highlighting</li>
+<li>mermaid.js diagrams</li>
+<li>Github-Flavored Markdown Features
+<ul>
+<li>Checklists</li>
+<li>Tables</li>
+</ul>
+</li>
+</ul>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({ startOnLoad: true });
+</script>
+</body></html>
