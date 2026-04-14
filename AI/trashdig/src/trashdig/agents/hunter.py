@@ -20,6 +20,7 @@ from trashdig.tools import (
 )
 from trashdig.findings import Finding
 
+
 def load_prompt(file_path: str) -> str:
     """Loads a prompt from a markdown file.
 
@@ -31,6 +32,7 @@ def load_prompt(file_path: str) -> str:
     """
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
+
 
 class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
@@ -48,6 +50,7 @@ class HunterAgent(LlmAgent):
         Returns:
             A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
         """
+
         def _log(msg: str) -> None:
             if log_fn:
                 log_fn(msg)
@@ -80,7 +83,7 @@ class HunterAgent(LlmAgent):
             try:
                 cleaned_response = text.strip()
                 if cleaned_response.startswith("```json"):
-                    cleaned_response = cleaned_response[7:-3].strip()
+                    cleaned_response = cleaned_response[7:].rstrip("`").strip()
 
                 data = json.loads(cleaned_response)
 
@@ -99,13 +102,16 @@ class HunterAgent(LlmAgent):
                         impact=raw.get("impact", "N/A"),
                         exploitation_path=raw.get("exploitation_path", "N/A"),
                         remediation=raw.get("remediation", "N/A"),
-                        cwe_id=raw.get("cwe_id")
+                        cwe_id=raw.get("cwe_id"),
                     )
                     finding.save(os.path.join(project_root, "findings"))
                     all_findings.append(finding)
-                    sev_color = {"critical": "red", "high": "red", "medium": "yellow", "low": "green"}.get(
-                        (finding.severity or "").lower(), "white"
-                    )
+                    sev_color = {
+                        "critical": "red",
+                        "high": "red",
+                        "medium": "yellow",
+                        "low": "green",
+                    }.get((finding.severity or "").lower(), "white")
                     _log(
                         f"  [bold {sev_color}]■[/bold {sev_color}] "
                         f"[bold]{finding.title}[/bold] "
@@ -116,16 +122,19 @@ class HunterAgent(LlmAgent):
                 hypos = data.get("hypotheses", [])
                 all_hypotheses.extend(hypos)
                 if hypos:
-                    _log(f"  [dim]→ {len(hypos)} follow-up hypothesis{'es' if len(hypos) != 1 else ''} queued[/dim]")
+                    _log(
+                        f"  [dim]→ {len(hypos)} follow-up hypothesis{'es' if len(hypos) != 1 else ''} queued[/dim]"
+                    )
 
                 if not raw_findings:
                     _log(f"  [dim]no findings in {target}[/dim]")
 
-            except (json.JSONDecodeError, AttributeError):
+            except json.JSONDecodeError, AttributeError:
                 _log(f"  [red]failed to parse Hunter response for {target}[/red]")
                 continue
 
         return {"findings": all_findings, "hypotheses": all_hypotheses}
+
 
 def create_hunter_agent(config: AgentConfig = None) -> HunterAgent:
     """Creates a Hunter agent.
@@ -159,7 +168,11 @@ def create_hunter_agent(config: AgentConfig = None) -> HunterAgent:
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
 
-    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+    kwargs = (
+        {"generate_content_config": extras["generate_content_config"]}
+        if extras["generate_content_config"]
+        else {}
+    )
 
     return HunterAgent(
         name="hunter",

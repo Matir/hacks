@@ -1,3 +1,4 @@
+import os
 from typing import Dict, Any, List, Optional, Callable
 from trashdig.agents.archaeologist import create_archaeologist_agent
 from trashdig.agents.hunter import create_hunter_agent
@@ -6,6 +7,7 @@ from trashdig.agents.types import Task, TaskType, TaskStatus, Hypothesis
 from trashdig.config import Config
 from trashdig.database import ProjectDatabase
 from trashdig.findings import Finding
+
 
 class Coordinator:
     """Coordinatates the hypothesis-driven workflow between agents."""
@@ -20,7 +22,9 @@ class Coordinator:
         """
         self.config = config
         self.project_path = project_path
-        self.archaeologist = create_archaeologist_agent(config.agents.get("archaeologist"))
+        self.archaeologist = create_archaeologist_agent(
+            config.agents.get("archaeologist")
+        )
         self.hunter = create_hunter_agent(config.agents.get("hunter"))
         self.validator = create_validator_agent(config.agents.get("validator"))
 
@@ -52,20 +56,24 @@ class Coordinator:
         Args:
             task: The task to add to the queue.
         """
-        self.log(f"Spawned Task: [cyan]{task.type.name}[/cyan] -> [dim]{task.target}[/dim]")
+        self.log(
+            f"Spawned Task: [cyan]{task.type.name}[/cyan] -> [dim]{task.target}[/dim]"
+        )
         self.task_queue.append(task)
 
     async def run_loop(self) -> None:
         """Main Observe-Hypothesize-Verify loop.
-        
+
         This loop processes the task queue until it is empty, delegating tasks
         to the appropriate agents based on the task type.
         """
         while self.task_queue:
             task = self.task_queue.pop(0)
             task.status = TaskStatus.RUNNING
-            self.log(f"Executing: [bold blue]{task.type.name}[/bold blue] ([dim]{task.target}[/dim])")
-            
+            self.log(
+                f"Executing: [bold blue]{task.type.name}[/bold blue] ([dim]{task.target}[/dim])"
+            )
+
             try:
                 if task.type == TaskType.SCAN:
                     await self._handle_scan(task)
@@ -73,7 +81,7 @@ class Coordinator:
                     await self._handle_hunt(task)
                 elif task.type == TaskType.VERIFY:
                     await self._handle_verify(task)
-                
+
                 task.status = TaskStatus.COMPLETED
                 self.completed_tasks.append(task)
             except Exception as e:
@@ -106,7 +114,7 @@ class Coordinator:
                 target=hypo.get("target", ""),
                 description=hypo.get("description", ""),
                 confidence=hypo.get("confidence", 0.5),
-                parent_id=task.id
+                parent_id=task.id,
             )
             self.db.save_hypothesis(self.project_path, hypo_task)
             self.spawn_task(hypo_task)
@@ -127,21 +135,34 @@ class Coordinator:
         if isinstance(task, Hypothesis):
             self.db.update_hypothesis_status(task.id, "running")
 
-        results = await self.hunter.hunt_vulnerabilities([task.target], project_root=".")
+        results = await self.hunter.hunt_vulnerabilities(
+            [task.target], project_root="."
+        )
 
         # Process findings
         findings = results.get("findings", [])
         for finding in findings:
             self.findings.append(finding)
             self.db.save_finding(self.project_path, finding)
-            self.log(f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]")
+            self.log(
+                f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]"
+            )
             # Automatically spawn verification task
-            self.spawn_task(Task(TaskType.VERIFY, finding.title, context={"finding": finding}, parent_id=task.id))
+            self.spawn_task(
+                Task(
+                    TaskType.VERIFY,
+                    finding.title,
+                    context={"finding": finding},
+                    parent_id=task.id,
+                )
+            )
 
         # Mark hypothesis complete/failed based on whether findings were found
         if isinstance(task, Hypothesis):
             status = "completed" if findings else "failed"
-            self.db.update_hypothesis_status(task.id, status, result={"finding_count": len(findings)})
+            self.db.update_hypothesis_status(
+                task.id, status, result={"finding_count": len(findings)}
+            )
 
         # Process new hypotheses (Recursive Loop)
         hypotheses = results.get("hypotheses", [])
@@ -151,7 +172,7 @@ class Coordinator:
                 target=hypo.get("target", ""),
                 description=hypo.get("description", ""),
                 confidence=hypo.get("confidence", 0.5),
-                parent_id=task.id
+                parent_id=task.id,
             )
             self.db.save_hypothesis(self.project_path, hypo_task)
             self.spawn_task(hypo_task)
@@ -166,13 +187,17 @@ class Coordinator:
         if not finding:
             return
 
-        result = await self.validator.verify_finding(finding, self.tech_stack, log_fn=self.log)
+        result = await self.validator.verify_finding(
+            finding, self.tech_stack, log_fn=self.log
+        )
         if result.get("status"):
             finding.verification_status = result["status"]
-            self.log(f"Verification Result: [bold {'green' if result['status'] == 'Verified' else 'red'}]{result['status']}[/bold]")
+            self.log(
+                f"Verification Result: [bold {'green' if result['status'] == 'Verified' else 'red'}]{result['status']}[/bold]"
+            )
         if result.get("poc_code"):
             finding.poc = result["poc_code"]
-        finding.save()
+        finding.save(os.path.join(self.project_path, "findings"))
 
         # Sync the updated status back to the database
         self.db.update_finding_status(
@@ -219,7 +244,9 @@ class Coordinator:
                 confidence=hypo.get("confidence", 0.5),
             )
             self.db.save_hypothesis(self.project_path, hypo_task)
-            self.log(f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}")
+            self.log(
+                f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}"
+            )
 
         return mapping
 
@@ -240,13 +267,17 @@ class Coordinator:
         new_findings: List[Finding] = []
         for target in targets:
             self.log(f"Hunting: [cyan]{target}[/cyan]")
-            results = await self.hunter.hunt_vulnerabilities([target], project_root=path, log_fn=self.log)
+            results = await self.hunter.hunt_vulnerabilities(
+                [target], project_root=path, log_fn=self.log
+            )
 
             for finding in results.get("findings", []):
                 self.findings.append(finding)
                 new_findings.append(finding)
                 self.db.save_finding(self.project_path, finding)
-                self.log(f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]")
+                self.log(
+                    f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]"
+                )
 
             # Persist recursive hypotheses without auto-queueing them.
             for hypo in results.get("hypotheses", []):
@@ -257,7 +288,9 @@ class Coordinator:
                     confidence=hypo.get("confidence", 0.5),
                 )
                 self.db.save_hypothesis(self.project_path, hypo_task)
-                self.log(f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}")
+                self.log(
+                    f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}"
+                )
 
         return new_findings
 
@@ -272,7 +305,9 @@ class Coordinator:
         Returns:
             A dictionary with 'status' and 'poc_code'.
         """
-        result = await self.validator.verify_finding(finding, self.tech_stack, log_fn=self.log)
+        result = await self.validator.verify_finding(
+            finding, self.tech_stack, log_fn=self.log
+        )
         if result.get("status"):
             finding.verification_status = result["status"]
             self.log(
@@ -282,7 +317,7 @@ class Coordinator:
             )
         if result.get("poc_code"):
             finding.poc = result["poc_code"]
-        finding.save()
+        finding.save(os.path.join(self.project_path, "findings"))
         self.db.update_finding_status(
             self.project_path,
             finding.title,
@@ -291,4 +326,3 @@ class Coordinator:
             finding.poc,
         )
         return {"status": finding.verification_status, "poc_code": finding.poc}
-

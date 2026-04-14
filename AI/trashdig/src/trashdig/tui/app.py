@@ -23,13 +23,16 @@ def _setup_file_logger(log_path: str) -> logging.Logger:
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
         handler = logging.FileHandler(log_path, encoding="utf-8")
-        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        )
         logger.addHandler(handler)
     return logger
 
 
 class FileTree(Tree):
     """A tree representing the project file structure."""
+
     def __init__(self, label: str, data: Dict[str, Dict[str, Any]]):
         super().__init__(label)
         self.data = data
@@ -45,15 +48,19 @@ class FileTree(Tree):
             parts = path.split(os.sep)
             for i in range(len(parts)):
                 parent_path = os.sep.join(parts[:i])
-                current_path = os.sep.join(parts[:i+1])
+                current_path = os.sep.join(parts[: i + 1])
                 if current_path not in nodes:
                     parent_node = nodes[parent_path]
-                    is_file = (i == len(parts) - 1)
+                    is_file = i == len(parts) - 1
                     label = parts[i]
-                    if current_path in self.data and self.data[current_path].get("is_high_value"):
+                    if current_path in self.data and self.data[current_path].get(
+                        "is_high_value"
+                    ):
                         label = f"⭐ {label}"
                     if is_file:
-                        nodes[current_path] = parent_node.add_leaf(label, data=current_path)
+                        nodes[current_path] = parent_node.add_leaf(
+                            label, data=current_path
+                        )
                     else:
                         nodes[current_path] = parent_node.add(label, data=current_path)
         self.root.expand()
@@ -89,7 +96,11 @@ class StatusPane(Vertical):
         task_queue_len: int,
         completed_len: int,
     ) -> None:
-        high_value = sum(1 for d in scan_results.values() if isinstance(d, dict) and d.get("is_high_value"))
+        high_value = sum(
+            1
+            for d in scan_results.values()
+            if isinstance(d, dict) and d.get("is_high_value")
+        )
 
         severity_counts: Dict[str, int] = {}
         for f in findings:
@@ -133,7 +144,10 @@ class REPLPane(Vertical):
         yield Label("Interactive Console")
         yield RichLog(id="repl_log", highlight=True, markup=True, wrap=True)
         yield AutoComplete(
-            Input(placeholder="Type a command (e.g., 'scan api/', 'help')...", id="repl_input"),
+            Input(
+                placeholder="Type a command (e.g., 'scan api/', 'help')...",
+                id="repl_input",
+            ),
             candidates=[DropdownItem(cmd) for cmd in self.commands],
             id="repl_autocomplete",
         )
@@ -179,7 +193,9 @@ class REPLPane(Vertical):
         base_cmd = cmd_parts[0].lower() if cmd_parts else ""
 
         if base_cmd == "help":
-            log.write("Available commands: [green]" + ", ".join(self.commands) + "[/green]")
+            log.write(
+                "Available commands: [green]" + ", ".join(self.commands) + "[/green]"
+            )
         elif base_cmd == "scan":
             path = cmd_parts[1] if len(cmd_parts) > 1 else self.app.workspace_root
             self.app.run_worker(self.app.run_archaeologist_scan(path))
@@ -187,7 +203,9 @@ class REPLPane(Vertical):
             if not self.app.prioritized_targets:
                 log.write("[red]No targets prioritized. Star some files first![/red]")
             else:
-                self.app.run_worker(self.app.run_hunter_analysis(self.app.prioritized_targets))
+                self.app.run_worker(
+                    self.app.run_hunter_analysis(self.app.prioritized_targets)
+                )
         elif base_cmd == "verify":
             if not self.app.coordinator.findings:
                 log.write("[red]No findings to verify. Run 'hunt' first![/red]")
@@ -201,13 +219,13 @@ class REPLPane(Vertical):
                         idx = int(cmd_parts[1]) - 1
                         finding = self.app.coordinator.findings[idx]
                         self.app.run_worker(self.app.run_verification(finding))
-                    except (ValueError, IndexError):
+                    except ValueError, IndexError:
                         log.write(f"[red]Invalid finding index: {cmd_parts[1]}[/red]")
         elif base_cmd == "star":
             if len(cmd_parts) < 2:
                 log.write("[red]Usage: star <path>[/red]")
             else:
-                path = cmd_parts[1]
+                path = os.path.normpath(cmd_parts[1])
                 if path not in self.app.prioritized_targets:
                     self.app.prioritized_targets.append(path)
                     self.app._file_log.info("Starred: %s", path)
@@ -216,7 +234,9 @@ class REPLPane(Vertical):
                 else:
                     log.write(f"[yellow]{path} is already starred.[/yellow]")
         elif base_cmd == "status":
-            log.write(f"Prioritized targets: [cyan]{', '.join(self.app.prioritized_targets) or 'None'}[/cyan]")
+            log.write(
+                f"Prioritized targets: [cyan]{', '.join(self.app.prioritized_targets) or 'None'}[/cyan]"
+            )
         elif base_cmd == "exit":
             self.app.exit()
         else:
@@ -307,7 +327,9 @@ class TrashDigApp(App):
                 yield StatusPane()
             with Vertical():
                 yield Label("File Summary")
-                yield Static("Select a file to see its summary.", id="summary", expand=True)
+                yield Static(
+                    "Select a file to see its summary.", id="summary", expand=True
+                )
                 yield REPLPane(id="repl_pane")
         yield Footer()
 
@@ -348,7 +370,9 @@ class TrashDigApp(App):
         self.refresh_status()
         try:
             await self.coordinator.run_hunter(targets)
-            self._file_log.info("Hunt complete: %d findings", len(self.coordinator.findings))
+            self._file_log.info(
+                "Hunt complete: %d findings", len(self.coordinator.findings)
+            )
         except Exception as e:
             self._file_log.error("Hunt exception: %s\n%s", e, traceback.format_exc())
             self._log("error", f"[bold red]Hunt failed:[/bold red] {e}")
@@ -362,9 +386,15 @@ class TrashDigApp(App):
         self.refresh_status()
         try:
             await self.coordinator.verify_finding(finding)
-            self._file_log.info("Verification complete: %s → %s", finding.title, finding.verification_status)
+            self._file_log.info(
+                "Verification complete: %s → %s",
+                finding.title,
+                finding.verification_status,
+            )
         except Exception as e:
-            self._file_log.error("Verification exception: %s\n%s", e, traceback.format_exc())
+            self._file_log.error(
+                "Verification exception: %s\n%s", e, traceback.format_exc()
+            )
             self._log("error", f"[bold red]Verification failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
@@ -374,12 +404,21 @@ class TrashDigApp(App):
         self.run_worker(self.run_archaeologist_scan(self.workspace_root))
 
     def action_prioritize(self) -> None:
-        high_value = [p for p, d in self.coordinator.scan_results.items() if d.get("is_high_value")]
+        high_value = [
+            p
+            for p, d in self.coordinator.scan_results.items()
+            if d.get("is_high_value")
+        ]
         for path in high_value:
             if path not in self.prioritized_targets:
                 self.prioritized_targets.append(path)
-        self._file_log.info("Auto-prioritized %d targets: %s", len(high_value), high_value)
-        self._log("info", f"[green]Auto-prioritized {len(high_value)} high-value targets.[/green]")
+        self._file_log.info(
+            "Auto-prioritized %d targets: %s", len(high_value), high_value
+        )
+        self._log(
+            "info",
+            f"[green]Auto-prioritized {len(high_value)} high-value targets.[/green]",
+        )
         self.refresh_status()
 
     def action_quit(self) -> None:

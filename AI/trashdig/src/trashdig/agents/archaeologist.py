@@ -1,18 +1,24 @@
 import os
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
-from trashdig.agents.utils import get_project_structure, detect_frameworks, run_prompt, google_provider_extras
+from trashdig.agents.utils import (
+    get_project_structure,
+    detect_frameworks,
+    run_prompt,
+    google_provider_extras,
+)
 from trashdig.tools import (
     ripgrep_search,
     get_ast_summary,
     query_cwe_database,
     find_references,
     get_scope_info,
-    web_fetch
+    web_fetch,
 )
+
 
 def load_prompt(file_path: str) -> str:
     """Loads a prompt from a markdown file.
@@ -26,9 +32,10 @@ def load_prompt(file_path: str) -> str:
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
+
 class ArchaeologistAgent(LlmAgent):
     """Archaeologist Agent for TrashDig.
-    
+
     This agent is responsible for mapping the project structure, identifying
     high-value targets (entry points, controllers, etc.), and generating
     initial vulnerability hypotheses.
@@ -47,27 +54,38 @@ class ArchaeologistAgent(LlmAgent):
                 - hypotheses: A list of proposed security hypotheses.
                 - tech_stack: A string description of detected technologies.
         """
+
         def _log(msg: str) -> None:
             if log_fn:
                 log_fn(msg)
 
-        _log(f"[bold]Archaeologist:[/bold] walking [cyan]{os.path.abspath(root_path)}[/cyan]")
+        _log(
+            f"[bold]Archaeologist:[/bold] walking [cyan]{os.path.abspath(root_path)}[/cyan]"
+        )
         file_list = get_project_structure(root_path)
-        _log(f"[bold]Archaeologist:[/bold] found [yellow]{len(file_list)}[/yellow] files")
+        _log(
+            f"[bold]Archaeologist:[/bold] found [yellow]{len(file_list)}[/yellow] files"
+        )
 
         tech_stack = detect_frameworks(file_list, root_path)
-        stack_str = ", ".join([f"{cat}: {', '.join(libs)}" for cat, libs in tech_stack.items() if libs])
+        stack_str = ", ".join(
+            [f"{cat}: {', '.join(libs)}" for cat, libs in tech_stack.items() if libs]
+        )
         if stack_str:
             _log(f"[bold]Archaeologist:[/bold] tech stack — {stack_str}")
         else:
-            _log("[bold]Archaeologist:[/bold] tech stack — unknown (no recognised dependency files)")
+            _log(
+                "[bold]Archaeologist:[/bold] tech stack — unknown (no recognised dependency files)"
+            )
 
-        _log("[bold]Archaeologist:[/bold] asking LLM to map files and identify high-value targets…")
+        _log(
+            "[bold]Archaeologist:[/bold] asking LLM to map files and identify high-value targets…"
+        )
 
         prompt_data = {
             "project_context": f"Project located at {os.path.abspath(root_path)}",
             "file_tree": "\n".join(file_list),
-            "tech_stack": stack_str or "Unknown"
+            "tech_stack": stack_str or "Unknown",
         }
 
         text = await run_prompt(
@@ -88,7 +106,7 @@ class ArchaeologistAgent(LlmAgent):
         try:
             cleaned_response = text.strip()
             if cleaned_response.startswith("```json"):
-                cleaned_response = cleaned_response[7:-3].strip()
+                cleaned_response = cleaned_response[7:].rstrip("`").strip()
 
             data: Dict[str, Any] = json.loads(cleaned_response)
             # Support both old and new formats for robustness
@@ -98,7 +116,11 @@ class ArchaeologistAgent(LlmAgent):
                 data["tech_stack"] = stack_str
 
             mapping = data.get("mapping", {})
-            high_value = [p for p, d in mapping.items() if isinstance(d, dict) and d.get("is_high_value")]
+            high_value = [
+                p
+                for p, d in mapping.items()
+                if isinstance(d, dict) and d.get("is_high_value")
+            ]
             _log(
                 f"[bold]Archaeologist:[/bold] mapped [yellow]{len(mapping)}[/yellow] files, "
                 f"[green]{len(high_value)}[/green] flagged as high-value"
@@ -109,13 +131,17 @@ class ArchaeologistAgent(LlmAgent):
 
             hypos = data.get("hypotheses", [])
             if hypos:
-                _log(f"[bold]Archaeologist:[/bold] generated [yellow]{len(hypos)}[/yellow] follow-up hypotheses")
+                _log(
+                    f"[bold]Archaeologist:[/bold] generated [yellow]{len(hypos)}[/yellow] follow-up hypotheses"
+                )
                 for h in hypos:
-                    conf = h.get('confidence', 0)
-                    _log(f"  [dim]? {h.get('target', '?')} (confidence {conf:.0%}) — {h.get('description', '')}[/dim]")
+                    conf = h.get("confidence", 0)
+                    _log(
+                        f"  [dim]? {h.get('target', '?')} (confidence {conf:.0%}) — {h.get('description', '')}[/dim]"
+                    )
 
             return data
-        except (json.JSONDecodeError, AttributeError):
+        except json.JSONDecodeError, AttributeError:
             return {
                 "mapping": {},
                 "hypotheses": [],
@@ -124,7 +150,10 @@ class ArchaeologistAgent(LlmAgent):
                 "raw": text,
             }
 
-def create_archaeologist_agent(config: Optional[AgentConfig] = None) -> ArchaeologistAgent:
+
+def create_archaeologist_agent(
+    config: Optional[AgentConfig] = None,
+) -> ArchaeologistAgent:
     """Creates and configures an Archaeologist agent.
 
     Args:
@@ -151,7 +180,11 @@ def create_archaeologist_agent(config: Optional[AgentConfig] = None) -> Archaeol
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
 
-    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+    kwargs = (
+        {"generate_content_config": extras["generate_content_config"]}
+        if extras["generate_content_config"]
+        else {}
+    )
 
     return ArchaeologistAgent(
         name="archaeologist",
@@ -161,4 +194,3 @@ def create_archaeologist_agent(config: Optional[AgentConfig] = None) -> Archaeol
         tools=tools,
         **kwargs,
     )
-

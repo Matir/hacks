@@ -8,15 +8,19 @@ from trashdig.agents.utils import read_file_content, run_prompt, google_provider
 from trashdig.tools import ripgrep_search, bash_tool, container_bash_tool, web_fetch
 from trashdig.findings import Finding
 
+
 def load_prompt(file_path: str) -> str:
     """Loads a prompt from a markdown file."""
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
+
 class ValidatorAgent(LlmAgent):
     """Validator Agent for TrashDig."""
 
-    async def verify_finding(self, finding: Finding, tech_stack: str = "", log_fn=None) -> Dict[str, Any]:
+    async def verify_finding(
+        self, finding: Finding, tech_stack: str = "", log_fn=None
+    ) -> Dict[str, Any]:
         """Attempts to verify a potential finding by running a PoC.
 
         Args:
@@ -27,11 +31,14 @@ class ValidatorAgent(LlmAgent):
         Returns:
             A dictionary with the verification results (status, poc_code, output).
         """
+
         def _log(msg: str) -> None:
             if log_fn:
                 log_fn(msg)
 
-        _log(f"[bold]Validator:[/bold] verifying [bold yellow]{finding.title}[/bold yellow]")
+        _log(
+            f"[bold]Validator:[/bold] verifying [bold yellow]{finding.title}[/bold yellow]"
+        )
         _log(f"  [dim]file: {finding.file_path}[/dim]")
 
         file_content = read_file_content(finding.file_path)
@@ -56,21 +63,30 @@ class ValidatorAgent(LlmAgent):
         try:
             cleaned_response = text.strip()
             if cleaned_response.startswith("```json"):
-                cleaned_response = cleaned_response[7:-3].strip()
+                cleaned_response = cleaned_response[7:].rstrip("`").strip()
             result = json.loads(cleaned_response)
             status = result.get("status", "Unverified")
-            status_color = "green" if status == "Verified" else "red" if status == "False Positive" else "yellow"
+            status_color = (
+                "green"
+                if status == "Verified"
+                else "red"
+                if status == "False Positive"
+                else "yellow"
+            )
             _log(f"[bold]Validator:[/bold] [{status_color}]{status}[/{status_color}]")
             if result.get("reasoning"):
-                _log(f"  [dim]{result['reasoning'][:120]}{'…' if len(result.get('reasoning','')) > 120 else ''}[/dim]")
+                _log(
+                    f"  [dim]{result['reasoning'][:120]}{'…' if len(result.get('reasoning', '')) > 120 else ''}[/dim]"
+                )
             return result
-        except (json.JSONDecodeError, AttributeError):
+        except json.JSONDecodeError, AttributeError:
             _log("[bold]Validator:[/bold] [red]failed to parse response[/red]")
             return {
                 "status": "Unverified",
                 "error": "Failed to parse Validator response",
                 "raw": text,
             }
+
 
 def create_validator_agent(config: AgentConfig = None) -> ValidatorAgent:
     """Creates a Validator agent."""
@@ -91,7 +107,11 @@ def create_validator_agent(config: AgentConfig = None) -> ValidatorAgent:
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
 
-    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+    kwargs = (
+        {"generate_content_config": extras["generate_content_config"]}
+        if extras["generate_content_config"]
+        else {}
+    )
 
     return ValidatorAgent(
         name="validator",
