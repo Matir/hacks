@@ -41,7 +41,7 @@ class ArchaeologistAgent(LlmAgent):
     initial vulnerability hypotheses.
     """
 
-    async def scan_project(self, root_path: str = ".", log_fn=None) -> Dict[str, Any]:
+    async def scan_project(self, root_path: str = ".", log_fn=None, stats_fn=None, error_fn=None) -> Dict[str, Any]:
         """Scans the project structure and provides summaries.
 
         Args:
@@ -101,6 +101,8 @@ class ArchaeologistAgent(LlmAgent):
             f"Only return the JSON object.\n\n"
             f"File Tree:\n{prompt_data['file_tree']}",
             on_event=log_fn,
+            on_stats=stats_fn,
+            on_error=error_fn,
         )
 
         try:
@@ -141,7 +143,9 @@ class ArchaeologistAgent(LlmAgent):
                     )
 
             return data
-        except json.JSONDecodeError, AttributeError:
+        except (json.JSONDecodeError, AttributeError):
+            if error_fn:
+                error_fn()
             return {
                 "mapping": {},
                 "hypotheses": [],

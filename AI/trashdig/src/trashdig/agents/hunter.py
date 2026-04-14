@@ -38,7 +38,7 @@ class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
 
     async def hunt_vulnerabilities(
-        self, targets: List[str], project_root: str = ".", log_fn=None
+        self, targets: List[str], project_root: str = ".", log_fn=None, stats_fn=None, error_fn=None
     ) -> Dict[str, Any]:
         """Deep-dive into specific files to identify vulnerabilities.
 
@@ -78,6 +78,8 @@ class HunterAgent(LlmAgent):
                 f"   - description: (Why you need to look there)\n"
                 f"   - confidence: (0.0 to 1.0)\n",
                 on_event=log_fn,
+                on_stats=stats_fn,
+                on_error=error_fn,
             )
 
             try:
@@ -129,7 +131,9 @@ class HunterAgent(LlmAgent):
                 if not raw_findings:
                     _log(f"  [dim]no findings in {target}[/dim]")
 
-            except json.JSONDecodeError, AttributeError:
+            except (json.JSONDecodeError, AttributeError):
+                if error_fn:
+                    error_fn()
                 _log(f"  [red]failed to parse Hunter response for {target}[/red]")
                 continue
 

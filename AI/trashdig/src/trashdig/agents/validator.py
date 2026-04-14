@@ -19,7 +19,7 @@ class ValidatorAgent(LlmAgent):
     """Validator Agent for TrashDig."""
 
     async def verify_finding(
-        self, finding: Finding, tech_stack: str = "", log_fn=None
+        self, finding: Finding, tech_stack: str = "", log_fn=None, stats_fn=None, error_fn=None
     ) -> Dict[str, Any]:
         """Attempts to verify a potential finding by running a PoC.
 
@@ -58,6 +58,8 @@ class ValidatorAgent(LlmAgent):
             f"4. Provide a JSON response with: 'status' (Verified/False Positive), "
             f"'poc_code' (the script/command used), and 'reasoning' (why it was confirmed or refuted).",
             on_event=log_fn,
+            on_stats=stats_fn,
+            on_error=error_fn,
         )
 
         try:
@@ -79,7 +81,9 @@ class ValidatorAgent(LlmAgent):
                     f"  [dim]{result['reasoning'][:120]}{'…' if len(result.get('reasoning', '')) > 120 else ''}[/dim]"
                 )
             return result
-        except json.JSONDecodeError, AttributeError:
+        except (json.JSONDecodeError, AttributeError):
+            if error_fn:
+                error_fn()
             _log("[bold]Validator:[/bold] [red]failed to parse response[/red]")
             return {
                 "status": "Unverified",

@@ -34,12 +34,33 @@ class Coordinator:
         self.tech_stack: str = ""
         self.findings: List[Finding] = []
 
+        # LLM usage counters
+        self.total_messages: int = 0
+        self.input_tokens: int = 0
+        self.output_tokens: int = 0
+        self.llm_errors: int = 0
+
         # Persistent knowledge store
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
         self.db = ProjectDatabase(db_path)
 
         # Callback for TUI updates
         self.on_task_event: Optional[Callable[[str], None]] = None
+        self.on_stats_event: Optional[Callable[[], None]] = None
+
+    def _on_stats(self, input_tokens: int, output_tokens: int) -> None:
+        """Accumulate LLM usage stats from a single run_prompt call."""
+        self.total_messages += 1
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+        if self.on_stats_event:
+            self.on_stats_event()
+
+    def _on_llm_error(self) -> None:
+        """Increment the LLM error counter."""
+        self.llm_errors += 1
+        if self.on_stats_event:
+            self.on_stats_event()
 
     def log(self, message: str) -> None:
         """Logs a message through the event callback.
@@ -94,7 +115,7 @@ class Coordinator:
         Args:
             task: The scan task to handle.
         """
-        results = await self.archaeologist.scan_project(task.target)
+        results = await self.archaeologist.scan_project(task.target, stats_fn=self._on_stats, error_fn=self._on_llm_error)
 
         # Handle new format {"mapping": ..., "hypotheses": ...}
         mapping: Dict[str, Any] = results.get("mapping", results)
@@ -136,7 +157,7 @@ class Coordinator:
             self.db.update_hypothesis_status(task.id, "running")
 
         results = await self.hunter.hunt_vulnerabilities(
-            [task.target], project_root="."
+            [task.target], project_root=".", stats_fn=self._on_stats, error_fn=self._on_llm_error
         )
 
         # Process findings
@@ -188,7 +209,7 @@ class Coordinator:
             return
 
         result = await self.validator.verify_finding(
-            finding, self.tech_stack, log_fn=self.log
+            finding, self.tech_stack, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error
         )
         if result.get("status"):
             finding.verification_status = result["status"]
@@ -223,7 +244,7 @@ class Coordinator:
         Returns:
             The scan results mapping (file path → {summary, is_high_value}).
         """
-        results = await self.archaeologist.scan_project(path, log_fn=self.log)
+        results = await self.archaeologist.scan_project(path, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error)
 
         mapping: Dict[str, Any] = results.get("mapping", results)
         hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
@@ -268,7 +289,7 @@ class Coordinator:
         for target in targets:
             self.log(f"Hunting: [cyan]{target}[/cyan]")
             results = await self.hunter.hunt_vulnerabilities(
-                [target], project_root=path, log_fn=self.log
+                [target], project_root=path, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error
             )
 
             for finding in results.get("findings", []):
@@ -306,7 +327,7 @@ class Coordinator:
             A dictionary with 'status' and 'poc_code'.
         """
         result = await self.validator.verify_finding(
-            finding, self.tech_stack, log_fn=self.log
+            finding, self.tech_stack, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error
         )
         if result.get("status"):
             finding.verification_status = result["status"]

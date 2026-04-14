@@ -95,6 +95,10 @@ class StatusPane(Vertical):
         findings: List[Finding],
         task_queue_len: int,
         completed_len: int,
+        total_messages: int = 0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        llm_errors: int = 0,
     ) -> None:
         high_value = sum(
             1
@@ -119,6 +123,9 @@ class StatusPane(Vertical):
 
         root_display = os.path.basename(workspace_root) or workspace_root
 
+        def _fmt_tokens(n: int) -> str:
+            return f"{n:,}" if n < 1_000_000 else f"{n/1_000_000:.1f}M"
+
         lines = [
             f"[bold]Phase:[/bold]    [{phase_color}]{phase}[/{phase_color}]",
             f"[bold]Root:[/bold]     {root_display}",
@@ -127,6 +134,10 @@ class StatusPane(Vertical):
             f"[bold]Targets:[/bold]  {len(prioritized_targets)} prioritized",
             f"[bold]Findings:[/bold] {len(findings)} ({sev_str})",
             f"[bold]Queue:[/bold]    {task_queue_len} pending / {completed_len} done",
+            f"[bold]LLM Msgs:[/bold] {total_messages}",
+            f"[bold]Tokens↑:[/bold]  {_fmt_tokens(input_tokens)}",
+            f"[bold]Tokens↓:[/bold]  {_fmt_tokens(output_tokens)}",
+            f"[bold]Errors:[/bold]   {'[red]' if llm_errors else ''}{llm_errors}{'[/red]' if llm_errors else ''}",
         ]
         self.query_one("#status_body", Static).update("\n".join(lines))
 
@@ -261,6 +272,12 @@ class TrashDigApp(App):
     FileTree {
         height: 1fr;
     }
+    REPLPane {
+        overflow-x: hidden;
+    }
+    #repl_log {
+        overflow-x: hidden;
+    }
     """
 
     def __init__(self, config: Config = None, workspace_root: str = "."):
@@ -274,6 +291,7 @@ class TrashDigApp(App):
         log_auth_info(self.config, self._file_log)
         self.coordinator = Coordinator(self.config, project_path=workspace_root)
         self.coordinator.on_task_event = self._on_coordinator_log
+        self.coordinator.on_stats_event = self.refresh_status
         self.prioritized_targets: List[str] = []
 
     def _log(self, level: str, message: str) -> None:
@@ -314,6 +332,10 @@ class TrashDigApp(App):
                 findings=self.coordinator.findings,
                 task_queue_len=len(self.coordinator.task_queue),
                 completed_len=len(self.coordinator.completed_tasks),
+                total_messages=self.coordinator.total_messages,
+                input_tokens=self.coordinator.input_tokens,
+                output_tokens=self.coordinator.output_tokens,
+                llm_errors=self.coordinator.llm_errors,
             )
         except Exception:
             pass

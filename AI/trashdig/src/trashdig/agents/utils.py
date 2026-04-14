@@ -134,6 +134,8 @@ async def run_prompt(
     agent: "BaseAgent",
     prompt: str,
     on_event: Optional[callable] = None,
+    on_stats: Optional[callable] = None,
+    on_error: Optional[callable] = None,
 ) -> str:
     """Run a single text prompt through an ADK agent and return the final response text.
 
@@ -145,6 +147,10 @@ async def run_prompt(
         prompt: The user-turn text to send.
         on_event: Optional callable invoked with a formatted string for each
             tool call the agent makes, allowing callers to surface progress.
+        on_stats: Optional callable invoked with (input_tokens, output_tokens)
+            after a successful run, for tracking cumulative LLM usage.
+        on_error: Optional callable invoked with no arguments when the API call
+            itself raises an exception.
 
     Returns:
         The agent's final text response, or an empty string if none was produced.
@@ -163,24 +169,42 @@ async def run_prompt(
     )
     content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])
     final_text = ""
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session.id,
-        new_message=content,
-    ):
-        if on_event and event.content and event.content.parts:
-            for part in event.content.parts:
-                fc = getattr(part, "function_call", None)
-                if fc and getattr(fc, "name", None):
-                    args = getattr(fc, "args", {}) or {}
-                    args_str = ", ".join(
-                        f"{k}={repr(v)[:60]}" for k, v in args.items()
-                    )
-                    on_event(f"  [dim]→ {fc.name}({args_str})[/dim]")
-        if event.is_final_response() and event.content and event.content.parts:
-            for part in event.content.parts:
-                if hasattr(part, "text") and part.text:
-                    final_text = part.text
+    input_tokens = 0
+    output_tokens = 0
+    try:
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session.id,
+            new_message=content,
+        ):
+            # Extract token usage from usage_metadata if present
+            usage = getattr(event, "usage_metadata", None)
+            if usage is not None:
+                pt = getattr(usage, "prompt_token_count", None) or 0
+                ct = getattr(usage, "candidates_token_count", None) or 0
+                if pt:
+                    input_tokens = max(input_tokens, pt)
+                if ct:
+                    output_tokens = max(output_tokens, ct)
+            if on_event and event.content and event.content.parts:
+                for part in event.content.parts:
+                    fc = getattr(part, "function_call", None)
+                    if fc and getattr(fc, "name", None):
+                        args = getattr(fc, "args", {}) or {}
+                        args_str = ", ".join(
+                            f"{k}={repr(v)[:60]}" for k, v in args.items()
+                        )
+                        on_event(f"  [dim]→ {fc.name}({args_str})[/dim]")
+            if event.is_final_response() and event.content and event.content.parts:
+                for part in event.content.parts:
+                    if hasattr(part, "text") and part.text:
+                        final_text = part.text
+    except Exception:
+        if on_error:
+            on_error()
+        raise
+    if on_stats:
+        on_stats(input_tokens, output_tokens)
     return final_text
 
 def get_project_structure(root_path: str = ".") -> List[str]:
