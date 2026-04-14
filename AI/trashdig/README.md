@@ -11,6 +11,8 @@ TrashDig is a multi-agent, language-agnostic vulnerability scanner and security 
     *   **Hunter**: Performs autonomous, hypothesis-driven depth-first analysis on prioritized files.
     *   **Validator**: Attempts to generate Proof-of-Concept (PoC) code to verify findings.
 *   **Human-in-the-Loop TUI**: A beautiful terminal interface (built with `Textual`) for reviewing maps, starring high-interest areas, and steering the "Hunt."
+*   **Persistent Intelligence**: Uses a SQLite-backed **ProjectDatabase** to store project profiles, symbols, findings, and a full interaction history, allowing you to resume research across multiple sessions.
+*   **Enhanced Taint Analysis**: Goes beyond single-file grep. Uses **cross-file data flow tracing** and **AST-aware parsing** to track untrusted user input to dangerous sinks across module boundaries.
 *   **Language Agnostic**: Uses `tree-sitter` and `semgrep` to understand and trace patterns across any codebase (Python, JavaScript, Go, C#, and more).
 *   **Automated Findings**: Generates detailed Markdown reports for each vulnerability in a `findings/` directory.
 

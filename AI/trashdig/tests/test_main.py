@@ -37,6 +37,24 @@ def test_main_explicit_root(mock_load_config, mock_app_class, tmp_path):
     )
 
 
+@patch("trashdig.main.load_config")
+@patch("trashdig.main.TrashDigApp")
+def test_main_dump_config(mock_app_class, mock_load_config, capsys):
+    from trashdig.config import Config
+    mock_config = Config(rpm_limit=10)
+    mock_load_config.return_value = mock_config
+
+    with patch("sys.argv", ["trashdig", "--dump-config"]):
+        try:
+            main()
+        except SystemExit:
+            pass
+
+    out, _ = capsys.readouterr()
+    assert 'rpm_limit = 10' in out
+    mock_app_class.assert_not_called()
+
+
 def test_main_invalid_dir(capsys):
     with patch("sys.argv", ["trashdig", "/no/such/path"]):
         try:

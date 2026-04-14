@@ -12,12 +12,12 @@ TrashDig operates as a coordinated team of specialized agents:
     *   **Goal**: Identify "high-value targets" (entry points, sensitive configurations, risky controllers).
 2.  **Hunter Agent**:
     *   **Role**: Deep-Dive Researcher.
-    *   **Tasks**: Performs hypothesis-driven analysis, AST-aware taint analysis, and cross-file symbol tracing.
+    *   **Tasks**: Performs hypothesis-driven analysis, AST-aware taint analysis, and **Cross-File** symbol tracing.
     *   **Goal**: Connect untrusted user input to dangerous sinks.
 3.  **Validator Agent**:
     *   **Role**: Proof-of-Concept Specialist.
     *   **Tasks**: Generates PoC scripts to confirm Hunter's findings.
-    *   **Goal**: Prove exploitability and eliminate false positives.
+    *   **Goal**: Prove exploitability and eliminate false positives using a **containerized** execution environment.
 4.  **TUI (Human-in-the-Loop)**:
     *   **Role**: Steering & Prioritization.
     *   **Interface**: Built with `Textual`.
@@ -28,7 +28,41 @@ TrashDig operates as a coordinated team of specialized agents:
 *   **Language**: Python 3.14+ (using `uv` and `mise`).
 *   **Agent Framework**: Google ADK.
 *   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
+*   **Data Persistence**: SQLite-backed **ProjectDatabase** for session persistence, symbol mapping, and findings.
+*   **Artifact System**: Automatically saves large tool outputs (e.g., long `ripgrep` or `semgrep` results) to `.trashdig/artifacts` and provides a summary to the LLM to maintain context efficiency.
 *   **UI**: `textual` for the TUI, `prompt_toolkit` for the REPL.
+
+## 🛡️ Enhanced Taint Analysis (Phase 3)
+
+The Hunter agent uses a multi-stage approach to trace untrusted data:
+1.  **Intra-file Taint**: Identify local data flow from sources to sinks within a single function or module.
+2.  **Cross-file Tracing**: Use `trace_taint_cross_file` to follow data into callees, resolving parameter names across module boundaries.
+3.  **Semantic Resolution**: Leverages `tree-sitter` to distinguish between simple variable usages and assignments/sinks.
+
+## 🧪 Validation Infrastructure (Phase 1)
+
+The Validator agent executes generated PoCs in an isolated **Docker container** to ensure host safety and consistent environments.
+*   **Tools**: `container_bash_tool`, `bash_tool`.
+*   **Isolation**: No network access by default; read-only project mounts.
+
+## 🛡️ Security & Tool Sandboxing
+
+To ensure the safety of the host system during automated research and PoC execution, TrashDig employs a multi-layered sandboxing strategy for all external tool invocations (e.g., `bash_tool`, `semgrep`, `ripgrep`).
+
+### Sandboxing Architecture
+*   **Abstraction Layer**: A unified `Sandbox` interface (`src/trashdig/sandbox/`) abstracts OS-specific sandboxing technologies.
+*   **Linux Implementation**: Uses `minijail` to provide a restricted execution environment.
+    *   **Filesystem Isolation**: The sandbox only sees the project workspace. The rest of the user's home directory is hidden.
+    *   **Permissions**: Tools run as the current user to maintain file ownership but are restricted from writing outside the workspace.
+    *   **Network**: Network access is enabled by default but can be toggled per-tool.
+    *   **Allowlisting**: An interface is provided to allowlist additional read-only paths. By default, the sandbox includes read-only mounts for standard system binaries and libraries:
+        *   **Binaries & Libs**: `/bin`, `/usr`, `/lib`, `/lib64`, `/sbin`.
+        *   **Dynamic Linker**: `/etc/ld.so.cache`, `/etc/ld.so.conf`, `/etc/ld.so.conf.d`.
+        *   **Networking & OS**: `/etc/resolv.conf`, `/etc/nsswitch.conf`, `/etc/passwd`, `/etc/group`, `/etc/hosts`, `/etc/localtime`.
+        *   **Security & SSL**: `/etc/ssl/certs`, `/etc/ca-certificates`, `/usr/share/ca-certificates`.
+        *   **Terminal & Locales**: `/usr/share/terminfo`, `/usr/lib/locale`.
+        *   **Devices**: `/dev/null`, `/dev/zero`, `/dev/full`, `/dev/random`, `/dev/urandom` (or use `minijail -d`).
+*   **Enforcement**: Controlled by the `require_sandbox` setting in `trashdig.toml` (default: `True`). If disabled, a prominent warning is logged for every unsandboxed execution.
 
 ## 📜 Engineering Standards (The Rules)
 

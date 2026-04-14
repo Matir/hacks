@@ -1,16 +1,18 @@
 import os
 import tomllib
+from unittest.mock import patch
 from trashdig.config import load_config, Config, AgentConfig
 
-def test_load_config_defaults():
+@patch("trashdig.config._find_user_config", return_value=None)
+def test_load_config_defaults(mock_user_config, tmp_path, monkeypatch):
     """Tests loading config when the file doesn't exist."""
-    # Ensure config.toml doesn't exist in the current directory for this test
-    # Or mock the file path
+    monkeypatch.chdir(tmp_path)
     config = load_config("non_existent_config.toml")
     assert config.interface == "textual"
     assert len(config.agents) == 0
 
-def test_load_config_from_file(tmp_path):
+@patch("trashdig.config._find_user_config", return_value=None)
+def test_load_config_from_file(mock_user_config, tmp_path):
     """Tests loading config from a valid TOML file."""
     config_content = """
     [ui]
@@ -33,7 +35,8 @@ def test_load_config_from_file(tmp_path):
     assert config.agents["hunter"].model == "gemini-2.0-flash"
     assert config.agents["hunter"].provider == "google" # Default
 
-def test_load_config_global_defaults(tmp_path):
+@patch("trashdig.config._find_user_config", return_value=None)
+def test_load_config_global_defaults(mock_user_config, tmp_path):
     """Tests loading config with global model and provider defaults."""
     config_content = """
     model = "global-model"
@@ -66,21 +69,22 @@ def test_load_config_global_defaults(tmp_path):
     assert validator_cfg.model == "global-model"
     assert validator_cfg.provider == "global-provider"
 
-def test_load_config_priority(tmp_path, monkeypatch):
-    """Tests that trashdig.toml is preferred over config.toml."""
+@patch("trashdig.config._find_user_config", return_value=None)
+def test_load_config_priority(mock_user_config, tmp_path, monkeypatch):
+    """Tests that .trashdig.toml is preferred over trashdig.toml."""
     monkeypatch.chdir(tmp_path)
-    
-    config_toml = tmp_path / "config.toml"
-    config_toml.write_text('model = "from-config"')
     
     trashdig_toml = tmp_path / "trashdig.toml"
     trashdig_toml.write_text('model = "from-trashdig"')
     
-    # Should load trashdig.toml
+    dot_trashdig_toml = tmp_path / ".trashdig.toml"
+    dot_trashdig_toml.write_text('model = "from-dot-trashdig"')
+    
+    # Should load .trashdig.toml (higher priority in _find_project_config)
+    config = load_config()
+    assert config.default_model == "from-dot-trashdig"
+    
+    # Remove .trashdig.toml, should load trashdig.toml
+    dot_trashdig_toml.unlink()
     config = load_config()
     assert config.default_model == "from-trashdig"
-    
-    # Remove trashdig.toml, should load config.toml
-    trashdig_toml.unlink()
-    config = load_config()
-    assert config.default_model == "from-config"

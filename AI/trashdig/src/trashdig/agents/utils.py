@@ -2,7 +2,6 @@ import os
 import uuid
 from typing import List, Dict, Optional, TYPE_CHECKING, Any
 from pathspec import PathSpec
-from pathspec.patterns import GitWildMatchPattern
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 import google.genai.types as genai_types
@@ -271,7 +270,7 @@ def get_project_structure(root_path: str = ".") -> List[str]:
     spec: Optional[PathSpec] = None
     if os.path.exists(gitignore_path):
         with open(gitignore_path, "r", encoding="utf-8") as f:
-            spec = PathSpec.from_lines(GitWildMatchPattern, f.readlines())
+            spec = PathSpec.from_lines("gitignore", f.readlines())
 
     # Noisy directories to always skip
     noisy_dirs = {".git", "node_modules", "dist", "vendor", "__pycache__", ".venv", "findings", "tests"}

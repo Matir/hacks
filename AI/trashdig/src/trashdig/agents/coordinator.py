@@ -148,6 +148,9 @@ class Coordinator:
 
                 task.status = TaskStatus.COMPLETED
                 self.completed_tasks.append(task)
+                self.log(
+                    f"Finished: [bold green]{task.type.name}[/bold green] ([dim]{task.target}[/dim])"
+                )
             except Exception as e:
                 task.status = TaskStatus.FAILED
                 self.log(f"[red]Task Failed: {str(e)}[/red]")
@@ -332,6 +335,9 @@ class Coordinator:
                 f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}"
             )
 
+        self.log(
+            f"Finished: [bold green]SCAN[/bold green] ([dim]{path}[/dim]) — {len(mapping)} files mapped"
+        )
         return mapping
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
@@ -368,7 +374,6 @@ class Coordinator:
                     f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]"
                 )
 
-            # Persist recursive hypotheses without auto-queueing them.
             for hypo in results.get("hypotheses", []):
                 hypo_task = Hypothesis(
                     type=TaskType.HUNT,
@@ -380,6 +385,10 @@ class Coordinator:
                 self.log(
                     f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}"
                 )
+
+            self.log(
+                f"Finished: [bold green]HUNT[/bold green] ([dim]{target}[/dim]) — {len(results.get('findings', []))} findings found"
+            )
 
         return new_findings
 
@@ -418,5 +427,9 @@ class Coordinator:
             finding.file_path,
             finding.verification_status,
             finding.poc,
+        )
+
+        self.log(
+            f"Finished: [bold green]VERIFY[/bold green] ([dim]{finding.title}[/dim]) — {finding.verification_status}"
         )
         return {"status": finding.verification_status, "poc_code": finding.poc}
