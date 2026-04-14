@@ -2,7 +2,7 @@ import pytest
 import os
 import json
 import tempfile
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch, AsyncMock, ANY
 from trashdig.agents.hunter import HunterAgent, create_hunter_agent, load_prompt
 from trashdig.config import AgentConfig
 
@@ -12,7 +12,7 @@ from trashdig.config import AgentConfig
 @patch("trashdig.agents.hunter.run_prompt", new_callable=AsyncMock)
 async def test_hunter_hunt_vulnerabilities(mock_run_prompt, mock_read):
     mock_read.return_value = "vulnerable code"
-    mock_run_prompt.return_value = json.dumps({
+    text_response = json.dumps({
         "findings": [{
             "title": "SQL Injection",
             "description": "desc",
@@ -28,6 +28,12 @@ async def test_hunter_hunt_vulnerabilities(mock_run_prompt, mock_read):
             "confidence": 0.8,
         }],
     })
+    mock_run_prompt.return_value = {
+        "text": text_response,
+        "input_tokens": 200,
+        "output_tokens": 100,
+        "tool_calls": []
+    }
 
     with tempfile.TemporaryDirectory() as tmpdir:
         findings_dir = os.path.join(tmpdir, "findings")
@@ -53,7 +59,12 @@ async def test_hunter_hunt_vulnerabilities(mock_run_prompt, mock_read):
 @patch("trashdig.agents.hunter.run_prompt", new_callable=AsyncMock)
 async def test_hunter_hunt_vulnerabilities_json_error(mock_run_prompt, mock_read):
     mock_read.return_value = "code"
-    mock_run_prompt.return_value = "not valid json"
+    mock_run_prompt.return_value = {
+        "text": "not valid json",
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "tool_calls": []
+    }
 
     agent = HunterAgent(name="hunter", model="gemini-2.0-flash")
     results = await agent.hunt_vulnerabilities(["test.py"], project_root=".")
@@ -61,6 +72,33 @@ async def test_hunter_hunt_vulnerabilities_json_error(mock_run_prompt, mock_read
     # JSON parse error is swallowed with continue; results come back empty
     assert results["findings"] == []
     assert results["hypotheses"] == []
+
+
+@pytest.mark.anyio
+@patch("trashdig.agents.hunter.read_file_content")
+@patch("trashdig.agents.hunter.run_prompt", new_callable=AsyncMock)
+async def test_hunter_conversation_logging(mock_run_prompt, mock_read):
+    mock_read.return_value = "code"
+    text_response = '{"findings": [], "hypotheses": []}'
+    mock_run_prompt.return_value = {
+        "text": text_response,
+        "input_tokens": 123,
+        "output_tokens": 456,
+        "tool_calls": [{"name": "trace", "args": {}}]
+    }
+
+    mock_log_fn = MagicMock()
+    agent = HunterAgent(name="hunter", model="gemini-2.0-flash")
+    await agent.hunt_vulnerabilities(["test.py"], conversation_log_fn=mock_log_fn)
+
+    mock_log_fn.assert_called_once_with(
+        "hunter",
+        ANY,
+        text_response,
+        [{"name": "trace", "args": {}}],
+        123,
+        456
+    )
 
 
 @patch("trashdig.agents.hunter.load_prompt")

@@ -17,13 +17,21 @@ def main():
         metavar="DIR",
         help="Workspace root directory to scan (default: current directory)",
     )
+    parser.add_argument(
+        "--data-dir",
+        help="Location for internal data (default: {workspace}/.trashdig)",
+    )
     args = parser.parse_args()
 
     workspace_root = os.path.abspath(args.root)
     if not os.path.isdir(workspace_root):
         parser.error(f"Not a directory: {workspace_root}")
 
-    config = load_config()
+    config = load_config(data_dir=args.data_dir, workspace_root=workspace_root)
+    
+    from trashdig.rate_limiter import init_rate_limiter
+    init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)
+
     app = TrashDigApp(config=config, workspace_root=workspace_root)
     app.run()
 

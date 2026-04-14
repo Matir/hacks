@@ -34,14 +34,15 @@ TrashDig operates as a coordinated team of specialized agents:
 
 These rules are foundational. Adhere to them for all modifications:
 
-1.  **Testing**: Always provide unit tests in the `tests/` directory. Aim for high coverage of agent logic.
+1.  **Testing**: Always provide unit tests in the `tests/` directory. All code should be written alongside corresponding tests. Whenever features are added, both the test suite and coverage must be checked; coverage metrics should generally trend upwards. Aim for high coverage of agent logic.
 2.  **Typing**: Strict type hints are mandatory (`pyright`/`mypy` clean).
-3.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.
+3.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration. Prefer `mise` tasks (e.g., `mise run test`, `mise run coverage`, `mise run lint`) for all common development operations to ensure manual execution and agentic workflows remain in-sync.
 4.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
-5.  **Imports**: Always check `pyproject.toml` before adding new dependencies. Ask the user before adding a new top-level import.
+5.  **Imports**: Always check `pyproject.toml` before adding new dependencies. Ensure all imports are placed at the top of the file. Ask the user before adding a new top-level import.
 6.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory. Do not hardcode long prompts.
 7.  **Model Configuration**: Every agent must be configurable via `config.toml`. Support for Google/VertexAI and OpenRouter is required.
 8.  **Security**: Never hardcode API keys. Use environment variables. Ensure `bash_tool` or PoC execution is scoped and safe.
+9.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for LLM returns and inter-agent communication whenever possible.
 
 ## 📂 Contextual References
 

@@ -41,12 +41,22 @@ class ArchaeologistAgent(LlmAgent):
     initial vulnerability hypotheses.
     """
 
-    async def scan_project(self, root_path: str = ".", log_fn=None, stats_fn=None, error_fn=None) -> Dict[str, Any]:
+    async def scan_project(
+        self,
+        root_path: str = ".",
+        log_fn=None,
+        stats_fn=None,
+        error_fn=None,
+        conversation_log_fn=None,
+    ) -> Dict[str, Any]:
         """Scans the project structure and provides summaries.
 
         Args:
             root_path: Root directory of the project to scan.
             log_fn: Optional callable for progress messages (Rich markup supported).
+            stats_fn: Optional callable for token usage tracking.
+            error_fn: Optional callable for LLM error tracking.
+            conversation_log_fn: Optional callable for structured conversation logging.
 
         Returns:
             A dictionary containing:
@@ -88,8 +98,7 @@ class ArchaeologistAgent(LlmAgent):
             "tech_stack": stack_str or "Unknown",
         }
 
-        text = await run_prompt(
-            self,
+        prompt = (
             f"Please analyze this project structure. The project uses the following technologies: {prompt_data['tech_stack']}.\n\n"
             f"Provide a JSON response with two keys:\n"
             f"1. 'mapping': A dictionary mapping file paths to a dictionary containing 'summary' (1 sentence) and "
@@ -99,11 +108,27 @@ class ArchaeologistAgent(LlmAgent):
             f"Flag files as high-value and propose hypotheses if they contain security-critical "
             f"logic relevant to the detected frameworks (e.g., routes, auth, db queries).\n\n"
             f"Only return the JSON object.\n\n"
-            f"File Tree:\n{prompt_data['file_tree']}",
+            f"File Tree:\n{prompt_data['file_tree']}"
+        )
+
+        result = await run_prompt(
+            self,
+            prompt,
             on_event=log_fn,
             on_stats=stats_fn,
             on_error=error_fn,
         )
+        text = result["text"]
+
+        if conversation_log_fn:
+            conversation_log_fn(
+                self.name,
+                prompt,
+                text,
+                result["tool_calls"],
+                result["input_tokens"],
+                result["output_tokens"],
+            )
 
         try:
             cleaned_response = text.strip()

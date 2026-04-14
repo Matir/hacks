@@ -120,9 +120,9 @@ def log_auth_info(config: "Config", logger) -> None:
         if agent_cfg.provider not in referenced:
             referenced[agent_cfg.provider] = config.providers.get(agent_cfg.provider)
 
-    # If no agents are explicitly configured, fall back to the default provider
+    # If no agents are explicitly configured, fall back to the global default provider
     if not referenced:
-        default_provider = "google"
+        default_provider = getattr(config, "default_provider", "google")
         referenced[default_provider] = config.providers.get(default_provider)
 
     for prov_name, prov_cfg in referenced.items():
@@ -136,8 +136,8 @@ async def run_prompt(
     on_event: Optional[callable] = None,
     on_stats: Optional[callable] = None,
     on_error: Optional[callable] = None,
-) -> str:
-    """Run a single text prompt through an ADK agent and return the final response text.
+) -> Dict[str, Any]:
+    """Run a single text prompt through an ADK agent and return structured results.
 
     The ADK Runner requires a session service; we use an in-memory one that is
     discarded after each call so agents remain stateless between invocations.
@@ -147,14 +147,21 @@ async def run_prompt(
         prompt: The user-turn text to send.
         on_event: Optional callable invoked with a formatted string for each
             tool call the agent makes, allowing callers to surface progress.
-        on_stats: Optional callable invoked with (input_tokens, output_tokens)
+        on_stats: Optional callable invoked with (input_tokens, output_tokens, new_msg)
             after a successful run, for tracking cumulative LLM usage.
         on_error: Optional callable invoked with no arguments when the API call
             itself raises an exception.
 
     Returns:
-        The agent's final text response, or an empty string if none was produced.
+        A dict containing:
+            - text: The agent's final text response.
+            - input_tokens: Total prompt tokens used.
+            - output_tokens: Total completion/tool tokens used.
+            - tool_calls: A list of {name, args} dicts for each tool execution.
     """
+    from trashdig.rate_limiter import get_rate_limiter
+    limiter = get_rate_limiter()
+
     session_service = InMemorySessionService()
     runner = Runner(
         agent=agent,
@@ -171,6 +178,11 @@ async def run_prompt(
     final_text = ""
     input_tokens = 0
     output_tokens = 0
+    tool_calls: List[Dict[str, Any]] = []
+
+    if limiter:
+        await limiter.wait_for_request()
+
     try:
         async for event in runner.run_async(
             user_id=user_id,
@@ -178,23 +190,46 @@ async def run_prompt(
             new_message=content,
         ):
             # Extract token usage from usage_metadata if present
+            # ADK events may carry usage_metadata directly, inside 'response', or 'raw_response'
             usage = getattr(event, "usage_metadata", None)
+            if usage is None:
+                usage = getattr(getattr(event, "response", None), "usage_metadata", None)
+            if usage is None:
+                usage = getattr(getattr(event, "raw_response", None), "usageMetadata", None)
+
             if usage is not None:
-                pt = getattr(usage, "prompt_token_count", None) or 0
-                ct = getattr(usage, "candidates_token_count", None) or 0
+                # Robust extraction with fallbacks for both class attributes and dict keys
+                if isinstance(usage, dict):
+                    pt = usage.get("prompt_token_count") or usage.get("promptTokenCount") or 0
+                    ct = usage.get("candidates_token_count") or usage.get("candidatesTokenCount") or 0
+                else:
+                    pt = getattr(usage, "prompt_token_count", 0) or getattr(usage, "promptTokenCount", 0) or 0
+                    ct = getattr(usage, "candidates_token_count", 0) or getattr(usage, "candidatesTokenCount", 0) or 0
+
                 if pt:
                     input_tokens = max(input_tokens, pt)
                 if ct:
                     output_tokens = max(output_tokens, ct)
-            if on_event and event.content and event.content.parts:
+                
+                # Provide intermediate updates for tokens during streaming
+                if on_stats:
+                    try:
+                        on_stats(input_tokens, output_tokens, new_msg=False)
+                    except TypeError:
+                        on_stats(input_tokens, output_tokens)
+
+            if event.content and event.content.parts:
                 for part in event.content.parts:
                     fc = getattr(part, "function_call", None)
                     if fc and getattr(fc, "name", None):
                         args = getattr(fc, "args", {}) or {}
-                        args_str = ", ".join(
-                            f"{k}={repr(v)[:60]}" for k, v in args.items()
-                        )
-                        on_event(f"  [dim]→ {fc.name}({args_str})[/dim]")
+                        tool_calls.append({"name": fc.name, "args": args})
+                        if on_event:
+                            args_str = ", ".join(
+                                f"{k}={repr(v)[:60]}" for k, v in args.items()
+                            )
+                            on_event(f"  [dim]→ {fc.name}({args_str})[/dim]")
+
             if event.is_final_response() and event.content and event.content.parts:
                 for part in event.content.parts:
                     if hasattr(part, "text") and part.text:
@@ -203,9 +238,22 @@ async def run_prompt(
         if on_error:
             on_error()
         raise
+    
+    if limiter:
+        await limiter.update_usage(input_tokens + output_tokens)
+
     if on_stats:
-        on_stats(input_tokens, output_tokens)
-    return final_text
+        try:
+            on_stats(input_tokens, output_tokens, new_msg=True)
+        except TypeError:
+            on_stats(input_tokens, output_tokens)
+
+    return {
+        "text": final_text,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "tool_calls": tool_calls,
+    }
 
 def get_project_structure(root_path: str = ".") -> List[str]:
     """Walks the project directory and returns a list of files, respecting .gitignore.
@@ -299,4 +347,3 @@ def detect_frameworks(file_list: List[str], project_root: str = ".") -> Dict[str
                             stack[category].append(name)
                             
     return stack
-

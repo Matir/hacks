@@ -32,3 +32,36 @@ def test_load_config_from_file(tmp_path):
     assert config.agents["archaeologist"].provider == "openrouter"
     assert config.agents["hunter"].model == "gemini-2.0-flash"
     assert config.agents["hunter"].provider == "google" # Default
+
+def test_load_config_global_defaults(tmp_path):
+    """Tests loading config with global model and provider defaults."""
+    config_content = """
+    model = "global-model"
+    provider = "global-provider"
+
+    [agents.archaeologist]
+    # Should use global defaults
+    
+    [agents.hunter]
+    model = "hunter-model"
+    # Should use global provider default
+    """
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(config_content)
+
+    config = load_config(str(config_file))
+    assert config.default_model == "global-model"
+    assert config.default_provider == "global-provider"
+    
+    # Check archaeologist (inherited)
+    assert config.agents["archaeologist"].model == "global-model"
+    assert config.agents["archaeologist"].provider == "global-provider"
+    
+    # Check hunter (partial override)
+    assert config.agents["hunter"].model == "hunter-model"
+    assert config.agents["hunter"].provider == "global-provider"
+    
+    # Check get_agent_config for non-existent agent
+    validator_cfg = config.get_agent_config("validator")
+    assert validator_cfg.model == "global-model"
+    assert validator_cfg.provider == "global-provider"

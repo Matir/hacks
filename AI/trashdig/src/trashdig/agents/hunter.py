@@ -1,6 +1,6 @@
 import os
 import json
-from typing import List
+from typing import List, Dict, Any
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
@@ -38,7 +38,13 @@ class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
 
     async def hunt_vulnerabilities(
-        self, targets: List[str], project_root: str = ".", log_fn=None, stats_fn=None, error_fn=None
+        self,
+        targets: List[str],
+        project_root: str = ".",
+        log_fn=None,
+        stats_fn=None,
+        error_fn=None,
+        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Deep-dive into specific files to identify vulnerabilities.
 
@@ -46,6 +52,9 @@ class HunterAgent(LlmAgent):
             targets: List of file paths to analyze.
             project_root: Root directory of the project.
             log_fn: Optional callable for progress messages (Rich markup supported).
+            stats_fn: Optional callable for token usage tracking.
+            error_fn: Optional callable for LLM error tracking.
+            conversation_log_fn: Optional callable for structured conversation logging.
 
         Returns:
             A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
@@ -65,8 +74,7 @@ class HunterAgent(LlmAgent):
             )
             content = read_file_content(os.path.join(project_root, target))
 
-            text = await run_prompt(
-                self,
+            prompt = (
                 f"Analyze the following file for potential security vulnerabilities:\n\n"
                 f"File: {target}\n"
                 f"Content:\n{content}\n\n"
@@ -76,11 +84,27 @@ class HunterAgent(LlmAgent):
                 f"2. 'hypotheses': A list of follow-up tasks if you need to trace data flow into other files:\n"
                 f"   - target: (The file path or symbol to investigate next)\n"
                 f"   - description: (Why you need to look there)\n"
-                f"   - confidence: (0.0 to 1.0)\n",
+                f"   - confidence: (0.0 to 1.0)\n"
+            )
+
+            result = await run_prompt(
+                self,
+                prompt,
                 on_event=log_fn,
                 on_stats=stats_fn,
                 on_error=error_fn,
             )
+            text = result["text"]
+
+            if conversation_log_fn:
+                conversation_log_fn(
+                    self.name,
+                    prompt,
+                    text,
+                    result["tool_calls"],
+                    result["input_tokens"],
+                    result["output_tokens"],
+                )
 
             try:
                 cleaned_response = text.strip()

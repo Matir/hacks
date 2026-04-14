@@ -75,6 +75,18 @@ CREATE TABLE IF NOT EXISTS tool_cache (
     created_at   TEXT    NOT NULL,
     UNIQUE(project_path, tool_name, args_hash)
 );
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_path TEXT    NOT NULL,
+    agent_name   TEXT    NOT NULL,
+    prompt       TEXT    NOT NULL,
+    response     TEXT,
+    tool_calls   TEXT,   -- JSON array of {name: str, args: dict}
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    timestamp    TEXT    NOT NULL
+);
 """
 
 
@@ -483,3 +495,48 @@ class ProjectDatabase:
                 (project_path, tool_name, _args_hash(args)),
             ).fetchone()
         return row["output"] if row else None
+
+    # ------------------------------------------------------------------
+    # Conversations
+    # ------------------------------------------------------------------
+
+    def log_conversation(
+        self,
+        project_path: str,
+        agent_name: str,
+        prompt: str,
+        response: Optional[str],
+        tool_calls: List[Dict[str, Any]],
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Persist a structured conversation turn to the database.
+
+        Args:
+            project_path: The root directory of the scanned project.
+            agent_name: The name of the agent that performed the interaction.
+            prompt: The text prompt sent to the LLM.
+            response: The final text response from the LLM.
+            tool_calls: A list of dicts {name: str, args: dict} for each tool call.
+            input_tokens: Number of prompt tokens used.
+            output_tokens: Number of response/tool-call tokens used.
+        """
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO conversations (
+                    project_path, agent_name, prompt, response, tool_calls,
+                    input_tokens, output_tokens, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    project_path,
+                    agent_name,
+                    prompt,
+                    response,
+                    json.dumps(tool_calls, default=str),
+                    input_tokens,
+                    output_tokens,
+                    _now(),
+                ),
+            )

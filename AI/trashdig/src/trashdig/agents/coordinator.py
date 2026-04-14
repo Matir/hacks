@@ -23,10 +23,10 @@ class Coordinator:
         self.config = config
         self.project_path = project_path
         self.archaeologist = create_archaeologist_agent(
-            config.agents.get("archaeologist")
+            config.get_agent_config("archaeologist")
         )
-        self.hunter = create_hunter_agent(config.agents.get("hunter"))
-        self.validator = create_validator_agent(config.agents.get("validator"))
+        self.hunter = create_hunter_agent(config.get_agent_config("hunter"))
+        self.validator = create_validator_agent(config.get_agent_config("validator"))
 
         self.task_queue: List[Task] = []
         self.completed_tasks: List[Task] = []
@@ -34,11 +34,17 @@ class Coordinator:
         self.tech_stack: str = ""
         self.findings: List[Finding] = []
 
-        # LLM usage counters
+        # LLM usage counters (cumulative)
         self.total_messages: int = 0
         self.input_tokens: int = 0
         self.output_tokens: int = 0
         self.llm_errors: int = 0
+
+        # Internal trackers for live streaming updates
+        self._total_input_tokens: int = 0
+        self._total_output_tokens: int = 0
+        self._current_msg_input: int = 0
+        self._current_msg_output: int = 0
 
         # Persistent knowledge store
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
@@ -48,11 +54,28 @@ class Coordinator:
         self.on_task_event: Optional[Callable[[str], None]] = None
         self.on_stats_event: Optional[Callable[[], None]] = None
 
-    def _on_stats(self, input_tokens: int, output_tokens: int) -> None:
-        """Accumulate LLM usage stats from a single run_prompt call."""
-        self.total_messages += 1
-        self.input_tokens += input_tokens
-        self.output_tokens += output_tokens
+    def _on_stats(self, input_tokens: int, output_tokens: int, new_msg: bool = False) -> None:
+        """Accumulate LLM usage stats from a single run_prompt call.
+
+        Args:
+            input_tokens: Latest token count for the current request.
+            output_tokens: Latest token count for the current request.
+            new_msg: Whether this is the final update for a message.
+        """
+        if new_msg:
+            self.total_messages += 1
+            self._total_input_tokens += input_tokens
+            self._total_output_tokens += output_tokens
+            self._current_msg_input = 0
+            self._current_msg_output = 0
+        else:
+            self._current_msg_input = input_tokens
+            self._current_msg_output = output_tokens
+
+        # Exported cumulative totals for the UI
+        self.input_tokens = self._total_input_tokens + self._current_msg_input
+        self.output_tokens = self._total_output_tokens + self._current_msg_output
+
         if self.on_stats_event:
             self.on_stats_event()
 
@@ -61,6 +84,26 @@ class Coordinator:
         self.llm_errors += 1
         if self.on_stats_event:
             self.on_stats_event()
+
+    def _on_conversation(
+        self,
+        agent_name: str,
+        prompt: str,
+        response: Optional[str],
+        tool_calls: List[Dict[str, Any]],
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Persist a conversation turn to the database."""
+        self.db.log_conversation(
+            self.project_path,
+            agent_name,
+            prompt,
+            response,
+            tool_calls,
+            input_tokens,
+            output_tokens,
+        )
 
     def log(self, message: str) -> None:
         """Logs a message through the event callback.
@@ -115,7 +158,12 @@ class Coordinator:
         Args:
             task: The scan task to handle.
         """
-        results = await self.archaeologist.scan_project(task.target, stats_fn=self._on_stats, error_fn=self._on_llm_error)
+        results = await self.archaeologist.scan_project(
+            task.target,
+            stats_fn=self._on_stats,
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
+        )
 
         # Handle new format {"mapping": ..., "hypotheses": ...}
         mapping: Dict[str, Any] = results.get("mapping", results)
@@ -157,7 +205,11 @@ class Coordinator:
             self.db.update_hypothesis_status(task.id, "running")
 
         results = await self.hunter.hunt_vulnerabilities(
-            [task.target], project_root=".", stats_fn=self._on_stats, error_fn=self._on_llm_error
+            [task.target],
+            project_root=".",
+            stats_fn=self._on_stats,
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
         )
 
         # Process findings
@@ -209,7 +261,12 @@ class Coordinator:
             return
 
         result = await self.validator.verify_finding(
-            finding, self.tech_stack, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error
+            finding,
+            self.tech_stack,
+            log_fn=self.log,
+            stats_fn=self._on_stats,
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
         )
         if result.get("status"):
             finding.verification_status = result["status"]
@@ -244,7 +301,13 @@ class Coordinator:
         Returns:
             The scan results mapping (file path → {summary, is_high_value}).
         """
-        results = await self.archaeologist.scan_project(path, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error)
+        results = await self.archaeologist.scan_project(
+            path,
+            log_fn=self.log,
+            stats_fn=self._on_stats,
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
+        )
 
         mapping: Dict[str, Any] = results.get("mapping", results)
         hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
@@ -289,7 +352,12 @@ class Coordinator:
         for target in targets:
             self.log(f"Hunting: [cyan]{target}[/cyan]")
             results = await self.hunter.hunt_vulnerabilities(
-                [target], project_root=path, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error
+                [target],
+                project_root=path,
+                log_fn=self.log,
+                stats_fn=self._on_stats,
+                error_fn=self._on_llm_error,
+                conversation_log_fn=self._on_conversation,
             )
 
             for finding in results.get("findings", []):
@@ -327,7 +395,12 @@ class Coordinator:
             A dictionary with 'status' and 'poc_code'.
         """
         result = await self.validator.verify_finding(
-            finding, self.tech_stack, log_fn=self.log, stats_fn=self._on_stats, error_fn=self._on_llm_error
+            finding,
+            self.tech_stack,
+            log_fn=self.log,
+            stats_fn=self._on_stats,
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
         )
         if result.get("status"):
             finding.verification_status = result["status"]

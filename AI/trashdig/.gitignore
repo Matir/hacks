@@ -12,3 +12,5 @@ __pycache__/
 findings/
 trashdig.db
 MagicMock
+.env
+.coverage

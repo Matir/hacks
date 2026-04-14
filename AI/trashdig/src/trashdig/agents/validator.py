@@ -19,7 +19,13 @@ class ValidatorAgent(LlmAgent):
     """Validator Agent for TrashDig."""
 
     async def verify_finding(
-        self, finding: Finding, tech_stack: str = "", log_fn=None, stats_fn=None, error_fn=None
+        self,
+        finding: Finding,
+        tech_stack: str = "",
+        log_fn=None,
+        stats_fn=None,
+        error_fn=None,
+        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Attempts to verify a potential finding by running a PoC.
 
@@ -27,6 +33,9 @@ class ValidatorAgent(LlmAgent):
             finding: The potential vulnerability to verify.
             tech_stack: The detected project tech stack.
             log_fn: Optional callable for progress messages (Rich markup supported).
+            stats_fn: Optional callable for token usage tracking.
+            error_fn: Optional callable for LLM error tracking.
+            conversation_log_fn: Optional callable for structured conversation logging.
 
         Returns:
             A dictionary with the verification results (status, poc_code, output).
@@ -44,8 +53,7 @@ class ValidatorAgent(LlmAgent):
         file_content = read_file_content(finding.file_path)
         _log("[bold]Validator:[/bold] generating and executing PoC…")
 
-        text = await run_prompt(
-            self,
+        prompt = (
             f"Please verify this potential finding:\n\n"
             f"Title: {finding.title}\n"
             f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
@@ -56,11 +64,27 @@ class ValidatorAgent(LlmAgent):
             f"2. Execute the PoC using `container_bash_tool`. This tool runs the command inside a temporary Docker container.\n"
             f"3. Analyze the results.\n"
             f"4. Provide a JSON response with: 'status' (Verified/False Positive), "
-            f"'poc_code' (the script/command used), and 'reasoning' (why it was confirmed or refuted).",
+            f"'poc_code' (the script/command used), and 'reasoning' (why it was confirmed or refuted)."
+        )
+
+        result = await run_prompt(
+            self,
+            prompt,
             on_event=log_fn,
             on_stats=stats_fn,
             on_error=error_fn,
         )
+        text = result["text"]
+
+        if conversation_log_fn:
+            conversation_log_fn(
+                self.name,
+                prompt,
+                text,
+                result["tool_calls"],
+                result["input_tokens"],
+                result["output_tokens"],
+            )
 
         try:
             cleaned_response = text.strip()

@@ -295,3 +295,32 @@ def test_cache_scoped_by_project():
 
         assert db.get_cached_tool_output("/proj-a", "ripgrep_search", args) == "result-a"
         assert db.get_cached_tool_output("/proj-b", "ripgrep_search", args) == "result-b"
+
+
+# ---------------------------------------------------------------------------
+# Conversations
+# ---------------------------------------------------------------------------
+
+def test_log_conversation():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = _make_db(tmp)
+        db.log_conversation(
+            "/proj",
+            "test_agent",
+            "test prompt",
+            "test response",
+            [{"name": "tool", "args": {"a": 1}}],
+            100,
+            50,
+        )
+
+        with db._connect() as conn:
+            row = conn.execute("SELECT * FROM conversations WHERE agent_name = 'test_agent'").fetchone()
+            assert row is not None
+            assert row["project_path"] == "/proj"
+            assert row["prompt"] == "test prompt"
+            assert row["response"] == "test response"
+            assert "tool" in row["tool_calls"]
+            assert row["input_tokens"] == 100
+            assert row["output_tokens"] == 50
+            assert "timestamp" in row.keys()

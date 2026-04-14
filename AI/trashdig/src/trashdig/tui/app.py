@@ -1,14 +1,12 @@
 import os
 import logging
 import traceback
-from datetime import datetime
 from typing import List, Dict, Any
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Tree, Static, Label, Input, RichLog
 from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
 from textual.events import Key
-from textual.worker import WorkerFailed
 from textual_autocomplete import AutoComplete, DropdownItem
 
 from trashdig.agents.coordinator import Coordinator
@@ -285,13 +283,13 @@ class TrashDigApp(App):
         self.config = config or Config()
         self.workspace_root = workspace_root
         self._phase = "Idle"
-        log_path = os.path.join(workspace_root, ".trashdig", "trashdig.log")
+        log_path = os.path.join(self.config.data_dir, "trashdig.log")
         self._file_log = _setup_file_logger(log_path)
         self._file_log.info("Session started — workspace: %s", workspace_root)
         log_auth_info(self.config, self._file_log)
         self.coordinator = Coordinator(self.config, project_path=workspace_root)
-        self.coordinator.on_task_event = self._on_coordinator_log
-        self.coordinator.on_stats_event = self.refresh_status
+        self.coordinator.on_task_event = lambda msg: self.call_from_thread(self._on_coordinator_log, msg)
+        self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)
         self.prioritized_targets: List[str] = []
 
     def _log(self, level: str, message: str) -> None:
@@ -323,7 +321,8 @@ class TrashDigApp(App):
 
     def refresh_status(self) -> None:
         try:
-            self.query_one(StatusPane).refresh_status(
+            status_pane = self.query_one(StatusPane)
+            status_pane.refresh_status(
                 workspace_root=self.workspace_root,
                 phase=self._phase,
                 tech_stack=self.coordinator.tech_stack,
@@ -337,8 +336,9 @@ class TrashDigApp(App):
                 output_tokens=self.coordinator.output_tokens,
                 llm_errors=self.coordinator.llm_errors,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            if hasattr(self, "_file_log"):
+                self._file_log.error("refresh_status error: %s", e)
 
     def compose(self) -> ComposeResult:
         yield Header()

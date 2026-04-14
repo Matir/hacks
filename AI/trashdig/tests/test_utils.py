@@ -66,7 +66,8 @@ def test_detect_frameworks_no_files():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.anyio
-async def test_run_prompt_returns_final_text():
+@patch("trashdig.rate_limiter.get_rate_limiter", return_value=None)
+async def test_run_prompt_returns_final_text(mock_limiter):
     """run_prompt collects the final response text from the ADK event stream."""
     import google.genai.types as types
 
@@ -78,6 +79,7 @@ async def test_run_prompt_returns_final_text():
     mock_event = MagicMock()
     mock_event.is_final_response.return_value = True
     mock_event.content = mock_content
+    mock_event.usage_metadata = MagicMock(prompt_token_count=10, candidates_token_count=5)
 
     async def fake_run_async(**kwargs):
         yield mock_event
@@ -99,14 +101,21 @@ async def test_run_prompt_returns_final_text():
 
         result = await run_prompt(mock_agent, "do something")
 
-    assert result == "hello from agent"
+    assert result["text"] == "hello from agent"
+    assert result["input_tokens"] == 10
+    assert result["output_tokens"] == 5
 
 
 @pytest.mark.anyio
-async def test_run_prompt_no_final_event_returns_empty():
+@patch("trashdig.rate_limiter.get_rate_limiter", return_value=None)
+async def test_run_prompt_no_final_event_returns_empty(mock_limiter):
     """run_prompt returns empty string when no final response event is produced."""
     mock_event = MagicMock()
     mock_event.is_final_response.return_value = False
+    mock_event.usage_metadata = None
+    mock_event.response = None
+    mock_event.raw_response = None
+    mock_event.content = None
 
     async def fake_run_async(**kwargs):
         yield mock_event
@@ -128,4 +137,4 @@ async def test_run_prompt_no_final_event_returns_empty():
 
         result = await run_prompt(mock_agent, "do something")
 
-    assert result == ""
+    assert result["text"] == ""

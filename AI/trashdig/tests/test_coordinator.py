@@ -132,3 +132,17 @@ async def test_coordinator_api_methods(mock_create_val, mock_create_hunt, mock_c
         verify_res = await coord.verify_finding(finding)
         assert verify_res["status"] == "Verified"
         assert finding.verification_status == "Verified"
+
+@patch("trashdig.agents.coordinator.create_archaeologist_agent")
+@patch("trashdig.agents.coordinator.create_hunter_agent")
+@patch("trashdig.agents.coordinator.create_validator_agent")
+def test_coordinator_on_conversation(mock_create_val, mock_create_hunt, mock_create_arch, mock_config):
+    mock_db = MagicMock()
+    with patch("trashdig.agents.coordinator.ProjectDatabase", return_value=mock_db):
+        coord = Coordinator(mock_config)
+        coord._on_conversation(
+            "test_agent", "test prompt", "test response", [{"name": "tool"}], 10, 20
+        )
+        mock_db.log_conversation.assert_called_once_with(
+            coord.project_path, "test_agent", "test prompt", "test response", [{"name": "tool"}], 10, 20
+        )

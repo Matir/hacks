@@ -42,7 +42,12 @@ async def test_archaeologist_malformed_json():
         with patch("trashdig.agents.archaeologist.run_prompt", new_callable=AsyncMock) as mock_run_prompt, \
              patch("trashdig.agents.archaeologist.get_project_structure", return_value=[]), \
              patch("trashdig.agents.archaeologist.detect_frameworks", return_value={}):
-            mock_run_prompt.return_value = "This is not JSON"
+            mock_run_prompt.return_value = {
+                "text": "This is not JSON",
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "tool_calls": []
+            }
             result = await agent.scan_project(".")
             assert result["error"] == "Failed to parse Archaeologist response"
 

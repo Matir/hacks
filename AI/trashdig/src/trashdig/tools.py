@@ -622,7 +622,7 @@ def trace_taint_cross_file(
     _trace(variable, source_file, depth=0)
 
     report_lines.append("\n" + "=" * 60)
-    has_sink = any("*** SINK ***" in l for l in report_lines)
+    has_sink = any("*** SINK ***" in line for line in report_lines)
     report_lines.append(
         "RESULT: POTENTIAL VULNERABILITY FOUND" if has_sink else "RESULT: No sinks reached within depth limit"
     )
