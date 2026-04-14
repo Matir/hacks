@@ -1,36 +1,70 @@
 import os
-from typing import Dict, Any, List, Optional, Callable
-from trashdig.agents.archaeologist import create_archaeologist_agent
+from typing import Dict, Any, List, Optional, Callable, Set
+import asyncio
+from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.validator import create_validator_agent
+from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.types import Task, TaskType, TaskStatus, Hypothesis
 from trashdig.config import Config
-from trashdig.database import ProjectDatabase
+from trashdig.services.database import ProjectDatabase
+from trashdig.services.cost import CostTracker
+from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
+from trashdig.engine.engine import Engine
 
 
 class Coordinator:
     """Coordinatates the hypothesis-driven workflow between agents."""
 
-    def __init__(self, config: Config, project_path: str = "."):
+    def __init__(
+        self,
+        config: Config,
+        project_path: str = ".",
+        on_confirm: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
+    ):
         """Initializes the Coordinator with the given configuration.
 
         Args:
             config: The project configuration object.
             project_path: Root directory of the project being scanned.
                 Used as the key for all database records.
+            on_confirm: Optional callback for tool call confirmation.
         """
         self.config = config
         self.project_path = project_path
-        self.archaeologist = create_archaeologist_agent(
-            config.get_agent_config("archaeologist")
+        self.permission_manager = PermissionManager(config, on_confirm=on_confirm)
+
+        self.stack_scout = create_stack_scout_agent(
+            config.get_agent_config("stack_scout") or config.get_agent_config("archaeologist"),
+            permission_manager=self.permission_manager,
         )
-        self.hunter = create_hunter_agent(config.get_agent_config("hunter"))
-        self.validator = create_validator_agent(config.get_agent_config("validator"))
+        self.web_route_mapper = create_web_route_mapper_agent(
+            config.get_agent_config("web_route_mapper"),
+            permission_manager=self.permission_manager,
+        )
+        self.hunter = create_hunter_agent(
+            config.get_agent_config("hunter"),
+            permission_manager=self.permission_manager,
+        )
+        self.skeptic = create_skeptic_agent(
+            config.get_agent_config("skeptic"),
+            permission_manager=self.permission_manager,
+        )
+        self.validator = create_validator_agent(
+            config.get_agent_config("validator"),
+            permission_manager=self.permission_manager,
+        )
+
+        self.engine = Engine()
+        self.cost_tracker = CostTracker()
+        self.semaphore = asyncio.Semaphore(config.max_parallel_tasks)
+        self.active_tasks: Set[asyncio.Task] = set()
 
         self.task_queue: List[Task] = []
         self.completed_tasks: List[Task] = []
         self.scan_results: Dict[str, Any] = {}
+        self.attack_surface: List[Dict[str, Any]] = []
         self.tech_stack: str = ""
         self.findings: List[Finding] = []
 
@@ -54,13 +88,20 @@ class Coordinator:
         self.on_task_event: Optional[Callable[[str], None]] = None
         self.on_stats_event: Optional[Callable[[], None]] = None
 
-    def _on_stats(self, input_tokens: int, output_tokens: int, new_msg: bool = False) -> None:
+    def _on_stats(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        new_msg: bool = False,
+        model_name: Optional[str] = None,
+    ) -> None:
         """Accumulate LLM usage stats from a single run_prompt call.
 
         Args:
             input_tokens: Latest token count for the current request.
             output_tokens: Latest token count for the current request.
             new_msg: Whether this is the final update for a message.
+            model_name: The name of the model used for this request.
         """
         if new_msg:
             self.total_messages += 1
@@ -68,6 +109,9 @@ class Coordinator:
             self._total_output_tokens += output_tokens
             self._current_msg_input = 0
             self._current_msg_output = 0
+
+            if model_name:
+                self.cost_tracker.record_usage(model_name, input_tokens, output_tokens)
         else:
             self._current_msg_input = input_tokens
             self._current_msg_output = output_tokens
@@ -78,6 +122,19 @@ class Coordinator:
 
         if self.on_stats_event:
             self.on_stats_event()
+
+    def _get_stats_fn(self, agent: Any) -> Callable[[int, int, bool], None]:
+        """Creates a stats callback for a specific agent.
+
+        Args:
+            agent: The agent instance to wrap.
+
+        Returns:
+            A callable that matches the Engine's on_stats signature.
+        """
+        return lambda in_t, out_t, final: self._on_stats(
+            in_t, out_t, final, model_name=getattr(agent, "model", None)
+        )
 
     def _on_llm_error(self) -> None:
         """Increment the LLM error counter."""
@@ -131,8 +188,30 @@ class Coordinator:
         This loop processes the task queue until it is empty, delegating tasks
         to the appropriate agents based on the task type.
         """
-        while self.task_queue:
-            task = self.task_queue.pop(0)
+        while self.task_queue or self.active_tasks:
+            # While we have room and tasks, spawn workers
+            while self.task_queue and len(self.active_tasks) < self.config.max_parallel_tasks:
+                task = self.task_queue.pop(0)
+                worker = asyncio.create_task(self._execute_task_with_semaphore(task))
+                self.active_tasks.add(worker)
+                worker.add_done_callback(self.active_tasks.discard)
+
+            if self.active_tasks:
+                # Wait for at least one task to finish before checking the queue again
+                await asyncio.wait(self.active_tasks, return_when=asyncio.FIRST_COMPLETED)
+            elif self.task_queue:
+                # This should not happen given the inner while loop, but for safety:
+                continue
+            else:
+                break
+
+    async def _execute_task_with_semaphore(self, task: Task) -> None:
+        """Worker wrapper that acquires the semaphore and executes a task.
+
+        Args:
+            task: The task to execute.
+        """
+        async with self.semaphore:
             task.status = TaskStatus.RUNNING
             self.log(
                 f"Executing: [bold blue]{task.type.name}[/bold blue] ([dim]{task.target}[/dim])"
@@ -156,28 +235,38 @@ class Coordinator:
                 self.log(f"[red]Task Failed: {str(e)}[/red]")
 
     async def _handle_scan(self, task: Task) -> None:
-        """Runs the Archaeologist scan.
+        """Runs the Recon (StackScout and WebRouteMapper) scan.
 
         Args:
             task: The scan task to handle.
         """
-        results = await self.archaeologist.scan_project(
+        results = await self.stack_scout.scan(
             task.target,
-            stats_fn=self._on_stats,
+            engine=self.engine,
+            stats_fn=self._get_stats_fn(self.stack_scout),
             error_fn=self._on_llm_error,
             conversation_log_fn=self._on_conversation,
         )
 
-        # Handle new format {"mapping": ..., "hypotheses": ...}
-        mapping: Dict[str, Any] = results.get("mapping", results)
+        mapping: Dict[str, Any] = results.get("mapping", {})
         hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
-
+        self.tech_stack = results.get("tech_stack", "")
         self.scan_results = mapping
-        if "tech_stack" in results:
-            self.tech_stack = results["tech_stack"]
+
+        # If it's a web app, also run WebRouteMapper
+        if results.get("is_web_app"):
+            route_results = await self.web_route_mapper.map_routes(
+                task.target,
+                engine=self.engine,
+                stats_fn=self._get_stats_fn(self.web_route_mapper),
+                error_fn=self._on_llm_error,
+                conversation_log_fn=self._on_conversation,
+            )
+            self.attack_surface = route_results.get("attack_surface", [])
 
         # Persist the project profile
-        self.db.save_project_profile(self.project_path, self.tech_stack, mapping)
+        full_profile = {"mapping": self.scan_results, "attack_surface": self.attack_surface}
+        self.db.save_project_profile(self.project_path, self.tech_stack, full_profile)
 
         # Spawn HUNT tasks from hypotheses
         for hypo in hypotheses:
@@ -210,7 +299,8 @@ class Coordinator:
         results = await self.hunter.hunt_vulnerabilities(
             [task.target],
             project_root=".",
-            stats_fn=self._on_stats,
+            engine=self.engine,
+            stats_fn=self._get_stats_fn(self.hunter),
             error_fn=self._on_llm_error,
             conversation_log_fn=self._on_conversation,
         )
@@ -254,7 +344,7 @@ class Coordinator:
             self.spawn_task(hypo_task)
 
     async def _handle_verify(self, task: Task) -> None:
-        """Runs the Validator on a finding.
+        """Runs the Skeptic and Validator on a finding.
 
         Args:
             task: The verification task to handle.
@@ -263,11 +353,39 @@ class Coordinator:
         if not finding:
             return
 
+        # 1. Run Skeptic
+        skeptic_result = await self.skeptic.debunk_finding(
+            finding,
+            self.project_path,
+            engine=self.engine,
+            log_fn=self.log,
+            stats_fn=self._get_stats_fn(self.skeptic),
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
+        )
+
+        if not skeptic_result.get("is_valid", True):
+            finding.verification_status = "Debunked"
+            finding.save(os.path.join(self.project_path, "findings"))
+            self.db.update_finding_status(
+                self.project_path,
+                finding.title,
+                finding.file_path,
+                finding.verification_status,
+                "",
+            )
+            self.log(
+                f"Skeptic Result: [bold red]Debunked[/bold red]"
+            )
+            return
+
+        # 2. Run Validator
         result = await self.validator.verify_finding(
             finding,
             self.tech_stack,
+            engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._on_stats,
+            stats_fn=self._get_stats_fn(self.validator),
             error_fn=self._on_llm_error,
             conversation_log_fn=self._on_conversation,
         )
@@ -291,38 +409,48 @@ class Coordinator:
 
     # TUI-facing methods — call agents directly without touching the task queue,
     # so each phase stays isolated and the user controls when to advance.
-    async def run_archaeologist(self, path: str = ".") -> Dict[str, Any]:
-        """Run the Archaeologist scan and return the project mapping.
+    async def run_recon(self, path: str = ".") -> Dict[str, Any]:
+        """Run the Recon (StackScout and WebRouteMapper) scan.
 
-        Calls the Archaeologist agent directly, without enqueuing follow-on HUNT
-        tasks.  Hypotheses are persisted to the database so the user can review
-        the project map and decide which targets to hunt.
+        Calls the StackScout agent directly, and if a web application is 
+        detected, also calls WebRouteMapper.  Hypotheses are persisted.
 
         Args:
             path: The project path to scan.
 
         Returns:
-            The scan results mapping (file path → {summary, is_high_value}).
+            The file mapping.
         """
-        results = await self.archaeologist.scan_project(
+        results = await self.stack_scout.scan(
             path,
+            engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._on_stats,
+            stats_fn=self._get_stats_fn(self.stack_scout),
             error_fn=self._on_llm_error,
             conversation_log_fn=self._on_conversation,
         )
 
-        mapping: Dict[str, Any] = results.get("mapping", results)
+        mapping: Dict[str, Any] = results.get("mapping", {})
         hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
-
+        self.tech_stack = results.get("tech_stack", "")
         self.scan_results = mapping
-        if "tech_stack" in results:
-            self.tech_stack = results["tech_stack"]
 
-        self.db.save_project_profile(self.project_path, self.tech_stack, mapping)
+        # If it's a web app, also run WebRouteMapper
+        if results.get("is_web_app"):
+            route_results = await self.web_route_mapper.map_routes(
+                path,
+                engine=self.engine,
+                log_fn=self.log,
+                stats_fn=self._get_stats_fn(self.web_route_mapper),
+                error_fn=self._on_llm_error,
+                conversation_log_fn=self._on_conversation,
+            )
+            self.attack_surface = route_results.get("attack_surface", [])
 
-        # Persist hypotheses for later use, but do not queue HUNT tasks —
-        # the user decides which targets to hunt via the TUI.
+        full_profile = {"mapping": self.scan_results, "attack_surface": self.attack_surface}
+        self.db.save_project_profile(self.project_path, self.tech_stack, full_profile)
+
+        # Persist hypotheses
         for hypo in hypotheses:
             hypo_task = Hypothesis(
                 type=TaskType.HUNT,
@@ -336,9 +464,9 @@ class Coordinator:
             )
 
         self.log(
-            f"Finished: [bold green]SCAN[/bold green] ([dim]{path}[/dim]) — {len(mapping)} files mapped"
+            f"Finished: [bold green]RECON[/bold green] ([dim]{path}[/dim]) — {len(mapping)} files mapped"
         )
-        return mapping
+        return self.scan_results
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
         """Run the Hunter on a list of targets and return new findings.
@@ -360,8 +488,9 @@ class Coordinator:
             results = await self.hunter.hunt_vulnerabilities(
                 [target],
                 project_root=path,
+                engine=self.engine,
                 log_fn=self.log,
-                stats_fn=self._on_stats,
+                stats_fn=self._get_stats_fn(self.hunter),
                 error_fn=self._on_llm_error,
                 conversation_log_fn=self._on_conversation,
             )
@@ -395,7 +524,7 @@ class Coordinator:
     async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
         """Verify a single finding and update its status in place.
 
-        Calls the Validator agent directly without using the task queue.
+        Calls the Skeptic and Validator agents directly without using the task queue.
 
         Args:
             finding: The finding object to verify.
@@ -403,11 +532,39 @@ class Coordinator:
         Returns:
             A dictionary with 'status' and 'poc_code'.
         """
+        # 1. Run Skeptic
+        skeptic_result = await self.skeptic.debunk_finding(
+            finding,
+            self.project_path,
+            engine=self.engine,
+            log_fn=self.log,
+            stats_fn=self._get_stats_fn(self.skeptic),
+            error_fn=self._on_llm_error,
+            conversation_log_fn=self._on_conversation,
+        )
+
+        if not skeptic_result.get("is_valid", True):
+            finding.verification_status = "Debunked"
+            finding.save(os.path.join(self.project_path, "findings"))
+            self.db.update_finding_status(
+                self.project_path,
+                finding.title,
+                finding.file_path,
+                finding.verification_status,
+                "",
+            )
+            self.log(
+                f"Skeptic Result: [bold red]Debunked[/bold red]"
+            )
+            return {"status": "Debunked", "poc_code": ""}
+
+        # 2. Run Validator
         result = await self.validator.verify_finding(
             finding,
             self.tech_stack,
+            engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._on_stats,
+            stats_fn=self._get_stats_fn(self.validator),
             error_fn=self._on_llm_error,
             conversation_log_fn=self._on_conversation,
         )

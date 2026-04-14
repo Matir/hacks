@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from trashdig.config import Config
 from trashdig.tools import (
     _node_contains_identifier,
     _extract_callee_name,
@@ -16,6 +17,12 @@ from trashdig.tools import (
     trace_taint_cross_file,
     _make_parser,
 )
+
+@pytest.fixture(autouse=True)
+def mock_cfg():
+    with patch("trashdig.tools.get_config") as mock:
+        mock.return_value = Config(require_sandbox=False)
+        yield mock
 
 
 # ---------------------------------------------------------------------------

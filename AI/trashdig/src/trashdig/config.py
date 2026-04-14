@@ -30,6 +30,7 @@ class Config:
     rpm_limit: int | None = None
     tpm_limit: int | None = None
     require_sandbox: bool = True
+    max_parallel_tasks: int = 3
 
     def get_agent_config(self, name: str) -> AgentConfig:
         """Returns the config for a specific agent, falling back to defaults.
@@ -179,6 +180,7 @@ def load_config(
     rpm_limit = final_data.get("rate_limit", {}).get("rpm")
     tpm_limit = final_data.get("rate_limit", {}).get("tpm")
     require_sandbox = final_data.get("security", {}).get("require_sandbox", True)
+    max_parallel = final_data.get("concurrency", {}).get("max_parallel_tasks", 3)
 
     # Load Agents
     agents_data = final_data.get("agents", {})
@@ -217,6 +219,7 @@ def load_config(
         rpm_limit=rpm_limit,
         tpm_limit=tpm_limit,
         require_sandbox=require_sandbox,
+        max_parallel_tasks=max_parallel,
     )
 
 _config: Config | None = None

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch, AsyncMock, ANY
 from trashdig.agents.validator import ValidatorAgent, create_validator_agent, load_prompt
 from trashdig.findings import Finding
 from trashdig.config import AgentConfig
+from trashdig.engine.engine import EngineResult
 
 
 def test_load_prompt():
@@ -13,20 +14,20 @@ def test_load_prompt():
 
 @pytest.mark.anyio
 @patch("trashdig.agents.validator.read_file_content")
-@patch("trashdig.agents.validator.run_prompt", new_callable=AsyncMock)
-async def test_validator_verify_finding(mock_run_prompt, mock_read):
+@patch("trashdig.engine.engine.Engine.run", new_callable=AsyncMock)
+async def test_validator_verify_finding(mock_engine_run, mock_read):
     mock_read.return_value = "print('vulnerable_code')"
     text_response = (
         '```json\n'
         '{"status": "Verified", "poc_code": "python poc.py", "reasoning": "Confirmed"}\n'
         '```'
     )
-    mock_run_prompt.return_value = {
-        "text": text_response,
-        "input_tokens": 150,
-        "output_tokens": 75,
-        "tool_calls": []
-    }
+    mock_engine_run.return_value = EngineResult(
+        text=text_response,
+        input_tokens=150,
+        output_tokens=75,
+        tool_calls=[]
+    )
 
     agent = ValidatorAgent(name="validator", model="gemini-2.0-flash")
     finding = Finding(
@@ -44,20 +45,20 @@ async def test_validator_verify_finding(mock_run_prompt, mock_read):
 
     assert result["status"] == "Verified"
     assert result["poc_code"] == "python poc.py"
-    mock_run_prompt.assert_called_once()
+    mock_engine_run.assert_called_once()
 
 
 @pytest.mark.anyio
 @patch("trashdig.agents.validator.read_file_content")
-@patch("trashdig.agents.validator.run_prompt", new_callable=AsyncMock)
-async def test_validator_verify_finding_json_error(mock_run_prompt, mock_read):
+@patch("trashdig.engine.engine.Engine.run", new_callable=AsyncMock)
+async def test_validator_verify_finding_json_error(mock_engine_run, mock_read):
     mock_read.return_value = "code"
-    mock_run_prompt.return_value = {
-        "text": "invalid json",
-        "input_tokens": 10,
-        "output_tokens": 5,
-        "tool_calls": []
-    }
+    mock_engine_run.return_value = EngineResult(
+        text="invalid json",
+        input_tokens=10,
+        output_tokens=5,
+        tool_calls=[]
+    )
 
     agent = ValidatorAgent(name="validator", model="gemini-2.0-flash")
     finding = Finding(
@@ -80,16 +81,16 @@ async def test_validator_verify_finding_json_error(mock_run_prompt, mock_read):
 
 @pytest.mark.anyio
 @patch("trashdig.agents.validator.read_file_content")
-@patch("trashdig.agents.validator.run_prompt", new_callable=AsyncMock)
-async def test_validator_conversation_logging(mock_run_prompt, mock_read):
+@patch("trashdig.engine.engine.Engine.run", new_callable=AsyncMock)
+async def test_validator_conversation_logging(mock_engine_run, mock_read):
     mock_read.return_value = "code"
     text_response = '{"status": "Unverified"}'
-    mock_run_prompt.return_value = {
-        "text": text_response,
-        "input_tokens": 123,
-        "output_tokens": 456,
-        "tool_calls": [{"name": "bash", "args": {}}]
-    }
+    mock_engine_run.return_value = EngineResult(
+        text=text_response,
+        input_tokens=123,
+        output_tokens=456,
+        tool_calls=[{"name": "bash", "args": {}}]
+    )
 
     mock_log_fn = MagicMock()
     agent = ValidatorAgent(name="validator", model="gemini-2.0-flash")

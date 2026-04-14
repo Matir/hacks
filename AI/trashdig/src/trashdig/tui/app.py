@@ -207,7 +207,7 @@ class REPLPane(Vertical):
             )
         elif base_cmd == "scan":
             path = cmd_parts[1] if len(cmd_parts) > 1 else self.app.workspace_root
-            self.app.run_worker(self.app.run_archaeologist_scan(path))
+            self.app.run_worker(self.app.run_recon_scan(path))
         elif base_cmd == "hunt":
             if not self.app.prioritized_targets:
                 log.write("[red]No targets prioritized. Star some files first![/red]")
@@ -368,12 +368,12 @@ class TrashDigApp(App):
             summary_text += f"**High Value:** {'Yes' if summary_data.get('is_high_value') else 'No'}"
             self.query_one("#summary", Static).update(summary_text)
 
-    async def run_archaeologist_scan(self, path: str = ".") -> None:
+    async def run_recon_scan(self, path: str = ".") -> None:
         self._phase = "Scanning"
         self._file_log.info("Scan started: %s", path)
         self.refresh_status()
         try:
-            results = await self.coordinator.run_archaeologist(path)
+            results = await self.coordinator.run_recon(path)
             if "error" in results:
                 self._log("error", f"[red]Scan error:[/red] {results['error']}")
             else:
@@ -423,7 +423,7 @@ class TrashDigApp(App):
             self.refresh_status()
 
     def action_scan(self) -> None:
-        self.run_worker(self.run_archaeologist_scan(self.workspace_root))
+        self.run_worker(self.run_recon_scan(self.workspace_root))
 
     def action_prioritize(self) -> None:
         high_value = [

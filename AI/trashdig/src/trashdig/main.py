@@ -62,7 +62,7 @@ def main():
         print(tomli_w.dumps(config_dict))
         return
     
-    from trashdig.rate_limiter import init_rate_limiter
+    from trashdig.services.rate_limiter import init_rate_limiter
     from trashdig.tools import init_artifact_manager
     
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)

@@ -4,7 +4,9 @@ from typing import List, Dict, Any
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
-from trashdig.agents.utils import read_file_content, run_prompt, google_provider_extras
+from trashdig.agents.utils import read_file_content, google_provider_extras
+from trashdig.services.permissions import PermissionManager
+from trashdig.engine.engine import Engine, EngineResult
 from trashdig.tools import (
     ripgrep_search,
     semgrep_scan,
@@ -42,6 +44,7 @@ class HunterAgent(LlmAgent):
         targets: List[str],
         project_root: str = ".",
         log_fn=None,
+        engine: Optional[Engine] = None,
         stats_fn=None,
         error_fn=None,
         conversation_log_fn=None,
@@ -52,6 +55,7 @@ class HunterAgent(LlmAgent):
             targets: List of file paths to analyze.
             project_root: Root directory of the project.
             log_fn: Optional callable for progress messages (Rich markup supported).
+            engine: Optional Engine instance to use.
             stats_fn: Optional callable for token usage tracking.
             error_fn: Optional callable for LLM error tracking.
             conversation_log_fn: Optional callable for structured conversation logging.
@@ -59,6 +63,8 @@ class HunterAgent(LlmAgent):
         Returns:
             A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
         """
+        if engine is None:
+            engine = Engine()
 
         def _log(msg: str) -> None:
             if log_fn:
@@ -87,23 +93,23 @@ class HunterAgent(LlmAgent):
                 f"   - confidence: (0.0 to 1.0)\n"
             )
 
-            result = await run_prompt(
+            result = await engine.run(
                 self,
                 prompt,
                 on_event=log_fn,
                 on_stats=stats_fn,
                 on_error=error_fn,
             )
-            text = result["text"]
+            text = result.text
 
             if conversation_log_fn:
                 conversation_log_fn(
                     self.name,
                     prompt,
                     text,
-                    result["tool_calls"],
-                    result["input_tokens"],
-                    result["output_tokens"],
+                    result.tool_calls,
+                    result.input_tokens,
+                    result.output_tokens,
                 )
 
             try:
@@ -164,11 +170,14 @@ class HunterAgent(LlmAgent):
         return {"findings": all_findings, "hypotheses": all_hypotheses}
 
 
-def create_hunter_agent(config: AgentConfig = None) -> HunterAgent:
+def create_hunter_agent(
+    config: AgentConfig = None, permission_manager: Optional[PermissionManager] = None
+) -> HunterAgent:
     """Creates a Hunter agent.
 
     Args:
         config: Optional agent configuration.
+        permission_manager: Optional permission manager.
 
     Returns:
         A configured HunterAgent instance.
@@ -195,6 +204,9 @@ def create_hunter_agent(config: AgentConfig = None) -> HunterAgent:
     ]
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
+
+    if permission_manager:
+        tools = permission_manager.wrap_tools(tools)
 
     kwargs = (
         {"generate_content_config": extras["generate_content_config"]}

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from trashdig.database import ProjectDatabase, _args_hash
+from trashdig.services.database import ProjectDatabase, _args_hash
 from trashdig.findings import Finding
 from trashdig.agents.types import Hypothesis, TaskType
 

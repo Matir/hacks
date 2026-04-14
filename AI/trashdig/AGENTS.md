@@ -4,46 +4,46 @@ TrashDig is an AI-powered, language-agnostic vulnerability scanner and security 
 
 ## 🏗 Architecture & Agent Personas
 
-TrashDig operates as a coordinated team of specialized agents:
+TrashDig operates as a coordinated team of specialized agents, managed by a central **Coordinator**:
 
-1.  **Archaeologist Agent**:
-    *   **Role**: Mapper and Scout.
-    *   **Tasks**: Detects framework/tech stacks, respects `.gitignore`, and generates file summaries.
-    *   **Goal**: Identify "high-value targets" (entry points, sensitive configurations, risky controllers).
+1.  **Recon Suite**:
+    *   **StackScout Agent**:
+        *   **Role**: Hybrid Environment Detection.
+        *   **Tasks**: Detects framework/tech stacks using deterministic checks and LLM inference. assigns "high-value" flags to entry points and sensitive configurations.
+        *   **Goal**: Build a project profile and initial hunt hypotheses.
+    *   **WebRouteMapper Agent**:
+        *   **Role**: Attack Surface Mapper.
+        *   **Tasks**: (Conditional) Invoked if StackScout detects a web application. Uses AST-aware parsing to map all web endpoints (e.g., Express routes, FastAPI decorators).
+        *   **Goal**: Generate a structured artifact of the application's attack surface.
 2.  **Hunter Agent**:
     *   **Role**: Deep-Dive Researcher.
     *   **Tasks**: Performs hypothesis-driven analysis, AST-aware taint analysis, and **Cross-File** symbol tracing.
     *   **Goal**: Connect untrusted user input to dangerous sinks.
-3.  **Validator Agent**:
-    *   **Role**: Proof-of-Concept Specialist.
-    *   **Tasks**: Generates PoC scripts to confirm Hunter's findings.
-    *   **Goal**: Prove exploitability and eliminate false positives using a **containerized** execution environment.
+3.  **Verification Pipeline**:
+    *   **Skeptic Agent**:
+        *   **Role**: Adversarial Reviewer.
+        *   **Tasks**: Pre-validation gate for all Hunter findings. Attempts to debunk findings by identifying missed sanitizers, middleware, or logic-level defenses.
+        *   **Goal**: Reduce false positives and ensure high-quality findings.
+    *   **Validator Agent**:
+        *   **Role**: Proof-of-Concept Specialist.
+        *   **Tasks**: Only invoked after Skeptic approval. Generates and executes PoC scripts in a containerized environment to prove reachability and exploitability.
+        *   **Goal**: Empirical proof of vulnerability.
 4.  **TUI (Human-in-the-Loop)**:
     *   **Role**: Steering & Prioritization.
     *   **Interface**: Built with `Textual`.
     *   **Goal**: Allow researchers to "star" files and guide the Hunter agent.
 
-## 🛠 Technical Stack
+## 🛠 Technical Stack & Services
 
-*   **Language**: Python 3.14+ (using `uv` and `mise`).
-*   **Agent Framework**: Google ADK.
+*   **Engine**: A custom state-machine-based execution loop (`src/trashdig/engine/`) that handles multi-turn tool calls, transient LLM failures (retries), and **Context Compaction** (summarizing/pruning history when token limits are hit).
+*   **Concurrency**: Parallel task execution in the Coordinator using `asyncio.Semaphore` to manage agent workloads.
 *   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
-*   **Data Persistence**: SQLite-backed **ProjectDatabase** for session persistence, symbol mapping, and findings.
-*   **Artifact System**: Automatically saves large tool outputs (e.g., long `ripgrep` or `semgrep` results) to `.trashdig/artifacts` and provides a summary to the LLM to maintain context efficiency.
-*   **UI**: `textual` for the TUI, `prompt_toolkit` for the REPL.
-
-## 🛡️ Enhanced Taint Analysis (Phase 3)
-
-The Hunter agent uses a multi-stage approach to trace untrusted data:
-1.  **Intra-file Taint**: Identify local data flow from sources to sinks within a single function or module.
-2.  **Cross-file Tracing**: Use `trace_taint_cross_file` to follow data into callees, resolving parameter names across module boundaries.
-3.  **Semantic Resolution**: Leverages `tree-sitter` to distinguish between simple variable usages and assignments/sinks.
-
-## 🧪 Validation Infrastructure (Phase 1)
-
-The Validator agent executes generated PoCs in an isolated **Docker container** to ensure host safety and consistent environments.
-*   **Tools**: `container_bash_tool`, `bash_tool`.
-*   **Isolation**: No network access by default; read-only project mounts.
+*   **Services Layer** (`src/trashdig/services/`):
+    *   **ProjectDatabase**: SQLite-backed persistence for findings, symbols, and session history.
+    *   **CostTracker**: Real-time USD usage monitoring based on model rates.
+    *   **PermissionManager**: Logic-level middleware that intercepts tool calls based on security policies (e.g., confirming unsandboxed `bash_tool`).
+    *   **RateLimiter**: Manages LLM API throughput (RPM/TPM).
+*   **Isolation**: PoCs are executed in isolated **Docker containers** (Validator) or **Minijail** sandboxes (Hunter tools) to ensure host safety.
 
 ## 🛡️ Security & Tool Sandboxing
 
@@ -55,32 +55,30 @@ To ensure the safety of the host system during automated research and PoC execut
     *   **Filesystem Isolation**: The sandbox only sees the project workspace. The rest of the user's home directory is hidden.
     *   **Permissions**: Tools run as the current user to maintain file ownership but are restricted from writing outside the workspace.
     *   **Network**: Network access is enabled by default but can be toggled per-tool.
-    *   **Allowlisting**: An interface is provided to allowlist additional read-only paths. By default, the sandbox includes read-only mounts for standard system binaries and libraries:
-        *   **Binaries & Libs**: `/bin`, `/usr`, `/lib`, `/lib64`, `/sbin`.
-        *   **Dynamic Linker**: `/etc/ld.so.cache`, `/etc/ld.so.conf`, `/etc/ld.so.conf.d`.
-        *   **Networking & OS**: `/etc/resolv.conf`, `/etc/nsswitch.conf`, `/etc/passwd`, `/etc/group`, `/etc/hosts`, `/etc/localtime`.
-        *   **Security & SSL**: `/etc/ssl/certs`, `/etc/ca-certificates`, `/usr/share/ca-certificates`.
-        *   **Terminal & Locales**: `/usr/share/terminfo`, `/usr/lib/locale`.
-        *   **Devices**: `/dev/null`, `/dev/zero`, `/dev/full`, `/dev/random`, `/dev/urandom` (or use `minijail -d`).
-*   **Enforcement**: Controlled by the `require_sandbox` setting in `trashdig.toml` (default: `True`). If disabled, a prominent warning is logged for every unsandboxed execution.
+    *   **Allowlisting**: The sandbox includes read-only mounts for standard system binaries and libraries (e.g., `/bin`, `/usr`, `/lib`, `/etc/ssl/certs`) to ensure tool functionality while preventing host compromise.
+*   **Logic-Level Gatekeeping**: Controlled by the `PermissionManager` service and the `require_sandbox` setting in `trashdig.toml` (default: `True`).
+
+## 🛡️ Enhanced Taint Analysis (Phase 3)
+
+The Hunter agent uses a multi-stage approach to trace untrusted data:
+1.  **Intra-file Taint**: Identify local data flow from sources to sinks within a single function or module.
+2.  **Cross-file Tracing**: Use `trace_taint_cross_file` to follow data into callees, resolving parameter names across module boundaries.
+3.  **Semantic Resolution**: Leverages `tree-sitter` to distinguish between simple variable usages and assignments/sinks.
 
 ## 📜 Engineering Standards (The Rules)
 
 These rules are foundational. Adhere to them for all modifications:
 
-1.  **Testing**: Always provide unit tests in the `tests/` directory. All code should be written alongside corresponding tests. Whenever features are added, both the test suite and coverage must be checked; coverage metrics should generally trend upwards. Aim for high coverage of agent logic.
+1.  **Testing**: Always provide unit tests in the `tests/` directory. All code should be written alongside corresponding tests. Whenever features are added, both the test suite and coverage must be checked; coverage metrics should generally trend upwards.
 2.  **Typing**: Strict type hints are mandatory (`pyright`/`mypy` clean).
-3.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration. Prefer `mise` tasks (e.g., `mise run test`, `mise run coverage`, `mise run lint`) for all common development operations to ensure manual execution and agentic workflows remain in-sync.
+3.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.
 4.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
-5.  **Imports**: Always check `pyproject.toml` before adding new dependencies. Ensure all imports are placed at the top of the file. Ask the user before adding a new top-level import.
-6.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory. Do not hardcode long prompts.
-7.  **Model Configuration**: Every agent must be configurable via `trashdig.toml`. Support for Google/VertexAI and OpenRouter is required.
-8.  **Security**: Never hardcode API keys. Use environment variables. Ensure `bash_tool` or PoC execution is scoped and safe.
-9.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for LLM returns and inter-agent communication whenever possible.
+5.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory.
+6.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for inter-agent communication.
 
 ## 📂 Contextual References
 
 *   `README.md`: High-level project goals and user workflow.
-*   `TODO.md`: Current progress and upcoming milestones (Phase 1-4).
+*   `TODO.md`: Current progress and upcoming milestones.
 *   `trashdig.toml`: Central configuration for UI and Agent models.
 *   `prompts/`: Directory containing the "brains" of each agent.
