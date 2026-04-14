@@ -8,14 +8,22 @@
 - [x] Implement `bash_tool` for secure command execution (Phase 1).
 - [x] Integrate `google_search` and `web_fetch` for automated security research.
 - [x] **[HIGH]** Setup SQLite Project Database for persistent knowledge and session management (Phase 4).
+- [ ] **[HIGH]** Implement `Engine` State Machine (`src/trashdig/engine/`).
+    - [ ] Move core logic from `utils.run_prompt` into a formal `Engine` class.
+    - [ ] Manage the "Observer-Actor" loop, tool-call retries, and JSON schema validation.
+- [ ] **[MEDIUM]** Context Compaction & History Management.
+    - [ ] Implement a `ContextManager` to monitor tokens.
+    - [ ] Add "History Pruning" and "Recursive Summarization" to preserve model intent within context limits.
 - [ ] **[MEDIUM]** Implement Parallel Task Execution in `Coordinator`.
     - [ ] Use `asyncio.Semaphore` for a configurable concurrency limit (e.g., `max_parallel_tasks` in `trashdig.toml`).
     - [ ] Adopt a worker-pool pattern to handle recursive hypothesis generation without exhausting resources.
 
-## Archaeologist Agent Enhancements
-- [x] Framework and technology stack detection.
-- [x] **[MEDIUM]** Use `ripgrep` to quickly find entry points (e.g., routes, controllers).
-- [ ] **[LOW]** Improve file summarization by providing more context to the LLM.
+## Recon Agent Suite (Replacing Archaeologist)
+- [ ] **[HIGH]** StackScout Agent: Hybrid Environment Detection.
+    - [ ] Combine deterministic checks (regex/file signatures) with inference-based LLM analysis to explain how the stack is implemented.
+- [ ] **[MEDIUM]** WebRouteMapper Agent: Conditional Surface Mapping.
+    - [ ] Invoked only if `StackScout` detects a web application.
+    - [ ] Uses `tree-sitter` to map all endpoints (e.g., Express routes, FastAPI decorators) into a structured artifact for the Hunter.
 
 ## Hunter Agent Enhancements
 - [x] Multi-file context and definition resolution.
@@ -24,27 +32,33 @@
 - [x] Upgrade to true AST-aware taint analysis (Phase 3).
 - [x] **[HIGH]** Enhanced Taint Analysis: Trace data flows across multiple files from entry points to sinks.
 
-## Validation & Verification (Phase 1)
-- [x] Create `ValidatorAgent` for PoC generation.
-- [x] Implement finding verification loop (Prove the bug).
+## Multi-Stage Verification Pipeline
+- [ ] **[HIGH]** SkepticAgent: Adversarial Reviewer.
+    - [ ] Mandatory pre-validation gate for all Hunter findings.
+    - [ ] Attempts to debunk findings by identifying missed sanitizers, middleware, or logic-level defenses.
 - [x] **[HIGH]** Safe Execution Environment: Implement containerized (Docker) PoC execution for the `ValidatorAgent`.
+- [ ] **[MEDIUM]** Refine `ValidatorAgent` for PoC Generation.
+    - [ ] Invoked only after `SkepticAgent` approval.
+    - [ ] Focuses on generating and executing PoC scripts in the containerized sandbox to prove reachability and exploitability.
+
+## Services & Safety Middleware
+- [ ] **[HIGH]** Logic-Level Permission Middleware (`src/trashdig/services/permissions.py`).
+    - [ ] Intercept tool calls based on `trashdig.toml` policies (e.g., `allow_network`).
+    - [ ] Trigger manual TUI confirmation for sensitive or high-risk operations.
+- [ ] **[MEDIUM]** Cost Tracking Service (`src/trashdig/services/cost.py`).
+    - [ ] Map model names to USD rates for real-time financial monitoring of scan sessions.
+- [ ] **[MEDIUM]** Structural Refactor: Centralize Shared Logic.
+    - [ ] Move `RateLimiter`, `Database`, `CostTracker`, and `PermissionManager` into a `services` package to decouple infrastructure from agent logic.
 
 ## Semantic Intelligence (Phase 3)
 - [x] Implement `FindReferences(symbol)` tool.
 - [x] Implement `GetScope(file, line)` tool.
 - [x] **[MEDIUM]** Dynamic Tool Configuration: Configure `semgrep` rules based on detected tech stack and `config.toml`.
-- [ ] **[HIGH]** Security Sandboxing (Linux/Minijail):
-    - [ ] Create `src/trashdig/sandbox/` abstraction layer.
-    - [ ] Implement `MinijailSandbox` with:
-        - [ ] `-v -d`: Minimal `/dev` and private mount namespace.
-        - [ ] `-p -r`: Private PID namespace and read-only `/proc`.
-        - [ ] `-e`: (Optional) Network isolation toggle.
-        - [ ] Workspace-only write access and home directory hiding.
-        - [ ] **Default Allowlist**: Implement read-only mounts for system paths (/bin, /usr, /lib, /etc/ssl, etc.) as defined in AGENTS.md.
-    - [ ] Add `require_sandbox` (default: True) to `trashdig.toml`.
-    - [ ] Refactor `bash_tool` and `ripgrep_search` to use the sandbox abstraction.
-    - [ ] Add allowlist interface for mounting external tool dependencies.
-
+- [x] **[HIGH]** Security Sandboxing (Linux/Minijail):
+    - [x] Create `src/trashdig/sandbox/` abstraction layer.
+    - [x] Implement `MinijailSandbox` with PID/Mount/Network namespaces.
+    - [x] Add `require_sandbox` (default: True) to `trashdig.toml`.
+    - [x] Refactor `bash_tool` and `ripgrep_search` to use the sandbox abstraction.
 
 ## TUI & Collaborative Steering
 - [x] Functional REPL with history and autocomplete.

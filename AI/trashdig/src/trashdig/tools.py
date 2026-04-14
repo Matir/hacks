@@ -7,6 +7,8 @@ import asyncio
 import inspect
 from typing import List, Optional, Any, Dict, Set, Tuple, Callable
 from functools import wraps
+from .sandbox import get_sandbox
+from .config import get_config
 
 # ---------------------------------------------------------------------------
 # Artifact System
@@ -91,6 +93,44 @@ def artifact_tool(max_chars: int = 5000):
 # Client Tools
 # ---------------------------------------------------------------------------
 
+def _run_sandboxed(command: List[str], timeout: Optional[int] = None, network: bool = True) -> subprocess.CompletedProcess[str]:
+    """Internal helper to run a command in the configured sandbox.
+
+    Args:
+        command: The command to execute.
+        timeout: Execution timeout in seconds.
+        network: Whether to allow network access.
+
+    Returns:
+        The subprocess result.
+    """
+    cfg = get_config()
+    workspace_dir = os.getcwd() # Or get from config if implemented
+    require_sandbox = cfg.require_sandbox
+    
+    sandbox = get_sandbox(
+        workspace_dir=workspace_dir,
+        network=network,
+        require_sandbox=require_sandbox
+    )
+    try:
+        return sandbox.run(command, timeout=timeout)
+    except FileNotFoundError:
+        # Return a mock-like object that indicates failure
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=127,
+            stdout="",
+            stderr=f"Error: {command[0]} not found in PATH."
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=124,
+            stdout="",
+            stderr=f"Error: {command[0]} scan timed out."
+        )
+
 @artifact_tool(max_chars=4000)
 def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]] = None) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
@@ -107,11 +147,11 @@ def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]
     if extra_args:
         cmd.extend(extra_args)
     
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        return result.stdout if result.stdout else result.stderr
-    except FileNotFoundError:
-        return "Error: ripgrep (rg) not found in PATH."
+    result = _run_sandboxed(cmd, network=False)
+    # The existing tests expect specific error messages if rg is not found
+    if result.returncode == 127:
+        return result.stderr
+    return result.stdout if result.stdout else result.stderr
 
 @artifact_tool(max_chars=8000)
 def semgrep_scan(path: str = ".", config: str = "p/security-audit") -> str:
@@ -126,14 +166,11 @@ def semgrep_scan(path: str = ".", config: str = "p/security-audit") -> str:
     """
     cmd = ["semgrep", "--json", "--config", config, path]
     
-    try:
-        # Run semgrep with a timeout to avoid hanging
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=120)
-        return result.stdout
-    except subprocess.TimeoutExpired:
-        return "Error: semgrep scan timed out."
-    except FileNotFoundError:
-        return "Error: semgrep not found in PATH."
+    # Run semgrep with a timeout to avoid hanging
+    result = _run_sandboxed(cmd, timeout=120, network=True)
+    if result.returncode == 124:
+        return result.stderr
+    return result.stdout if result.stdout else result.stderr
 
 def _get_ts_language(language: str) -> Any:
     """Helper to get tree-sitter Language objects.
@@ -745,15 +782,10 @@ def bash_tool(command: str, timeout: int = 30) -> str:
     Returns:
         A formatted string containing stdout, stderr, and the exit code.
     """
+    # Note: Bash commands need to be executed through a shell
+    cmd = ["bash", "-c", command]
     try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False
-        )
+        result = _run_sandboxed(cmd, timeout=timeout, network=True)
         output: List[str] = []
         if result.stdout:
             output.append(f"STDOUT:\n{result.stdout}")

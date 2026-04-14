@@ -2,6 +2,13 @@ import subprocess
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from trashdig.tools import ripgrep_search, semgrep_scan, get_ast_summary, get_symbol_definition, find_references, bash_tool, query_cwe_database, get_scope_info
+from trashdig.config import Config
+
+@pytest.fixture(autouse=True)
+def mock_cfg():
+    with patch("trashdig.tools.get_config") as mock:
+        mock.return_value = Config(require_sandbox=False)
+        yield mock
 
 @patch("subprocess.run")
 def test_ripgrep_search(mock_run):

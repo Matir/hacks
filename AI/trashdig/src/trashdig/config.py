@@ -29,6 +29,7 @@ class Config:
     db_path: str = ".trashdig/trashdig.db"
     rpm_limit: int | None = None
     tpm_limit: int | None = None
+    require_sandbox: bool = True
 
     def get_agent_config(self, name: str) -> AgentConfig:
         """Returns the config for a specific agent, falling back to defaults.
@@ -177,6 +178,7 @@ def load_config(
     global_provider = final_data.get("provider", "google")
     rpm_limit = final_data.get("rate_limit", {}).get("rpm")
     tpm_limit = final_data.get("rate_limit", {}).get("tpm")
+    require_sandbox = final_data.get("security", {}).get("require_sandbox", True)
 
     # Load Agents
     agents_data = final_data.get("agents", {})
@@ -214,4 +216,14 @@ def load_config(
         db_path=resolved_db_path,
         rpm_limit=rpm_limit,
         tpm_limit=tpm_limit,
+        require_sandbox=require_sandbox,
     )
+
+_config: Config | None = None
+
+def get_config() -> Config:
+    """Returns the global configuration object, loading it if necessary."""
+    global _config
+    if _config is None:
+        _config = load_config()
+    return _config
