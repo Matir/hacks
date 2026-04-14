@@ -11,3 +11,4 @@ __pycache__/
 # Project
 findings/
 trashdig.db
+MagicMock

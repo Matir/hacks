@@ -27,8 +27,3 @@ Your goal is to provide empirical evidence for potential vulnerabilities by gene
     -   **False Positive**: If the PoC fails to demonstrate the flaw or proves the code is actually safe.
 6.  **Iterate**: If the PoC fails due to a technical error (e.g., missing dependency, wrong port), fix the script and retry.
 
-## Context
-
-The potential finding is: {{potential_finding}}
-Project technology stack: {{tech_stack}}
-Relevant file content: {{file_content}}

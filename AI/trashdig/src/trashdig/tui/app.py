@@ -1,16 +1,31 @@
 import os
+import logging
+import traceback
+from datetime import datetime
 from typing import List, Dict, Any
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Tree, Static, Label, Input, RichLog
 from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
 from textual.events import Key
+from textual.worker import WorkerFailed
 from textual_autocomplete import AutoComplete, DropdownItem
 
 from trashdig.agents.coordinator import Coordinator
-from trashdig.agents.utils import get_project_structure
+from trashdig.agents.utils import get_project_structure, log_auth_info
 from trashdig.config import Config
 from trashdig.findings import Finding
+
+
+def _setup_file_logger(log_path: str) -> logging.Logger:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    logger = logging.getLogger("trashdig")
+    logger.setLevel(logging.DEBUG)
+    if not logger.handlers:
+        handler = logging.FileHandler(log_path, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logger.addHandler(handler)
+    return logger
 
 
 class FileTree(Tree):
@@ -116,7 +131,7 @@ class REPLPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Label("Interactive Console")
-        yield RichLog(id="repl_log", highlight=True, markup=True)
+        yield RichLog(id="repl_log", highlight=True, markup=True, wrap=True)
         yield AutoComplete(
             Input(placeholder="Type a command (e.g., 'scan api/', 'help')...", id="repl_input"),
             candidates=[DropdownItem(cmd) for cmd in self.commands],
@@ -195,6 +210,7 @@ class REPLPane(Vertical):
                 path = cmd_parts[1]
                 if path not in self.app.prioritized_targets:
                     self.app.prioritized_targets.append(path)
+                    self.app._file_log.info("Starred: %s", path)
                     log.write(f"[green]Starred {path} for hunting.[/green]")
                     self.app.refresh_status()
                 else:
@@ -232,16 +248,40 @@ class TrashDigApp(App):
         self.config = config or Config()
         self.workspace_root = workspace_root
         self._phase = "Idle"
+        log_path = os.path.join(workspace_root, ".trashdig", "trashdig.log")
+        self._file_log = _setup_file_logger(log_path)
+        self._file_log.info("Session started — workspace: %s", workspace_root)
+        log_auth_info(self.config, self._file_log)
         self.coordinator = Coordinator(self.config, project_path=workspace_root)
         self.coordinator.on_task_event = self._on_coordinator_log
         self.prioritized_targets: List[str] = []
 
-    def _on_coordinator_log(self, message: str) -> None:
+    def _log(self, level: str, message: str) -> None:
+        """Write to both the TUI console and the log file."""
+        plain = message  # Rich markup stripped automatically by logger
+        getattr(self._file_log, level)(plain)
         try:
             self.query_one("#repl_log", RichLog).write(message)
             self.refresh_status()
         except Exception:
             pass
+
+    def _on_coordinator_log(self, message: str) -> None:
+        self._log("info", message)
+
+    def on_worker_state_changed(self, event) -> None:
+        """Catch worker failures and surface them in the console and log."""
+        if isinstance(event.worker.error, Exception):
+            err = event.worker.error
+            tb = "".join(traceback.format_exception(type(err), err, err.__traceback__))
+            self._file_log.error("Worker failed:\n%s", tb)
+            try:
+                log = self.query_one("#repl_log", RichLog)
+                log.write(f"[bold red]Error:[/bold red] {err}")
+            except Exception:
+                pass
+            self._phase = "Idle"
+            self.refresh_status()
 
     def refresh_status(self) -> None:
         try:
@@ -286,37 +326,60 @@ class TrashDigApp(App):
 
     async def run_archaeologist_scan(self, path: str = ".") -> None:
         self._phase = "Scanning"
+        self._file_log.info("Scan started: %s", path)
         self.refresh_status()
-        results = await self.coordinator.run_archaeologist(path)
-        self._phase = "Idle"
-        if "error" not in results:
-            self.query_one(FileTree).update_tree(path, results)
-        self.refresh_status()
+        try:
+            results = await self.coordinator.run_archaeologist(path)
+            if "error" in results:
+                self._log("error", f"[red]Scan error:[/red] {results['error']}")
+            else:
+                self._file_log.info("Scan complete: %d files mapped", len(results))
+                self.query_one(FileTree).update_tree(path, results)
+        except Exception as e:
+            self._file_log.error("Scan exception: %s\n%s", e, traceback.format_exc())
+            self._log("error", f"[bold red]Scan failed:[/bold red] {e}")
+        finally:
+            self._phase = "Idle"
+            self.refresh_status()
 
     async def run_hunter_analysis(self, targets: List[str]) -> None:
         self._phase = "Hunting"
+        self._file_log.info("Hunt started: %s", targets)
         self.refresh_status()
-        await self.coordinator.run_hunter(targets)
-        self._phase = "Idle"
-        self.refresh_status()
+        try:
+            await self.coordinator.run_hunter(targets)
+            self._file_log.info("Hunt complete: %d findings", len(self.coordinator.findings))
+        except Exception as e:
+            self._file_log.error("Hunt exception: %s\n%s", e, traceback.format_exc())
+            self._log("error", f"[bold red]Hunt failed:[/bold red] {e}")
+        finally:
+            self._phase = "Idle"
+            self.refresh_status()
 
     async def run_verification(self, finding: Finding) -> None:
         self._phase = "Verifying"
+        self._file_log.info("Verification started: %s", finding.title)
         self.refresh_status()
-        await self.coordinator.verify_finding(finding)
-        self._phase = "Idle"
-        self.refresh_status()
+        try:
+            await self.coordinator.verify_finding(finding)
+            self._file_log.info("Verification complete: %s → %s", finding.title, finding.verification_status)
+        except Exception as e:
+            self._file_log.error("Verification exception: %s\n%s", e, traceback.format_exc())
+            self._log("error", f"[bold red]Verification failed:[/bold red] {e}")
+        finally:
+            self._phase = "Idle"
+            self.refresh_status()
 
     def action_scan(self) -> None:
         self.run_worker(self.run_archaeologist_scan(self.workspace_root))
 
     def action_prioritize(self) -> None:
-        log = self.query_one("#repl_log", RichLog)
         high_value = [p for p, d in self.coordinator.scan_results.items() if d.get("is_high_value")]
         for path in high_value:
             if path not in self.prioritized_targets:
                 self.prioritized_targets.append(path)
-        log.write(f"[green]Auto-prioritized {len(high_value)} high-value targets.[/green]")
+        self._file_log.info("Auto-prioritized %d targets: %s", len(high_value), high_value)
+        self._log("info", f"[green]Auto-prioritized {len(high_value)} high-value targets.[/green]")
         self.refresh_status()
 
     def action_quit(self) -> None:

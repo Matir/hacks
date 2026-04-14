@@ -1,7 +1,8 @@
 import os
 import tempfile
 import pytest
-from trashdig.agents.utils import get_project_structure, read_file_content, detect_frameworks
+from unittest.mock import MagicMock, patch, AsyncMock
+from trashdig.agents.utils import get_project_structure, read_file_content, detect_frameworks, run_prompt
 
 def test_get_project_structure():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -58,3 +59,73 @@ def test_detect_frameworks():
 def test_detect_frameworks_no_files():
     stack = detect_frameworks([])
     assert all(len(v) == 0 for v in stack.values())
+
+
+# ---------------------------------------------------------------------------
+# run_prompt
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_run_prompt_returns_final_text():
+    """run_prompt collects the final response text from the ADK event stream."""
+    import google.genai.types as types
+
+    # Build a fake final event
+    mock_part = MagicMock()
+    mock_part.text = "hello from agent"
+    mock_content = MagicMock()
+    mock_content.parts = [mock_part]
+    mock_event = MagicMock()
+    mock_event.is_final_response.return_value = True
+    mock_event.content = mock_content
+
+    async def fake_run_async(**kwargs):
+        yield mock_event
+
+    mock_session = MagicMock()
+    mock_session.id = "session-1"
+
+    mock_runner = MagicMock()
+    mock_runner.run_async = fake_run_async
+
+    mock_agent = MagicMock()
+    mock_agent.name = "test-agent"
+
+    with patch("trashdig.agents.utils.Runner", return_value=mock_runner) as _mock_runner_cls, \
+         patch("trashdig.agents.utils.InMemorySessionService") as mock_svc_cls:
+        mock_svc = AsyncMock()
+        mock_svc.create_session = AsyncMock(return_value=mock_session)
+        mock_svc_cls.return_value = mock_svc
+
+        result = await run_prompt(mock_agent, "do something")
+
+    assert result == "hello from agent"
+
+
+@pytest.mark.anyio
+async def test_run_prompt_no_final_event_returns_empty():
+    """run_prompt returns empty string when no final response event is produced."""
+    mock_event = MagicMock()
+    mock_event.is_final_response.return_value = False
+
+    async def fake_run_async(**kwargs):
+        yield mock_event
+
+    mock_session = MagicMock()
+    mock_session.id = "session-1"
+
+    mock_runner = MagicMock()
+    mock_runner.run_async = fake_run_async
+
+    mock_agent = MagicMock()
+    mock_agent.name = "test-agent"
+
+    with patch("trashdig.agents.utils.Runner", return_value=mock_runner) as _mock_runner_cls, \
+         patch("trashdig.agents.utils.InMemorySessionService") as mock_svc_cls:
+        mock_svc = AsyncMock()
+        mock_svc.create_session = AsyncMock(return_value=mock_session)
+        mock_svc_cls.return_value = mock_svc
+
+        result = await run_prompt(mock_agent, "do something")
+
+    assert result == ""

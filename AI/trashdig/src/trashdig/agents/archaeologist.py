@@ -2,9 +2,9 @@ import os
 import json
 from typing import Dict, Any
 from google.adk.agents import LlmAgent
-from google.adk.tools import FunctionTool, google_search
+from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
-from trashdig.agents.utils import get_project_structure, detect_frameworks
+from trashdig.agents.utils import get_project_structure, detect_frameworks, run_prompt, google_provider_extras
 from trashdig.tools import (
     ripgrep_search,
     get_ast_summary,
@@ -34,11 +34,12 @@ class ArchaeologistAgent(LlmAgent):
     initial vulnerability hypotheses.
     """
 
-    async def scan_project(self, root_path: str = ".") -> Dict[str, Any]:
+    async def scan_project(self, root_path: str = ".", log_fn=None) -> Dict[str, Any]:
         """Scans the project structure and provides summaries.
 
         Args:
             root_path: Root directory of the project to scan.
+            log_fn: Optional callable for progress messages (Rich markup supported).
 
         Returns:
             A dictionary containing:
@@ -46,19 +47,31 @@ class ArchaeologistAgent(LlmAgent):
                 - hypotheses: A list of proposed security hypotheses.
                 - tech_stack: A string description of detected technologies.
         """
+        def _log(msg: str) -> None:
+            if log_fn:
+                log_fn(msg)
+
+        _log(f"[bold]Archaeologist:[/bold] walking [cyan]{os.path.abspath(root_path)}[/cyan]")
         file_list = get_project_structure(root_path)
+        _log(f"[bold]Archaeologist:[/bold] found [yellow]{len(file_list)}[/yellow] files")
+
         tech_stack = detect_frameworks(file_list, root_path)
-        
         stack_str = ", ".join([f"{cat}: {', '.join(libs)}" for cat, libs in tech_stack.items() if libs])
-        
+        if stack_str:
+            _log(f"[bold]Archaeologist:[/bold] tech stack — {stack_str}")
+        else:
+            _log("[bold]Archaeologist:[/bold] tech stack — unknown (no recognised dependency files)")
+
+        _log("[bold]Archaeologist:[/bold] asking LLM to map files and identify high-value targets…")
+
         prompt_data = {
             "project_context": f"Project located at {os.path.abspath(root_path)}",
             "file_tree": "\n".join(file_list),
             "tech_stack": stack_str or "Unknown"
         }
-        
-        # The prompt is already loaded as 'instruction' during initialization.
-        response = await self.run_async(
+
+        text = await run_prompt(
+            self,
             f"Please analyze this project structure. The project uses the following technologies: {prompt_data['tech_stack']}.\n\n"
             f"Provide a JSON response with two keys:\n"
             f"1. 'mapping': A dictionary mapping file paths to a dictionary containing 'summary' (1 sentence) and "
@@ -68,29 +81,47 @@ class ArchaeologistAgent(LlmAgent):
             f"Flag files as high-value and propose hypotheses if they contain security-critical "
             f"logic relevant to the detected frameworks (e.g., routes, auth, db queries).\n\n"
             f"Only return the JSON object.\n\n"
-            f"File Tree:\n{prompt_data['file_tree']}"
+            f"File Tree:\n{prompt_data['file_tree']}",
+            on_event=log_fn,
         )
-        
+
         try:
-            # Clean up response if it has markdown formatting
-            cleaned_response = response.text.strip()
+            cleaned_response = text.strip()
             if cleaned_response.startswith("```json"):
                 cleaned_response = cleaned_response[7:-3].strip()
-            
+
             data: Dict[str, Any] = json.loads(cleaned_response)
             # Support both old and new formats for robustness
-            if "mapping" in data:
+            if "mapping" not in data:
+                data = {"mapping": data, "hypotheses": [], "tech_stack": stack_str}
+            else:
                 data["tech_stack"] = stack_str
-                return data
-            return {"mapping": data, "hypotheses": [], "tech_stack": stack_str}
+
+            mapping = data.get("mapping", {})
+            high_value = [p for p, d in mapping.items() if isinstance(d, dict) and d.get("is_high_value")]
+            _log(
+                f"[bold]Archaeologist:[/bold] mapped [yellow]{len(mapping)}[/yellow] files, "
+                f"[green]{len(high_value)}[/green] flagged as high-value"
+            )
+            for path in high_value:
+                summary = mapping[path].get("summary", "")
+                _log(f"  [green]★[/green] [cyan]{path}[/cyan] — {summary}")
+
+            hypos = data.get("hypotheses", [])
+            if hypos:
+                _log(f"[bold]Archaeologist:[/bold] generated [yellow]{len(hypos)}[/yellow] follow-up hypotheses")
+                for h in hypos:
+                    conf = h.get('confidence', 0)
+                    _log(f"  [dim]? {h.get('target', '?')} (confidence {conf:.0%}) — {h.get('description', '')}[/dim]")
+
+            return data
         except (json.JSONDecodeError, AttributeError):
-            # Fallback or error handling
             return {
-                "mapping": {}, 
-                "hypotheses": [], 
+                "mapping": {},
+                "hypotheses": [],
                 "tech_stack": stack_str,
-                "error": "Failed to parse Archaeologist response", 
-                "raw": response.text if hasattr(response, 'text') else str(response)
+                "error": "Failed to parse Archaeologist response",
+                "raw": text,
             }
 
 def create_archaeologist_agent(config: Optional[AgentConfig] = None) -> ArchaeologistAgent:
@@ -108,19 +139,26 @@ def create_archaeologist_agent(config: Optional[AgentConfig] = None) -> Archaeol
     prompt_path = os.path.join(os.getcwd(), "prompts", "archaeologist.md")
     instruction = load_prompt(prompt_path)
 
+    extras = google_provider_extras(config.provider)
+    tools = [
+        FunctionTool(ripgrep_search),
+        FunctionTool(get_ast_summary),
+        FunctionTool(query_cwe_database),
+        FunctionTool(find_references),
+        FunctionTool(get_scope_info),
+        FunctionTool(web_fetch),
+    ]
+    if extras["google_search_tool"] is not None:
+        tools.append(extras["google_search_tool"])
+
+    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+
     return ArchaeologistAgent(
         name="archaeologist",
         model=config.model,
         instruction=instruction,
         description="Maps the project structure and summarizes high-level file purposes for security researchers.",
-        tools=[
-            FunctionTool(ripgrep_search),
-            FunctionTool(get_ast_summary),
-            FunctionTool(query_cwe_database),
-            FunctionTool(find_references),
-            FunctionTool(get_scope_info),
-            FunctionTool(web_fetch),
-            google_search
-        ],
+        tools=tools,
+        **kwargs,
     )
 

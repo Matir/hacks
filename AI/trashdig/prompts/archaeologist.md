@@ -26,7 +26,3 @@ Your goal is to map the project structure and provide high-level summaries of fi
     -   Input validation and sanitization code.
 4.  **Format Output**: Provide a structured map of the project with the summaries and flags.
 
-## Context
-
-The project you are analyzing is: {{project_context}}
-The file tree is: {{file_tree}}

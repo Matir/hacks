@@ -4,6 +4,7 @@ from trashdig.agents.archaeologist import ArchaeologistAgent, create_archaeologi
 from trashdig.config import AgentConfig
 from google.adk.agents import LlmAgent
 
+
 def test_create_archaeologist_agent():
     """Tests that the archaeologist agent is created correctly."""
     config = AgentConfig(model="test-model", provider="test-provider")
@@ -14,40 +15,41 @@ def test_create_archaeologist_agent():
         assert agent.model == "test-model"
         assert "Archaeologist Agent Prompt" in agent.instruction
 
-@pytest.mark.anyio
-@patch("trashdig.agents.archaeologist.get_project_structure")
-@patch("trashdig.agents.archaeologist.detect_frameworks")
-async def test_archaeologist_scan_project(mock_detect, mock_get_struct):
-    mock_get_struct.return_value = ["src/main.py", "README.md"]
-    mock_detect.return_value = {"web_frameworks": ["fastapi"]}
-    
-    with patch.object(ArchaeologistAgent, "run_async", new_callable=AsyncMock) as mock_run:
-        mock_response = MagicMock()
-        mock_response.text = '```json\n{"mapping": {"src/main.py": {"summary": "Main entry point", "is_high_value": true}}, "hypotheses": []}\n```'
-        mock_run.return_value = mock_response
-        
-        agent = ArchaeologistAgent(name="archaeologist", model="gemini-2.0-flash")
-        result = await agent.scan_project(".")
-        
-        assert "mapping" in result
-        assert "src/main.py" in result["mapping"]
-        assert result["mapping"]["src/main.py"]["is_high_value"] is True
-        assert mock_run.called
 
 @pytest.mark.anyio
 @patch("trashdig.agents.archaeologist.get_project_structure")
 @patch("trashdig.agents.archaeologist.detect_frameworks")
-async def test_archaeologist_scan_project_json_error(mock_detect, mock_get_struct):
+@patch("trashdig.agents.archaeologist.run_prompt", new_callable=AsyncMock)
+async def test_archaeologist_scan_project(mock_run_prompt, mock_detect, mock_get_struct):
+    mock_get_struct.return_value = ["src/main.py", "README.md"]
+    mock_detect.return_value = {"web_frameworks": ["fastapi"]}
+    mock_run_prompt.return_value = (
+        '```json\n'
+        '{"mapping": {"src/main.py": {"summary": "Main entry point", "is_high_value": true}}, "hypotheses": []}\n'
+        '```'
+    )
+
+    agent = ArchaeologistAgent(name="archaeologist", model="gemini-2.0-flash")
+    result = await agent.scan_project(".")
+
+    assert "mapping" in result
+    assert "src/main.py" in result["mapping"]
+    assert result["mapping"]["src/main.py"]["is_high_value"] is True
+    mock_run_prompt.assert_called_once()
+
+
+@pytest.mark.anyio
+@patch("trashdig.agents.archaeologist.get_project_structure")
+@patch("trashdig.agents.archaeologist.detect_frameworks")
+@patch("trashdig.agents.archaeologist.run_prompt", new_callable=AsyncMock)
+async def test_archaeologist_scan_project_json_error(mock_run_prompt, mock_detect, mock_get_struct):
     mock_get_struct.return_value = ["src/main.py"]
     mock_detect.return_value = {}
-    
-    with patch.object(ArchaeologistAgent, "run_async", new_callable=AsyncMock) as mock_run:
-        mock_response = MagicMock()
-        mock_response.text = "Invalid JSON response"
-        mock_run.return_value = mock_response
-        
-        agent = ArchaeologistAgent(name="archaeologist", model="gemini-2.0-flash")
-        result = await agent.scan_project(".")
-        
-        assert "error" in result
-        assert "Failed to parse Archaeologist response" in result["error"]
+    mock_run_prompt.return_value = "Invalid JSON response"
+
+    agent = ArchaeologistAgent(name="archaeologist", model="gemini-2.0-flash")
+    result = await agent.scan_project(".")
+
+    assert "error" in result
+    assert "Failed to parse Archaeologist response" in result["error"]
+    assert result["raw"] == "Invalid JSON response"

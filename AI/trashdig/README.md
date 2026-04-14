@@ -16,6 +16,98 @@ TrashDig is a multi-agent, language-agnostic vulnerability scanner and security 
 
 ---
 
+## 🤖 Agent Architecture
+
+TrashDig uses a pipeline of three specialized LLM agents, orchestrated by a central **Coordinator**. Each agent has a distinct role and a curated toolset.
+
+### Coordinator
+
+The Coordinator is the backbone of the system. It maintains a task queue and drives the **Observe → Hypothesize → Verify** loop, dispatching work to the appropriate agent based on task type (`SCAN`, `HUNT`, `VERIFY`). It also persists all findings and hypotheses to a SQLite database and surfaces events to the TUI in real time.
+
+### Archaeologist
+
+> *"Map the terrain before you dig."*
+
+The Archaeologist is the first agent to run. Given a project root, it:
+
+1. Walks the directory tree (respecting `.gitignore`) and builds a complete file inventory.
+2. Detects the tech stack by reading dependency manifests (`package.json`, `pyproject.toml`, `go.mod`, etc.) and cross-referencing known framework signatures.
+3. Assigns each file a one-sentence summary and an `is_high_value` flag, prioritizing files likely to contain security-sensitive logic: route handlers, auth modules, database access layers, and configuration files.
+4. Emits **hypotheses** — structured follow-up targets — that the Coordinator queues as `HUNT` tasks.
+
+**Tools**: `ripgrep_search`, `get_ast_summary`, `query_cwe_database`, `find_references`, `get_scope_info`, `web_fetch`, `google_search`
+
+### Hunter
+
+> *"Follow every thread, cross every boundary."*
+
+The Hunter performs deep-dive vulnerability analysis on the targets surfaced by the Archaeologist (or manually starred by the user). For each target it:
+
+1. Runs `semgrep_scan` for known-bad patterns and OWASP rule sets.
+2. Performs **taint analysis**: identifies user-controlled *sources* (e.g., `request.args`, `os.environ`) and traces them toward dangerous *sinks* (e.g., `db.execute`, `eval`, `os.system`).
+3. Crosses file boundaries using `get_symbol_definition` and `find_references` rather than stopping at the edge of a file.
+4. If a data flow disappears into an unanalyzed file, it emits a new **hypothesis** for that file, creating a recursive hunt loop.
+5. Documents each confirmed finding with title, description, severity, CWE ID, exploitation path, and remediation advice.
+
+**Tools**: `ripgrep_search`, `semgrep_scan`, `get_ast_summary`, `query_cwe_database`, `get_symbol_definition`, `trace_variable`, `find_references`, `get_scope_info`, `trace_variable_semantic`, `trace_taint_cross_file`, `web_fetch`, `google_search`
+
+### Validator
+
+> *"Proof, not conjecture."*
+
+The Validator takes a finding from the Hunter and attempts to produce empirical evidence that it is exploitable. It:
+
+1. Reviews the vulnerable code and the Hunter's description to formulate a specific test hypothesis (e.g., *"a single quote in the `id` parameter triggers a SQL syntax error"*).
+2. Generates a standalone PoC — a Python script, `curl` command, or small test case.
+3. Executes the PoC inside an **isolated Docker container** via `container_bash_tool`, keeping the host environment safe.
+4. Analyses exit codes, stdout, and stderr to determine whether the behavior matches the expected "vulnerable" output.
+5. Iterates if the PoC has environmental errors (missing dependencies, wrong port), then returns a verdict: **Verified** or **False Positive**.
+
+**Tools**: `container_bash_tool`, `bash_tool`, `ripgrep_search`, `read_file_content`, `web_fetch`, `google_search`
+
+### Agent Relationship Diagram
+
+```mermaid
+flowchart TD
+    User([User / TUI]) -->|scan path| C[Coordinator]
+    User -->|star targets| C
+    User -->|verify finding| C
+
+    C -->|SCAN task| A[Archaeologist]
+    A -->|project map + hypotheses| C
+
+    C -->|HUNT task| H[Hunter]
+    H -->|findings + new hypotheses| C
+    C -->|spawn follow-up HUNT| H
+
+    C -->|VERIFY task| V[Validator]
+    V -->|Verified / False Positive| C
+
+    C -->|persist| DB[(SQLite DB)]
+    C -->|emit events| User
+
+    subgraph Tools
+        direction LR
+        T1[ripgrep / semgrep]
+        T2[tree-sitter AST]
+        T3[taint tracers]
+        T4[web_fetch / google_search]
+        T5[container_bash_tool]
+    end
+
+    A -.->|uses| T1
+    A -.->|uses| T2
+    A -.->|uses| T4
+    H -.->|uses| T1
+    H -.->|uses| T2
+    H -.->|uses| T3
+    H -.->|uses| T4
+    V -.->|uses| T5
+    V -.->|uses| T4
+```
+
+---
+
 ## 🏁 Getting Started
 
 ### Prerequisites

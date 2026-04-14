@@ -51,8 +51,3 @@ You have access to several powerful tools. Use them to enhance your analysis:
         - `description`: A clear explanation of why this target is suspicious and what you are looking for.
         - `confidence`: Your level of suspicion (0.0 to 1.0).
 
-## Context
-
-The project you are analyzing is: {{project_context}}
-The targets identified by the Archaeologist are: {{prioritized_targets}}
-File content of targets: {{target_file_content}}

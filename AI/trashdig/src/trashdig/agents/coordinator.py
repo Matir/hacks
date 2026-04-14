@@ -166,7 +166,7 @@ class Coordinator:
         if not finding:
             return
 
-        result = await self.validator.verify_finding(finding, self.tech_stack)
+        result = await self.validator.verify_finding(finding, self.tech_stack, log_fn=self.log)
         if result.get("status"):
             finding.verification_status = result["status"]
             self.log(f"Verification Result: [bold {'green' if result['status'] == 'Verified' else 'red'}]{result['status']}[/bold]")
@@ -183,48 +183,112 @@ class Coordinator:
             finding.poc,
         )
 
-    # Backward compatibility for existing TUI methods
+    # TUI-facing methods — call agents directly without touching the task queue,
+    # so each phase stays isolated and the user controls when to advance.
     async def run_archaeologist(self, path: str = ".") -> Dict[str, Any]:
-        """Legacy method to run the Archaeologist scan.
+        """Run the Archaeologist scan and return the project mapping.
+
+        Calls the Archaeologist agent directly, without enqueuing follow-on HUNT
+        tasks.  Hypotheses are persisted to the database so the user can review
+        the project map and decide which targets to hunt.
 
         Args:
             path: The project path to scan.
 
         Returns:
-            The scan results mapping.
+            The scan results mapping (file path → {summary, is_high_value}).
         """
-        task = Task(TaskType.SCAN, path)
-        self.spawn_task(task)
-        await self.run_loop()
-        return self.scan_results
+        results = await self.archaeologist.scan_project(path, log_fn=self.log)
+
+        mapping: Dict[str, Any] = results.get("mapping", results)
+        hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
+
+        self.scan_results = mapping
+        if "tech_stack" in results:
+            self.tech_stack = results["tech_stack"]
+
+        self.db.save_project_profile(self.project_path, self.tech_stack, mapping)
+
+        # Persist hypotheses for later use, but do not queue HUNT tasks —
+        # the user decides which targets to hunt via the TUI.
+        for hypo in hypotheses:
+            hypo_task = Hypothesis(
+                type=TaskType.HUNT,
+                target=hypo.get("target", ""),
+                description=hypo.get("description", ""),
+                confidence=hypo.get("confidence", 0.5),
+            )
+            self.db.save_hypothesis(self.project_path, hypo_task)
+            self.log(f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}")
+
+        return mapping
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
-        """Legacy method to run the Hunter.
+        """Run the Hunter on a list of targets and return new findings.
+
+        Calls the Hunter agent directly for each target without enqueuing
+        follow-on VERIFY tasks.  New findings are appended to
+        ``self.findings``; recursive hypotheses are persisted but not queued.
 
         Args:
             targets: List of file paths to hunt in.
             path: Project root path.
 
         Returns:
-            The list of findings discovered.
+            The list of findings discovered in this run.
         """
+        new_findings: List[Finding] = []
         for target in targets:
-            self.spawn_task(Task(TaskType.HUNT, target, context={"project_root": path}))
-        await self.run_loop()
-        return self.findings
+            self.log(f"Hunting: [cyan]{target}[/cyan]")
+            results = await self.hunter.hunt_vulnerabilities([target], project_root=path, log_fn=self.log)
+
+            for finding in results.get("findings", []):
+                self.findings.append(finding)
+                new_findings.append(finding)
+                self.db.save_finding(self.project_path, finding)
+                self.log(f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]")
+
+            # Persist recursive hypotheses without auto-queueing them.
+            for hypo in results.get("hypotheses", []):
+                hypo_task = Hypothesis(
+                    type=TaskType.HUNT,
+                    target=hypo.get("target", ""),
+                    description=hypo.get("description", ""),
+                    confidence=hypo.get("confidence", 0.5),
+                )
+                self.db.save_hypothesis(self.project_path, hypo_task)
+                self.log(f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}")
+
+        return new_findings
 
     async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
-        """Legacy method to verify a specific finding.
+        """Verify a single finding and update its status in place.
+
+        Calls the Validator agent directly without using the task queue.
 
         Args:
             finding: The finding object to verify.
 
         Returns:
-            A dictionary containing the verification status and PoC code.
+            A dictionary with 'status' and 'poc_code'.
         """
-        task = Task(TaskType.VERIFY, finding.title, context={"finding": finding})
-        self.spawn_task(task)
-        await self.run_loop()
-        # Mocking return for existing API
+        result = await self.validator.verify_finding(finding, self.tech_stack, log_fn=self.log)
+        if result.get("status"):
+            finding.verification_status = result["status"]
+            self.log(
+                f"Verification Result: "
+                f"[bold {'green' if result['status'] == 'Verified' else 'red'}]"
+                f"{result['status']}[/bold]"
+            )
+        if result.get("poc_code"):
+            finding.poc = result["poc_code"]
+        finding.save()
+        self.db.update_finding_status(
+            self.project_path,
+            finding.title,
+            finding.file_path,
+            finding.verification_status,
+            finding.poc,
+        )
         return {"status": finding.verification_status, "poc_code": finding.poc}
 

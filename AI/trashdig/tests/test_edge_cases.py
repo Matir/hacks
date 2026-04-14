@@ -36,20 +36,15 @@ def test_container_bash_tool_docker_missing(mock_bash, mock_run):
 @pytest.mark.anyio
 async def test_archaeologist_malformed_json():
     """Test ArchaeologistAgent handles malformed JSON response from LLM."""
-    mock_config = MagicMock()
-    mock_config.model = "test-model"
-    
     with patch("trashdig.agents.archaeologist.load_prompt", return_value="instruction"):
         agent = ArchaeologistAgent(name="test", model="test-model", instruction="test")
-        
-        # Use patch.object on the class to mock run_async
-        with patch.object(ArchaeologistAgent, "run_async", new_callable=AsyncMock) as mock_run:
-            mock_run.return_value = MagicMock(text="This is not JSON")
-            
-            with patch("trashdig.agents.archaeologist.get_project_structure", return_value=[]):
-                with patch("trashdig.agents.archaeologist.detect_frameworks", return_value={}):
-                    result = await agent.scan_project(".")
-                    assert result["error"] == "Failed to parse Archaeologist response"
+
+        with patch("trashdig.agents.archaeologist.run_prompt", new_callable=AsyncMock) as mock_run_prompt, \
+             patch("trashdig.agents.archaeologist.get_project_structure", return_value=[]), \
+             patch("trashdig.agents.archaeologist.detect_frameworks", return_value={}):
+            mock_run_prompt.return_value = "This is not JSON"
+            result = await agent.scan_project(".")
+            assert result["error"] == "Failed to parse Archaeologist response"
 
 
 
