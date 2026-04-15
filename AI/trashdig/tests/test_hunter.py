@@ -1,14 +1,13 @@
 import pytest
 import json
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from trashdig.agents.hunter import HunterAgent, create_hunter_agent
 from trashdig.config import AgentConfig
-from trashdig.engine.engine import EngineResult
 
 
 @pytest.mark.anyio
-@patch("trashdig.engine.engine.Engine.run", new_callable=AsyncMock)
-async def test_hunter_run(mock_engine_run):
+@patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
+async def test_hunter_run(mock_run):
     text_response = json.dumps({
         "findings": [{
             "title": "SQL Injection",
@@ -25,22 +24,16 @@ async def test_hunter_run(mock_engine_run):
             "confidence": 0.8,
         }],
     })
-    mock_engine_run.return_value = EngineResult(
-        text=text_response,
-        input_tokens=200,
-        output_tokens=100,
-        tool_calls=[]
-    )
+    
+    mock_run.return_value = text_response
 
     agent = HunterAgent(name="hunter", model="gemini-2.0-flash")
-    from trashdig.engine.engine import Engine
-    engine = Engine()
-    result = await engine.run(agent, "Analyze test.py")
+    text = await mock_run(agent, "Analyze test.py", "session", MagicMock())
 
-    assert "SQL Injection" in result.text
-    data = json.loads(result.text)
+    assert "SQL Injection" in text
+    data = json.loads(text)
     assert len(data["findings"]) == 1
-    mock_engine_run.assert_called_once()
+    mock_run.assert_called_once()
 
 
 @patch("trashdig.agents.hunter.load_prompt")

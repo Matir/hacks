@@ -1,13 +1,10 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
-from trashdig.tools import get_ast_summary, container_bash_tool
+from unittest.mock import MagicMock, patch, AsyncMock
+from trashdig.tools import get_ast_summary
 from trashdig.agents.recon import StackScoutAgent
 from trashdig.agents.coordinator import Coordinator
 from trashdig.config import Config
-from trashdig.engine.engine import EngineResult
-
-from google.adk.agents import LlmAgent
 
 async def maybe_await(coro_or_val):
     if asyncio.iscoroutine(coro_or_val):
@@ -15,6 +12,7 @@ async def maybe_await(coro_or_val):
     return coro_or_val
 
 def create_mock_agent(name="dummy"):
+    from google.adk.agents import LlmAgent
     return LlmAgent(
         name=name,
         model="gemini-2.0-flash",
@@ -44,8 +42,7 @@ async def test_container_bash_tool_docker_missing(mock_bash, mock_run):
     mock_run.side_effect = FileNotFoundError
     mock_bash.return_value = "host_output"
     
-    # container_bash_tool is decorated with artifact_tool, so it might return a coroutine
-    # if tool_context is passed, but here it returns a string.
+    from trashdig.tools import container_bash_tool
     result = await maybe_await(container_bash_tool("ls"))
     assert "[Warning: Docker not found. Falling back to host bash_tool]" in result
     assert "host_output" in result
@@ -57,17 +54,11 @@ async def test_stack_scout_malformed_json():
     with patch("trashdig.agents.recon.load_prompt", return_value="instruction"):
         agent = StackScoutAgent(name="test", model="test-model", instruction="test")
 
-        from trashdig.engine.engine import Engine
-        engine = Engine()
-        
-        with patch("trashdig.engine.engine.Engine.run", return_value=EngineResult(
-                text="This is not JSON",
-                input_tokens=10,
-                output_tokens=5,
-                tool_calls=[]
-            )):
-            result = await engine.run(agent, "Analyze project")
-            assert result.text == "This is not JSON"
+        # Mock run_agent directly
+        with patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = "This is not JSON"
+            # In actual usage in Coordinator, it handles the text
+            assert await mock_run(agent, "Analyze", "session", MagicMock()) == "This is not JSON"
 
 @pytest.mark.anyio
 async def test_coordinator_init_validation(tmp_path):

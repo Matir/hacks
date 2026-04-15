@@ -16,6 +16,8 @@ from google.adk.models.llm_response import LlmResponse
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
+from trashdig.agents.types import EngineState
+
 if TYPE_CHECKING:
     from trashdig.agents.coordinator import Coordinator
 
@@ -46,7 +48,7 @@ class TrashDigCallback:
         """Return the singleton instance, creating it if needed.
 
         Args:
-            coordinator: The Coordinator instance to link. Required on first call.
+            coordinator: The Coordinator instance to link.
 
         Returns:
             The singleton TrashDigCallback instance.
@@ -55,6 +57,9 @@ class TrashDigCallback:
             if coordinator is None:
                 raise ValueError("TrashDigCallback.get_instance() requires a coordinator on first call")
             cls._instance = cls(coordinator)
+        elif coordinator is not None:
+            # Allow updating the coordinator reference (useful for tests or resumption)
+            cls._instance._c = coordinator
         return cls._instance
 
     @classmethod
@@ -70,17 +75,33 @@ class TrashDigCallback:
         Args:
             agent: The ADK agent (LlmAgent, BaseAgent, etc.) to monitor.
         """
+        # Wire agent-level callbacks (supported by BaseAgent)
+        agent.before_agent_callback = self.on_before_agent
+        agent.after_agent_callback = self.on_after_agent
+
         from google.adk.agents import LlmAgent
         
-        # Only LlmAgent supports these specific callbacks in its schema
+        # Only LlmAgent supports these specific model/tool callbacks in its schema
         if isinstance(agent, LlmAgent):
             agent.before_tool_callback = self.on_before_tool
             agent.after_model_callback = self.on_after_model
             agent.on_model_error_callback = self.on_model_error
-        else:
-            # For non-LlmAgents (like LoopAgent), we don't attach model-specific callbacks
-            # but we could potentially attach before/after agent callbacks if needed.
-            pass
+
+    # ------------------------------------------------------------------
+    # Agent lifecycle hooks
+    # ------------------------------------------------------------------
+
+    def on_before_agent(self, ctx: CallbackContext, req: Any) -> None:
+        """Update state to RUNNING when an agent starts."""
+        self._c._state = EngineState.RUNNING
+        if self._c.on_stats_event:
+            self._c.on_stats_event()
+
+    def on_after_agent(self, ctx: CallbackContext, resp: Any) -> None:
+        """Update state to IDLE when an agent finishes."""
+        self._c._state = EngineState.IDLE
+        if self._c.on_stats_event:
+            self._c.on_stats_event()
 
     # ------------------------------------------------------------------
     # Tool hook
@@ -89,7 +110,11 @@ class TrashDigCallback:
     def on_before_tool(
         self, tool: BaseTool, args: dict[str, Any], ctx: ToolContext
     ) -> Optional[dict]:
-        """Log tool invocations to the TUI before execution."""
+        """Log tool invocations and update state to WAITING_FOR_TOOLS."""
+        self._c._state = EngineState.WAITING_FOR_TOOLS
+        if self._c.on_stats_event:
+            self._c.on_stats_event()
+
         args_str = ", ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
         self._c.log(f"  [dim]→ {tool.name}({args_str})[/dim]")
         return None  # Never skip the actual tool call
@@ -101,7 +126,11 @@ class TrashDigCallback:
     def on_after_model(
         self, ctx: CallbackContext, resp: LlmResponse
     ) -> Optional[LlmResponse]:
-        """Record token usage, cost, and conversation log after each model turn."""
+        """Record token usage, cost, log conversation, and trigger compaction."""
+        # Restore RUNNING state after tool call finishes and model resumes
+        if self._c._state == EngineState.WAITING_FOR_TOOLS:
+            self._c._state = EngineState.RUNNING
+
         usage = resp.usage_metadata
         in_t = (getattr(usage, "prompt_token_count", None) or 0) if usage else 0
         out_t = (getattr(usage, "candidates_token_count", None) or 0) if usage else 0
@@ -110,9 +139,8 @@ class TrashDigCallback:
         agent = self._c._agent_by_name(agent_name)
         model_name = getattr(agent, "model", None) or "unknown"
 
-        # Final accounting: cumulative totals in CostTracker + Engine
+        # Final accounting
         self._c._cost_tracker.record_usage(model_name, in_t, out_t)
-        self._c._engine.total_messages += 1
         
         # Signaling hook for the TUI
         self._c._on_stats(in_t, out_t, new_msg=True, model_name=model_name)
@@ -148,4 +176,4 @@ class TrashDigCallback:
         """Increment the LLM error counter on model API failures."""
         logger.warning("Model error in agent %s: %s", ctx.agent_name, err)
         self._c._on_llm_error()
-        return None  # Let the error propagate to Engine's retry logic
+        return None  # Let the error propagate

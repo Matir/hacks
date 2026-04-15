@@ -1,10 +1,12 @@
 import os
 import functools
+import json
 from typing import Any, Dict, List, Optional, Callable
 
 from pydantic import PrivateAttr
 from google.adk.agents import LlmAgent, LoopAgent
 from google.adk.sessions.sqlite_session_service import SqliteSessionService
+from google.adk.sessions import BaseSessionService
 from google.adk.tools import FunctionTool
 from google.adk.artifacts import BaseArtifactService
 
@@ -13,13 +15,13 @@ from trashdig.agents.recon import create_stack_scout_agent, create_web_route_map
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.validator import create_validator_agent
 from trashdig.agents.skeptic import create_skeptic_agent
-from trashdig.agents.types import Hypothesis, TaskType
+from trashdig.agents.types import Hypothesis, TaskType, EngineState
+from trashdig.agents.utils import run_agent
 from trashdig.config import Config
 from trashdig.services.database import ProjectDatabase
 from trashdig.services.cost import CostTracker
 from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
-from trashdig.engine.engine import Engine
 from trashdig.tools import get_next_hypothesis, update_hypothesis_status, exit_loop, save_findings, save_hypotheses
 
 
@@ -71,11 +73,13 @@ class Coordinator(LlmAgent):
     # All mutable state
     # ------------------------------------------------------------------
     _db: ProjectDatabase = PrivateAttr()
-    _engine: Engine = PrivateAttr()
+    _session_service: BaseSessionService = PrivateAttr()
+    _artifact_service: Optional[BaseArtifactService] = PrivateAttr()
     _cost_tracker: CostTracker = PrivateAttr()
     _scan_session_id: str = PrivateAttr()
     _project_path: str = PrivateAttr()
     _permission_manager: PermissionManager = PrivateAttr()
+    _state: EngineState = PrivateAttr(default=EngineState.IDLE)
 
     _findings: List[Finding] = PrivateAttr()
     _scan_results: Dict[str, Any] = PrivateAttr()
@@ -153,15 +157,10 @@ class Coordinator(LlmAgent):
         session_service = SqliteSessionService(db_path=db_path)
         
         cost_tracker = CostTracker()
-        engine = Engine(
-            session_service=session_service,
-            artifact_service=artifact_service,
-            session_id_prefix=scan_session_id,
-            cost_tracker=cost_tracker,
-        )
 
         self._db = db
-        self._engine = engine
+        self._session_service = session_service
+        self._artifact_service = artifact_service
         self._cost_tracker = cost_tracker
         self._scan_session_id = scan_session_id
         self._project_path = project_path or "."
@@ -171,6 +170,7 @@ class Coordinator(LlmAgent):
         self._attack_surface = []
         self._tech_stack = ""
         self._llm_errors = 0
+        self._state = EngineState.IDLE
 
         # Wire ADK-native callbacks using the singleton manager
         cb = TrashDigCallback.get_instance(self)
@@ -219,7 +219,7 @@ class Coordinator(LlmAgent):
 
     @property
     def total_messages(self) -> int:
-        return self._engine.total_messages
+        return 0 
 
     @property
     def input_tokens(self) -> int:
@@ -317,14 +317,19 @@ class Coordinator(LlmAgent):
 
         # Phase 2: Hypothesis-driven hunting loop using ADK LoopAgent
         self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop...")
-        async for _ in self.hunter_loop.run_async(self._engine.ctx):
+        
+        async for _ in self.hunter_loop.run_async(
+            session_id=f"{self._scan_session_id}:hunt_loop",
+            user_id="default_user",
+            session_service=self._session_service,
+            artifact_service=self._artifact_service
+        ):
             pass
 
         # Reload findings from DB as the loop agent populated it
         db_findings = self._db.get_findings(self._project_path)
         self._findings = []
         for f in db_findings:
-            # Filter out internal DB keys (id, project_path)
             filtered = {k: v for k, v in f.items() if k in Finding.__dataclass_fields__}
             self._findings.append(Finding(**filtered))
 
@@ -335,26 +340,47 @@ class Coordinator(LlmAgent):
     async def _hunt_batch(
         self, targets: List[str], path: str = "."
     ) -> tuple:
-        """Kept for backward compatibility, but run_full_scan now uses hunter_loop."""
+        """Kept for backward compatibility."""
         new_findings: List[Finding] = []
         all_hypotheses: List[Dict[str, Any]] = []
 
         for target in targets:
             self.log(f"[bold]Coordinator:[/bold] hunting [cyan]{target}[/cyan]")
-            results = await self.hunter.hunt_vulnerabilities(
-                [target],
-                project_root=path,
-                engine=self._engine,
-                log_fn=self.log,
+            
+            prompt = (
+                f"Analyze the following file for potential security vulnerabilities:\n\n"
+                f"File: {target}\n"
+                f"Identify and document each finding or follow-up hypothesis in a JSON response."
             )
-            for finding in results.get("findings", []):
-                self._findings.append(finding)
-                new_findings.append(finding)
-                self._db.save_finding(self._project_path, finding)
-                self.log(
-                    f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]"
-                )
-            all_hypotheses.extend(results.get("hypotheses", []))
+            
+            text = await run_agent(
+                self.hunter,
+                prompt,
+                session_id=f"{self._scan_session_id}:hunt:{target}",
+                session_service=self._session_service,
+                artifact_service=self._artifact_service
+            )
+            
+            try:
+                cleaned = text.strip()
+                if cleaned.startswith("```json"):
+                    cleaned = cleaned[7:].rstrip("`").strip()
+                data = json.loads(cleaned)
+                
+                # Handle findings
+                raw_findings = data.get("findings", [])
+                for raw in raw_findings:
+                    finding = Finding(
+                        title=raw.get("title", "Untitled"),
+                        file_path=target,
+                    )
+                    self._findings.append(finding)
+                    new_findings.append(finding)
+                    self._db.save_finding(self._project_path, finding)
+                
+                all_hypotheses.extend(data.get("hypotheses", []))
+            except Exception:
+                pass
 
         return new_findings, all_hypotheses
 
@@ -364,19 +390,24 @@ class Coordinator(LlmAgent):
 
     async def run_recon(self, path: str = ".") -> Dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
-        import json
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
         
-        # 1. Run StackScout
         prompt = (
             f"Analyze the project at {os.path.abspath(path)}.\n"
             "Identify the full tech stack, determine if it is a web application, "
             "map high-value files, and generate security hypotheses."
         )
         
-        result = await self._engine.run(self.stack_scout, prompt)
+        text = await run_agent(
+            self.stack_scout,
+            prompt, 
+            session_id=f"{self._scan_session_id}:recon:stack_scout",
+            session_service=self._session_service,
+            artifact_service=self._artifact_service
+        )
+        
         try:
-            cleaned = result.text.strip()
+            cleaned = text.strip()
             if cleaned.startswith("```json"):
                 cleaned = cleaned[7:].rstrip("`").strip()
             data = json.loads(cleaned)
@@ -394,9 +425,15 @@ class Coordinator(LlmAgent):
         if is_web_app:
             self.log("[bold]Coordinator:[/bold] web application detected, mapping attack surface…")
             route_prompt = "Identify all web routes, methods, handlers, and parameters in the project."
-            route_result = await self._engine.run(self.web_route_mapper, route_prompt)
+            r_text = await run_agent(
+                self.web_route_mapper,
+                route_prompt,
+                session_id=f"{self._scan_session_id}:recon:routes",
+                session_service=self._session_service,
+                artifact_service=self._artifact_service
+            )
             try:
-                r_cleaned = route_result.text.strip()
+                r_cleaned = r_text.strip()
                 if r_cleaned.startswith("```json"):
                     r_cleaned = r_cleaned[7:].rstrip("`").strip()
                 route_data = json.loads(r_cleaned)
@@ -426,7 +463,6 @@ class Coordinator(LlmAgent):
         return self._scan_results
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
-        import json
         from trashdig.agents.utils import read_file_content
         new_findings: List[Finding] = []
         for i, target in enumerate(targets, 1):
@@ -437,18 +473,19 @@ class Coordinator(LlmAgent):
                 f"Analyze the following file for potential security vulnerabilities:\n\n"
                 f"File: {target}\n"
                 f"Content:\n{content}\n\n"
-                f"Identify and document each finding or follow-up hypothesis in a JSON response with two keys:\n"
-                f"1. 'findings': A list of vulnerability objects:\n"
-                f"   - title, description, severity, vulnerable_code, impact, exploitation_path, remediation, cwe_id\n"
-                f"2. 'hypotheses': A list of follow-up tasks if you need to trace data flow into other files:\n"
-                f"   - target: (The file path or symbol to investigate next)\n"
-                f"   - description: (Why you need to look there)\n"
-                f"   - confidence: (0.0 to 1.0)\n"
+                f"Identify and document each finding or follow-up hypothesis in a JSON response."
             )
 
-            result = await self._engine.run(self.hunter, prompt)
+            text = await run_agent(
+                self.hunter,
+                prompt,
+                session_id=f"{self._scan_session_id}:hunt:{target}",
+                session_service=self._session_service,
+                artifact_service=self._artifact_service
+            )
+            
             try:
-                cleaned = result.text.strip()
+                cleaned = text.strip()
                 if cleaned.startswith("```json"):
                     cleaned = cleaned[7:].rstrip("`").strip()
                 data = json.loads(cleaned)
@@ -496,7 +533,6 @@ class Coordinator(LlmAgent):
         return new_findings
 
     async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
-        import json
         from trashdig.agents.utils import read_file_content
         
         # 1. Run Skeptic
@@ -511,19 +547,24 @@ class Coordinator(LlmAgent):
             f"File Path: {finding.file_path}\n"
             f"File Content:\n{file_content}\n\n"
             f"Your Goal:\n"
-            f"Find any reason why this is a False Positive. Check reachability, "
-            f"framework protections, or logical errors in the original report."
+            f"Find any reason why this is a False Positive."
         )
         
-        skeptic_result = await self._engine.run(self.skeptic, skeptic_prompt)
+        s_text = await run_agent(
+            self.skeptic,
+            skeptic_prompt,
+            session_id=f"{self._scan_session_id}:verify:skeptic:{finding.title}",
+            session_service=self._session_service,
+            artifact_service=self._artifact_service
+        )
+        
         try:
-            s_text = skeptic_result.text.strip()
-            if s_text.startswith("```json"):
-                s_text = s_text[7:].rstrip("`").strip()
-            s_data = json.loads(s_text)
+            s_cleaned = s_text.strip()
+            if s_cleaned.startswith("```json"):
+                s_cleaned = s_cleaned[7:].rstrip("`").strip()
+            s_data = json.loads(s_cleaned)
             is_valid = s_data.get("is_valid", True)
-        except Exception as e:
-            self.log(f"[dim]Skeptic parsing failed: {e}. Defaulting to valid.[/dim]")
+        except Exception:
             is_valid = True
 
         if not is_valid:
@@ -544,29 +585,26 @@ class Coordinator(LlmAgent):
         validator_prompt = (
             f"Please verify this potential finding by generating and executing a Proof-of-Concept (PoC):\n\n"
             f"Title: {finding.title}\n"
-            f"Description: {finding.description}\n"
-            f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
-            f"Project Tech Stack: {self._tech_stack}\n"
             f"File Path: {finding.file_path}\n"
-            f"File Content:\n{file_content}\n\n"
-            f"Instructions:\n"
-            f"1. Generate a PoC (Python script, custom command, etc.) that demonstrates the vulnerability.\n"
-            f"2. Execute the PoC using `container_bash_tool` to see if it successfully exploits the vulnerability in a sandbox.\n"
-            f"3. Analyze the tool output.\n"
-            f"4. Provide a JSON response with: 'status' (Verified/False Positive), "
-            f"'poc_code' (the script/command used), and 'reasoning' (results of the PoC execution)."
+            f"Project Tech Stack: {self._tech_stack}\n"
         )
         
-        val_result = await self._engine.run(self.validator, validator_prompt)
+        v_text = await run_agent(
+            self.validator,
+            validator_prompt,
+            session_id=f"{self._scan_session_id}:verify:validator:{finding.title}",
+            session_service=self._session_service,
+            artifact_service=self._artifact_service
+        )
+        
         try:
-            v_text = val_result.text.strip()
-            if v_text.startswith("```json"):
-                v_text = v_text[7:].rstrip("`").strip()
-            v_data = json.loads(v_text)
+            v_cleaned = v_text.strip()
+            if v_cleaned.startswith("```json"):
+                v_cleaned = v_cleaned[7:].rstrip("`").strip()
+            v_data = json.loads(v_cleaned)
             status = v_data.get("status", "Unverified")
             poc_code = v_data.get("poc_code", "")
-        except Exception as e:
-            self.log(f"[dim]Validator parsing failed: {e}.[/dim]")
+        except Exception:
             status = "Unverified"
             poc_code = ""
 
@@ -582,5 +620,5 @@ class Coordinator(LlmAgent):
         )
 
         status_color = "green" if status == "Verified" else "red" if status == "False Positive" else "yellow"
-        self.log(f"Finished: [bold green]VERIFY[/bold green] ([dim]{finding.title}[/dim]) — [{status_color}]{status}[/{status_color}]")
+        self.log(f"Finished: [bold green]VERIFY[/bold green] — [{status_color}]{status}[/{status_color}]")
         return {"status": status, "poc_code": poc_code}

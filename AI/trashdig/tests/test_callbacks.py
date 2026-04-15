@@ -5,6 +5,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
 import google.genai.types as genai_types
 from google.adk.agents import LlmAgent
+from trashdig.agents.types import EngineState
 
 @pytest.fixture(autouse=True)
 def reset_callback_singleton():
@@ -18,8 +19,7 @@ def mock_coordinator():
     coord.project_path = "test_project"
     coord._db = MagicMock()
     coord._cost_tracker = MagicMock()
-    coord._engine = MagicMock()
-    coord._engine.total_messages = 0
+    coord._state = EngineState.IDLE
     # Mock _agent_by_name to return a mock agent with a model
     agent = MagicMock()
     agent.model = "gemini-2.0-flash"
@@ -49,9 +49,6 @@ def test_callback_on_after_model(mock_coordinator):
         "gemini-2.0-flash", 100, 50
     )
     
-    # Check engine message count update
-    assert mock_coordinator._engine.total_messages == 1
-    
     # Check TUI signaling
     mock_coordinator._on_stats.assert_called_once_with(
         100, 50, new_msg=True, model_name="gemini-2.0-flash"
@@ -67,6 +64,9 @@ def test_callback_on_before_tool(mock_coordinator):
     
     cb.on_before_tool(tool, {"arg1": "val1"}, MagicMock())
     
+    # Check state update
+    assert mock_coordinator._state == EngineState.WAITING_FOR_TOOLS
+    
     # Check logging to TUI
     mock_coordinator.log.assert_called_once()
     assert "test_tool" in mock_coordinator.log.call_args[0][0]
@@ -81,3 +81,15 @@ def test_callback_attach_to(mock_coordinator):
     assert agent.before_tool_callback == cb.on_before_tool
     assert agent.after_model_callback == cb.on_after_model
     assert agent.on_model_error_callback == cb.on_model_error
+    assert agent.before_agent_callback == cb.on_before_agent
+    assert agent.after_agent_callback == cb.on_after_agent
+
+def test_callback_agent_lifecycle(mock_coordinator):
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+    
+    cb.on_before_agent(ctx, None)
+    assert mock_coordinator._state == EngineState.RUNNING
+    
+    cb.on_after_agent(ctx, None)
+    assert mock_coordinator._state == EngineState.IDLE

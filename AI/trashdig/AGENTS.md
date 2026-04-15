@@ -37,15 +37,14 @@ TrashDig operates as a team of specialized agents coordinated by a top-level **C
 
 TrashDig is designed to be "ADK-Native," leveraging the framework's high-level abstractions for orchestration and state:
 
-*   **Orchestration**: Uses ADK's `LlmAgent` with `sub_agents` for dynamic delegation. The manual Python task loop is replaced by an agentic "brain" that decides which tool or agent to call next.
+*   **Orchestration**: Uses ADK's `LlmAgent` with `sub_agents` for dynamic delegation. Agent interactions are handled via native `agent.run()` or `runner.run_async()` methods, allowing the ADK engine to manage the tool execution loop.
 *   **State & Memory**: Uses ADK `SessionService` and `MemoryService` to maintain shared context across all agents. This ensures that the Hunter agent understands the project structure discovered by StackScout without redundant re-analysis.
-*   **Observability (Callbacks)**: Employs a unified `TrashDigCallback` (inheriting from ADK's `BaseCallback`) to handle real-time TUI updates, cost tracking, and database logging.
+*   **Observability (Callbacks)**: Employs a unified `TrashDigCallback` (implementing ADK's agent and model hooks) to handle real-time TUI updates, state tracking (RUNNING, WAITING_FOR_TOOLS), cost accounting, and database logging.
 *   **Artifacts**: Uses the native **ADK Artifact API** to manage large tool outputs (ASTs, call graphs, scan results), ensuring context efficiency by referencing files instead of inlining massive text blocks.
 *   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
 *   **Services Layer**:
     *   **ProjectDatabase**: ADK-compatible storage for findings, symbols, and session history.
-    *   **CostTracker**: The single source of truth for LLM-related accounting. Tracks total input/output tokens and USD costs across all agents.
-    *   **Engine**: The execution runtime for agent turns. Manages retries, rate limiting, and context compaction. Delegates financial recording to the `CostTracker`.
+    *   **CostTracker**: The single source of truth for LLM-related accounting. Tracks total input/output tokens and USD costs across all agents, updated per-turn by the callback system.
     *   **PermissionManager**: ADK `Tool` wrapper that intercepts calls based on security policies (e.g., TUI confirmation for unsandboxed commands).
 *   **Isolation**: PoCs are executed in isolated **Docker containers** (Validator) or **Minijail** sandboxes (Hunter tools) to ensure host safety.
 

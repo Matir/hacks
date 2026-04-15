@@ -16,6 +16,13 @@ class TaskStatus(Enum):
     COMPLETED = auto()
     FAILED = auto()
 
+class EngineState(Enum):
+    IDLE = "IDLE"
+    RUNNING = "RUNNING"
+    WAITING_FOR_TOOLS = "WAITING_FOR_TOOLS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
 @dataclass
 class Task:
     """A unit of work for an agent.

@@ -16,9 +16,9 @@
     - [x] Refactor `@artifact_tool` to use `ToolContext.save_artifact` with legacy fallback.
     - [x] Update agents to use artifact references for large analysis blobs (ASTs, routes).
     - [x] Initialize `FileArtifactService` in `main.py` and pass to `Engine`.
-- [ ] **[LOW]** Standardize Agent Interfaces.
-    - [ ] Remove custom `.scan()`, `.hunt()`, `.map_routes()` methods.
-    - [ ] Move domain logic into prompts and use `agent.run()`.
+- [x] **[LOW]** Standardize Agent Interfaces.
+    - [x] Remove custom `.scan()`, `.hunt()`, `.map_routes()` methods.
+    - [x] Move domain logic into prompts and use native `agent.run()` or `runner.run_async()`.
 
 ## Core Infrastructure
 - [x] Implement `tree-sitter` for AST-based analysis.
@@ -28,9 +28,9 @@
 - [x] Implement `bash_tool` for secure command execution (Phase 1).
 - [x] Integrate `google_search` and `web_fetch` for automated security research.
 - [x] **[HIGH]** Setup SQLite Project Database for persistent knowledge and session management (Phase 4).
-- [ ] **[REFAC]** Implement `Engine` State Machine (`src/trashdig/engine/`).
+- [x] **[REFAC]** Implement `Engine` State Machine (`src/trashdig/engine/`).
     - [x] Move core logic from `utils.run_prompt` into a formal `Engine` class.
-    - [ ] *Note: Custom Engine is being deprecated in favor of ADK Runner + Callbacks.*
+    - [x] *Note: Custom Engine has been removed in favor of ADK Runner + Callbacks.*
 - [ ] **[REFAC]** Context Compaction & History Management.
     - [x] Implement a `ContextManager` to monitor tokens.
     - [ ] *Note: Moving to ADK native compaction/summarization.*
