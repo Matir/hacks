@@ -44,11 +44,12 @@ TrashDig is designed to be "ADK-Native," leveraging the framework's high-level a
 *   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
 *   **Services Layer**:
     *   **ProjectDatabase**: ADK-compatible storage for findings, symbols, and session history.
-    *   **CostTracker**: Integrated into the ADK callback chain for real-time USD monitoring.
+    *   **CostTracker**: The single source of truth for LLM-related accounting. Tracks total input/output tokens and USD costs across all agents.
+    *   **Engine**: The execution runtime for agent turns. Manages retries, rate limiting, and context compaction. Delegates financial recording to the `CostTracker`.
     *   **PermissionManager**: ADK `Tool` wrapper that intercepts calls based on security policies (e.g., TUI confirmation for unsandboxed commands).
 *   **Isolation**: PoCs are executed in isolated **Docker containers** (Validator) or **Minijail** sandboxes (Hunter tools) to ensure host safety.
 
-## 🛡️ Security & Tool Sandboxing
+All designs should adhere to the ADK best practices.
 
 ## 🛡️ Security & Tool Sandboxing
 

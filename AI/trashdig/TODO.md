@@ -69,6 +69,7 @@
 - [x] **[MEDIUM]** Structural Refactor: Centralize Shared Logic.
     - [x] Move `RateLimiter`, `Database`, `CostTracker`, and `PermissionManager` into a `services` package to decouple infrastructure from agent logic.
 
+
 ## Semantic Intelligence (Phase 3)
 - [x] Implement `FindReferences(symbol)` tool.
 - [x] Implement `GetScope(file, line)` tool.

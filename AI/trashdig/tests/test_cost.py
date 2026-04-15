@@ -4,6 +4,8 @@ from trashdig.services.cost import CostTracker
 def test_cost_tracker_initial_cost():
     tracker = CostTracker()
     assert tracker.get_total_cost() == 0.0
+    assert tracker.total_input_tokens == 0
+    assert tracker.total_output_tokens == 0
 
 def test_cost_tracker_record_usage_flash():
     tracker = CostTracker()
@@ -12,23 +14,32 @@ def test_cost_tracker_record_usage_flash():
     # 1,000,000 output = $0.60
     tracker.record_usage("gemini-2.0-flash", 1_000_000, 1_000_000)
     assert tracker.get_total_cost() == pytest.approx(0.75)
+    assert tracker.total_input_tokens == 1_000_000
+    assert tracker.total_output_tokens == 1_000_000
 
 def test_cost_tracker_record_usage_pro():
     tracker = CostTracker()
     # gemini-2.0-pro-exp: $1.25/1M input, $5.00/1M output
     tracker.record_usage("gemini-2.0-pro-exp", 1_000_000, 1_000_000)
     assert tracker.get_total_cost() == pytest.approx(6.25)
+    assert tracker.total_input_tokens == 1_000_000
+    assert tracker.total_output_tokens == 1_000_000
 
 def test_cost_tracker_record_usage_multiple():
     tracker = CostTracker()
     tracker.record_usage("gemini-2.0-flash", 1_000_000, 0) # $0.15
     tracker.record_usage("gemini-2.0-pro-exp", 0, 1_000_000) # $5.00
     assert tracker.get_total_cost() == pytest.approx(5.15)
+    assert tracker.total_input_tokens == 1_000_000
+    assert tracker.total_output_tokens == 1_000_000
 
 def test_cost_tracker_unknown_model():
     tracker = CostTracker()
     tracker.record_usage("unknown-model", 1_000_000, 1_000_000)
     assert tracker.get_total_cost() == 0.0
+    # Still records tokens even if unknown model (for tracking purposes)
+    assert tracker.total_input_tokens == 1_000_000
+    assert tracker.total_output_tokens == 1_000_000
 
 def test_cost_tracker_prefix_match():
     tracker = CostTracker()

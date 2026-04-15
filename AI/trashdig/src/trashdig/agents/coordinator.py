@@ -64,7 +64,6 @@ class Coordinator(LlmAgent):
 
     # ------------------------------------------------------------------
     # All mutable state — PrivateAttr keeps them out of the Pydantic schema.
-    # Initialised in __init__ via object.__setattr__ after super().__init__().
     # ------------------------------------------------------------------
     _db: ProjectDatabase = PrivateAttr()
     _engine: Engine = PrivateAttr()
@@ -78,11 +77,6 @@ class Coordinator(LlmAgent):
     _attack_surface: List[Dict[str, Any]] = PrivateAttr()
     _tech_stack: str = PrivateAttr()
 
-    _total_messages: int = PrivateAttr()
-    _total_input_tokens: int = PrivateAttr()
-    _total_output_tokens: int = PrivateAttr()
-    _current_msg_input: int = PrivateAttr()
-    _current_msg_output: int = PrivateAttr()
     _llm_errors: int = PrivateAttr()
 
     def __init__(
@@ -91,14 +85,7 @@ class Coordinator(LlmAgent):
         project_path: str = ".",
         on_confirm: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
     ):
-        """Initialises the Coordinator with the given configuration.
-
-        Args:
-            config: The project configuration object.
-            project_path: Root directory of the project being scanned.
-                Used as the key for all database records.
-            on_confirm: Optional callback for tool call confirmation.
-        """
+        """Initialises the Coordinator with the given configuration."""
         perm = PermissionManager(config, on_confirm=on_confirm)
 
         stack_scout = create_stack_scout_agent(
@@ -124,9 +111,6 @@ class Coordinator(LlmAgent):
 
         coordinator_cfg = config.get_agent_config("coordinator")
 
-        # Initialise the LlmAgent (Pydantic model) with sub-agents declared.
-        # sub_agents registers the worker hierarchy for ADK-native orchestration;
-        # the coordinator LLM can delegate via transfer_to_agent in future iterations.
         super().__init__(
             name="coordinator",
             model=coordinator_cfg.model,
@@ -135,40 +119,35 @@ class Coordinator(LlmAgent):
             sub_agents=[stack_scout, web_route_mapper, hunter, skeptic, validator],
         )
 
-        # --- PrivateAttr initialisation (after super().__init__() completes) ---
+        # --- PrivateAttr initialisation ---
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
         db = ProjectDatabase(db_path)
         scan_session_id = db.get_or_create_scan_session(project_path if project_path else ".")
         session_service = SqliteSessionService(db_path=db_path)
+        
+        cost_tracker = CostTracker()
         engine = Engine(
             session_service=session_service,
             session_id_prefix=scan_session_id,
+            cost_tracker=cost_tracker,
         )
 
-        object.__setattr__(self, '_db', db)
-        object.__setattr__(self, '_engine', engine)
-        object.__setattr__(self, '_cost_tracker', CostTracker())
-        object.__setattr__(self, '_scan_session_id', scan_session_id)
-        object.__setattr__(self, '_project_path', project_path or ".")
-        object.__setattr__(self, '_permission_manager', perm)
-        object.__setattr__(self, '_findings', [])
-        object.__setattr__(self, '_scan_results', {})
-        object.__setattr__(self, '_attack_surface', [])
-        object.__setattr__(self, '_tech_stack', "")
-        object.__setattr__(self, '_total_messages', 0)
-        object.__setattr__(self, '_total_input_tokens', 0)
-        object.__setattr__(self, '_total_output_tokens', 0)
-        object.__setattr__(self, '_current_msg_input', 0)
-        object.__setattr__(self, '_current_msg_output', 0)
-        object.__setattr__(self, '_llm_errors', 0)
+        self._db = db
+        self._engine = engine
+        self._cost_tracker = cost_tracker
+        self._scan_session_id = scan_session_id
+        self._project_path = project_path or "."
+        self._permission_manager = perm
+        self._findings = []
+        self._scan_results = {}
+        self._attack_surface = []
+        self._tech_stack = ""
+        self._llm_errors = 0
 
-        # Wire ADK-native callbacks to all sub-agents + coordinator itself so
-        # tool calls, token stats, costs, and DB logging happen automatically.
-        cb = TrashDigCallback(self)
+        # Wire ADK-native callbacks using the singleton manager
+        cb = TrashDigCallback.get_instance(self)
         for _agent in (*self.sub_agents, self):
-            _agent.before_tool_callback = cb.on_before_tool
-            _agent.after_model_callback = cb.on_after_model
-            _agent.on_model_error_callback = cb.on_model_error
+            cb.attach_to(_agent)
 
     # ------------------------------------------------------------------
     # TUI compatibility properties (read-only)
@@ -214,15 +193,19 @@ class Coordinator(LlmAgent):
 
     @property
     def total_messages(self) -> int:
-        return self._total_messages
+        return self._engine.total_messages
 
     @property
     def input_tokens(self) -> int:
-        return self._total_input_tokens + self._current_msg_input
+        return self._cost_tracker.total_input_tokens
 
     @property
     def output_tokens(self) -> int:
-        return self._total_output_tokens + self._current_msg_output
+        return self._cost_tracker.total_output_tokens
+
+    @property
+    def total_cost(self) -> float:
+        return self._cost_tracker.total_cost
 
     @property
     def llm_errors(self) -> int:
@@ -260,26 +243,11 @@ class Coordinator(LlmAgent):
         new_msg: bool = False,
         model_name: Optional[str] = None,
     ) -> None:
-        """Accumulate LLM usage stats from a single model turn.
+        """Inform the TUI that stats have changed.
 
-        Args:
-            input_tokens: Latest token count for the current request.
-            output_tokens: Latest token count for the current request.
-            new_msg: Whether this is the final update for a message.
-            model_name: The name of the model used for this request.
+        The actual accounting is now handled by Engine and CostTracker.
+        This method remains as a signaling hook for the TUI.
         """
-        if new_msg:
-            self._total_messages += 1
-            self._total_input_tokens += input_tokens
-            self._total_output_tokens += output_tokens
-            self._current_msg_input = 0
-            self._current_msg_output = 0
-            if model_name:
-                self._cost_tracker.record_usage(model_name, input_tokens, output_tokens)
-        else:
-            self._current_msg_input = input_tokens
-            self._current_msg_output = output_tokens
-
         if self.on_stats_event:
             self.on_stats_event()
 

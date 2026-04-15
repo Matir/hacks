@@ -30,6 +30,8 @@ class EngineResult:
     status: EngineState = EngineState.IDLE
     error: Optional[str] = None
 
+from trashdig.services.cost import CostTracker
+
 class Engine:
     """The Engine handles the core Observer-Actor loop for ADK agents.
     
@@ -45,16 +47,17 @@ class Engine:
         compaction_threshold: float = 0.8,
         session_service: Optional[BaseSessionService] = None,
         session_id_prefix: Optional[str] = None,
+        cost_tracker: Optional[CostTracker] = None,
     ):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.max_context_tokens = max_context_tokens
         self.compaction_threshold = compaction_threshold
         self.state = EngineState.IDLE
-        self.total_input_tokens = 0
-        self.total_output_tokens = 0
         self.session_service = session_service if session_service is not None else InMemorySessionService()
         self.session_id_prefix = session_id_prefix
+        self.cost_tracker = cost_tracker or CostTracker()
+        self.total_messages = 0
 
     async def run(
         self,
@@ -63,23 +66,7 @@ class Engine:
         on_stats: Optional[Callable[[int, int, bool], None]] = None,
         session_id: Optional[str] = None,
     ) -> EngineResult:
-        """Runs a prompt through the agent with retries and tracking.
-
-        Tool-call logging, conversation DB persistence, cost tracking, and
-        error counting are handled by TrashDigCallback (ADK-native callbacks
-        registered on each agent).  ``on_stats`` is kept here solely for
-        intermediate streaming token updates used by the live TUI display.
-
-        Args:
-            agent: The ADK agent instance to run.
-            prompt: The text prompt to send.
-            on_stats: Optional callback for intermediate streaming token counts
-                (input, output, is_final=False).  The final accounting is done
-                by TrashDigCallback.on_after_model.
-
-        Returns:
-            An EngineResult object containing the outcome of the run.
-        """
+        """Runs a prompt through the agent with retries and tracking."""
         from trashdig.services.rate_limiter import get_rate_limiter
         limiter = get_rate_limiter()
 
@@ -183,9 +170,6 @@ class Engine:
                 result.tool_calls = tool_calls
                 result.status = EngineState.COMPLETED
                 self.state = EngineState.COMPLETED
-                
-                self.total_input_tokens += input_tokens
-                self.total_output_tokens += output_tokens
                 
                 if limiter:
                     await limiter.update_usage(input_tokens + output_tokens)

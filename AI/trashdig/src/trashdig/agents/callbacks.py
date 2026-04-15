@@ -28,17 +28,51 @@ class TrashDigCallback:
     Receives ADK hook calls and routes them to the Coordinator's TUI event
     system, token/cost tracking, and ProjectDatabase conversation log.
 
-    Usage::
-
-        cb = TrashDigCallback(coordinator)
-        for agent in (stack_scout, hunter, ...):
-            agent.before_tool_callback = cb.on_before_tool
-            agent.after_model_callback = cb.on_after_model
-            agent.on_model_error_callback = cb.on_model_error
+    This class implements a singleton pattern to ensure all agents in a
+    session share the same accounting and logging logic.
     """
 
+    _instance: Optional[TrashDigCallback] = None
+
     def __init__(self, coordinator: "Coordinator") -> None:
+        """Initialise the callback manager.
+        
+        Note: Use get_instance() instead of direct instantiation in most cases.
+        """
         self._c = coordinator
+
+    @classmethod
+    def get_instance(cls, coordinator: Optional["Coordinator"] = None) -> TrashDigCallback:
+        """Return the singleton instance, creating it if needed.
+
+        Args:
+            coordinator: The Coordinator instance to link. Required on first call.
+
+        Returns:
+            The singleton TrashDigCallback instance.
+        """
+        if cls._instance is None:
+            if coordinator is None:
+                raise ValueError("TrashDigCallback.get_instance() requires a coordinator on first call")
+            cls._instance = cls(coordinator)
+        return cls._instance
+
+    @classmethod
+    def _reset(cls) -> None:
+        """Reset the singleton instance (for testing)."""
+        cls._instance = None
+
+    def attach_to(self, agent: Any) -> None:
+        """Attach this callback manager to an ADK agent.
+
+        Wires up the tool, model, and error hooks.
+
+        Args:
+            agent: The ADK agent (LlmAgent, BaseAgent, etc.) to monitor.
+        """
+        agent.before_tool_callback = self.on_before_tool
+        agent.after_model_callback = self.on_after_model
+        agent.on_model_error_callback = self.on_model_error
 
     # ------------------------------------------------------------------
     # Tool hook
@@ -65,9 +99,14 @@ class TrashDigCallback:
         out_t = (getattr(usage, "candidates_token_count", None) or 0) if usage else 0
 
         agent_name = ctx.agent_name
-        model_name = getattr(self._c._agent_by_name(agent_name), "model", None)
+        agent = self._c._agent_by_name(agent_name)
+        model_name = getattr(agent, "model", None) or "unknown"
 
-        # Final accounting: cumulative totals + cost tracker
+        # Final accounting: cumulative totals in CostTracker + Engine
+        self._c._cost_tracker.record_usage(model_name, in_t, out_t)
+        self._c._engine.total_messages += 1
+        
+        # Signaling hook for the TUI
         self._c._on_stats(in_t, out_t, new_msg=True, model_name=model_name)
 
         # Extract response text and tool calls for the DB log

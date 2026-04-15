@@ -43,8 +43,6 @@ async def test_engine_run_success(engine, mock_agent):
         assert result.input_tokens == 10
         assert result.output_tokens == 5
         assert result.status == EngineState.COMPLETED
-        assert engine.total_input_tokens == 10
-        assert engine.total_output_tokens == 5
 
 @pytest.mark.anyio
 async def test_engine_tool_calling_state(engine, mock_agent):
@@ -115,12 +113,10 @@ async def test_engine_retry_on_failure(engine, mock_agent):
         instance = MockRunner.return_value
         instance.run_async = mock_run_async_fail_then_succeed
         
-        on_error = MagicMock()
-        result = await engine.run(mock_agent, "test prompt", on_error=on_error)
+        result = await engine.run(mock_agent, "test prompt")
         
         assert result.text == "Success"
         assert call_count == 2
-        on_error.assert_called_once()
 
 @pytest.mark.anyio
 async def test_engine_max_retries_exceeded(engine, mock_agent):

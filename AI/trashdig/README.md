@@ -57,7 +57,10 @@ flowchart TD
     V -->|Verified / False Positive| C
 
     C -->|Persist| DB[(SQLite DB)]
-    C -->|Usage / Cost| CT[Cost Tracker]
+    C -->|Stats Hook| UI([TUI / UI])
+    E -->|Record Usage| CT[Cost Tracker]
+    cb[Callbacks] -->|Record Usage| CT
+    cb -->|Log| DB
 
     subgraph Infrastructure
         direction LR

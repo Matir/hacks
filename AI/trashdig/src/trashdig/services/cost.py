@@ -22,6 +22,8 @@ class CostTracker:
         """
         self.rates = rates or self.DEFAULT_RATES
         self.total_cost: float = 0.0
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
 
     def record_usage(self, model_name: str, input_tokens: int, output_tokens: int) -> None:
         """Records usage for a specific model and updates the total cost.
@@ -31,6 +33,9 @@ class CostTracker:
             input_tokens: Number of input tokens.
             output_tokens: Number of output tokens.
         """
+        self.total_input_tokens += input_tokens
+        self.total_output_tokens += output_tokens
+
         rate = self.rates.get(model_name)
         
         # If no exact match, try to find a prefix match (e.g., 'gemini-2.0-flash-001')
