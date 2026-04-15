@@ -1,9 +1,9 @@
 # TrashDig TODO List
 
 ## 🏗️ ADK-Native Refactor (Priority)
-- [ ] **[HIGH]** Refactor `Coordinator` from Python loop to `LlmAgent`.
-    - [ ] Define sub-agents in `LlmAgent` constructor.
-    - [ ] Replace `run_loop` with agentic delegation.
+- [x] **[HIGH]** Refactor `Coordinator` from Python loop to `LlmAgent`.
+    - [x] Define sub-agents in `LlmAgent` constructor.
+    - [x] Replace `run_loop` with agentic delegation.
 - [x] **[HIGH]** Implement `TrashDigCallback` (ADK Callbacks).
     - [x] Move TUI tool-call updates to `before_tool_callback`.
     - [x] Integrate `CostTracker` and DB logging into `after_model_callback`.
