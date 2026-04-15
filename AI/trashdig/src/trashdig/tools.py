@@ -333,10 +333,37 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
                 summary.append(f"{node.type.replace('_', ' ').capitalize()}: {name}")
                 
         return "\n".join(summary) if summary else "No top-level definitions found."
-        
+
     except Exception as e:
         return f"Error analyzing AST: {str(e)}"
 
+def get_project_structure(path: str = ".") -> str:
+    """Returns a list of all files in the project, respecting .gitignore.
+
+    Args:
+        path: The root directory to list.
+
+    Returns:
+        A newline-separated list of file paths.
+    """
+    from .agents.utils import get_project_structure as _get_struct
+    files = _get_struct(path)
+    return "\n".join(files)
+
+def detect_frameworks(path: str = ".") -> str:
+    """Performs deterministic detection of frameworks and libraries.
+
+    Args:
+        path: The project root directory.
+
+    Returns:
+        A JSON string containing detected frameworks by category.
+    """
+    from .agents.utils import get_project_structure as _get_struct
+    from .agents.utils import detect_frameworks as _detect
+    files = _get_struct(path)
+    frameworks = _detect(files, path)
+    return json.dumps(frameworks)
 @artifact_tool(max_chars=5000)
 def get_symbol_definition(symbol_name: str, path: str = ".") -> str:
     """Finds the definition of a function or class across the project.
@@ -1073,4 +1100,77 @@ def update_hypothesis_status(task_id: str, status: str, db_path: str = ".trashdi
         return f"Hypothesis {task_id} updated to {status}."
     except Exception as e:
         return f"Error updating database: {str(e)}"
+
+def save_findings(findings_json: str, project_path: str, db_path: str = ".trashdig/trashdig.db") -> str:
+    """Saves a list of findings to the database.
+
+    Args:
+        findings_json: A JSON string containing a list of finding objects.
+        project_path: The project root directory.
+        db_path: Path to the SQLite database.
+
+    Returns:
+        A confirmation message.
+    """
+    from .findings import Finding
+    try:
+        data = json.loads(findings_json)
+        if not isinstance(data, list):
+            data = [data]
+        
+        count = 0
+        for raw in data:
+            finding = Finding(
+                title=raw.get("title", "Untitled"),
+                description=raw.get("description", "N/A"),
+                severity=raw.get("severity", "N/A"),
+                vulnerable_code=raw.get("vulnerable_code", "N/A"),
+                file_path=raw.get("file_path", "N/A"),
+                impact=raw.get("impact", "N/A"),
+                exploitation_path=raw.get("exploitation_path", "N/A"),
+                remediation=raw.get("remediation", "N/A"),
+                cwe_id=raw.get("cwe_id"),
+            )
+            # We need a ProjectDatabase instance or direct SQL
+            # For simplicity in a tool, use direct SQL or import ProjectDatabase
+            from .services.database import ProjectDatabase
+            db = ProjectDatabase(db_path)
+            db.save_finding(project_path, finding)
+            count += 1
+        return f"Saved {count} findings."
+    except Exception as e:
+        return f"Error saving findings: {str(e)}"
+
+def save_hypotheses(hypotheses_json: str, project_path: str, db_path: str = ".trashdig/trashdig.db") -> str:
+    """Saves a list of follow-up hypotheses to the database.
+
+    Args:
+        hypotheses_json: A JSON string containing a list of hypothesis objects.
+        project_path: The project root directory.
+        db_path: Path to the SQLite database.
+
+    Returns:
+        A confirmation message.
+    """
+    from .agents.types import Hypothesis, TaskType
+    try:
+        data = json.loads(hypotheses_json)
+        if not isinstance(data, list):
+            data = [data]
+        
+        from .services.database import ProjectDatabase
+        db = ProjectDatabase(db_path)
+        count = 0
+        for h in data:
+            hypo = Hypothesis(
+                type=TaskType.HUNT,
+                target=h.get("target", ""),
+                description=h.get("description", ""),
+                confidence=h.get("confidence", 0.5),
+            )
+            db.save_hypothesis(project_path, hypo)
+            count += 1
+        return f"Saved {count} hypotheses."
+    except Exception as e:
+        return f"Error saving hypotheses: {str(e)}"
 

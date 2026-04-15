@@ -20,7 +20,7 @@ from trashdig.services.cost import CostTracker
 from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
 from trashdig.engine.engine import Engine
-from trashdig.tools import get_next_hypothesis, update_hypothesis_status, exit_loop
+from trashdig.tools import get_next_hypothesis, update_hypothesis_status, exit_loop, save_findings, save_hypotheses
 
 
 _COORDINATOR_INSTRUCTION = """
@@ -51,7 +51,10 @@ You are the Hunter Orchestrator. Your job is to process ONE pending security hyp
 3. If you get a hypothesis:
    - Extract the 'target' (file path).
    - Use the `hunter` agent to perform a deep-dive analysis of that target.
-   - Once the hunter is done, call `update_hypothesis_status` with 'completed'.
+   - The hunter will return a JSON response with 'findings' and 'hypotheses'.
+   - Call `save_findings` with the 'findings' list.
+   - Call `save_hypotheses` with the 'hypotheses' list.
+   - Once done, call `update_hypothesis_status` with 'completed'.
 """
 
 
@@ -122,6 +125,8 @@ class Coordinator(LlmAgent):
             tools=[
                 FunctionTool(functools.partial(get_next_hypothesis, project_path=project_path, db_path=db_path)),
                 FunctionTool(functools.partial(update_hypothesis_status, db_path=db_path)),
+                FunctionTool(functools.partial(save_findings, project_path=project_path, db_path=db_path)),
+                FunctionTool(functools.partial(save_hypotheses, project_path=project_path, db_path=db_path)),
                 FunctionTool(exit_loop),
             ],
             sub_agents=[hunter],
@@ -358,24 +363,46 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
 
     async def run_recon(self, path: str = ".") -> Dict[str, Any]:
-        results = await self.stack_scout.scan(
-            path,
-            engine=self._engine,
-            log_fn=self.log,
+        """Performs initial stack discovery and project mapping."""
+        import json
+        self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
+        
+        # 1. Run StackScout
+        prompt = (
+            f"Analyze the project at {os.path.abspath(path)}.\n"
+            "Identify the full tech stack, determine if it is a web application, "
+            "map high-value files, and generate security hypotheses."
         )
+        
+        result = await self._engine.run(self.stack_scout, prompt)
+        try:
+            cleaned = result.text.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:].rstrip("`").strip()
+            data = json.loads(cleaned)
+        except Exception as e:
+            self.log(f"[bold red]Error:[/bold red] Failed to parse StackScout output: {e}")
+            data = {}
 
-        mapping: Dict[str, Any] = results.get("mapping", {})
-        hypotheses: List[Dict[str, Any]] = results.get("hypotheses", [])
-        self._tech_stack = results.get("tech_stack", "")
+        mapping: Dict[str, Any] = data.get("mapping", {})
+        hypotheses: List[Dict[str, Any]] = data.get("hypotheses", [])
+        self._tech_stack = data.get("tech_stack", "")
         self._scan_results = mapping
 
-        if results.get("is_web_app"):
-            route_results = await self.web_route_mapper.map_routes(
-                path,
-                engine=self._engine,
-                log_fn=self.log,
-            )
-            self._attack_surface = route_results.get("attack_surface", [])
+        is_web_app = data.get("is_web_app", False)
+
+        if is_web_app:
+            self.log("[bold]Coordinator:[/bold] web application detected, mapping attack surface…")
+            route_prompt = "Identify all web routes, methods, handlers, and parameters in the project."
+            route_result = await self._engine.run(self.web_route_mapper, route_prompt)
+            try:
+                r_cleaned = route_result.text.strip()
+                if r_cleaned.startswith("```json"):
+                    r_cleaned = r_cleaned[7:].rstrip("`").strip()
+                route_data = json.loads(r_cleaned)
+                self._attack_surface = route_data.get("attack_surface", [])
+            except Exception as e:
+                self.log(f"[bold red]Error:[/bold red] Failed to parse WebRouteMapper output: {e}")
 
         full_profile = {"mapping": self._scan_results, "attack_surface": self._attack_surface}
         self._db.save_project_profile(self._project_path, self._tech_stack, full_profile)
@@ -399,53 +426,107 @@ class Coordinator(LlmAgent):
         return self._scan_results
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
+        import json
+        from trashdig.agents.utils import read_file_content
         new_findings: List[Finding] = []
-        for target in targets:
-            self.log(f"Hunting: [cyan]{target}[/cyan]")
-            results = await self.hunter.hunt_vulnerabilities(
-                [target],
-                project_root=path,
-                engine=self._engine,
-                log_fn=self.log,
+        for i, target in enumerate(targets, 1):
+            self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")
+            content = read_file_content(os.path.join(path, target))
+
+            prompt = (
+                f"Analyze the following file for potential security vulnerabilities:\n\n"
+                f"File: {target}\n"
+                f"Content:\n{content}\n\n"
+                f"Identify and document each finding or follow-up hypothesis in a JSON response with two keys:\n"
+                f"1. 'findings': A list of vulnerability objects:\n"
+                f"   - title, description, severity, vulnerable_code, impact, exploitation_path, remediation, cwe_id\n"
+                f"2. 'hypotheses': A list of follow-up tasks if you need to trace data flow into other files:\n"
+                f"   - target: (The file path or symbol to investigate next)\n"
+                f"   - description: (Why you need to look there)\n"
+                f"   - confidence: (0.0 to 1.0)\n"
             )
 
-            for finding in results.get("findings", []):
-                self._findings.append(finding)
-                new_findings.append(finding)
-                self._db.save_finding(self._project_path, finding)
-                self.log(
-                    f"Found potential issue: [bold yellow]{finding.title}[/bold yellow]"
-                )
+            result = await self._engine.run(self.hunter, prompt)
+            try:
+                cleaned = result.text.strip()
+                if cleaned.startswith("```json"):
+                    cleaned = cleaned[7:].rstrip("`").strip()
+                data = json.loads(cleaned)
+                
+                # Handle findings
+                raw_findings = data.get("findings", [])
+                if not isinstance(raw_findings, list):
+                    raw_findings = [raw_findings]
 
-            for hypo in results.get("hypotheses", []):
-                hypo_task = Hypothesis(
-                    type=TaskType.HUNT,
-                    target=hypo.get("target", ""),
-                    description=hypo.get("description", ""),
-                    confidence=hypo.get("confidence", 0.5),
-                )
-                self._db.save_hypothesis(self._project_path, hypo_task)
-                self.log(
-                    f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}"
-                )
+                for raw in raw_findings:
+                    finding = Finding(
+                        title=raw.get("title", "Untitled"),
+                        description=raw.get("description", "N/A"),
+                        severity=raw.get("severity", "N/A"),
+                        vulnerable_code=raw.get("vulnerable_code", "N/A"),
+                        file_path=target,
+                        impact=raw.get("impact", "N/A"),
+                        exploitation_path=raw.get("exploitation_path", "N/A"),
+                        remediation=raw.get("remediation", "N/A"),
+                        cwe_id=raw.get("cwe_id"),
+                    )
+                    finding.save(os.path.join(path, "findings"))
+                    self._findings.append(finding)
+                    new_findings.append(finding)
+                    self._db.save_finding(self._project_path, finding)
+                    
+                    sev_color = {"critical": "red", "high": "red", "medium": "yellow", "low": "green"}.get((finding.severity or "").lower(), "white")
+                    self.log(f"  [bold {sev_color}]■[/bold {sev_color}] [bold]{finding.title}[/bold] — {finding.description[:80]}…")
 
-            self.log(
-                f"Finished: [bold green]HUNT[/bold green] ([dim]{target}[/dim]) — "
-                f"{len(results.get('findings', []))} findings found"
-            )
+                # Handle hypotheses
+                for h in data.get("hypotheses", []):
+                    hypo_task = Hypothesis(
+                        type=TaskType.HUNT,
+                        target=h.get("target", ""),
+                        description=h.get("description", ""),
+                        confidence=h.get("confidence", 0.5),
+                    )
+                    self._db.save_hypothesis(self._project_path, hypo_task)
+                    self.log(f"  [dim]Hypothesis: {hypo_task.target}[/dim]")
 
+            except Exception as e:
+                self.log(f"[bold red]Error:[/bold red] Failed to parse Hunter output for {target}: {e}")
+
+        self.log(f"Finished: [bold green]HUNT[/bold green] — {len(new_findings)} findings found")
         return new_findings
 
     async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
+        import json
+        from trashdig.agents.utils import read_file_content
+        
         # 1. Run Skeptic
-        skeptic_result = await self.skeptic.debunk_finding(
-            finding,
-            self._project_path,
-            engine=self._engine,
-            log_fn=self.log,
+        self.log(f"[bold]Skeptic:[/bold] reviewing [bold yellow]{finding.title}[/bold yellow]")
+        file_content = read_file_content(finding.file_path)
+        
+        skeptic_prompt = (
+            f"Please review this potential finding and try to debunk it:\n\n"
+            f"Title: {finding.title}\n"
+            f"Description: {finding.description}\n"
+            f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
+            f"File Path: {finding.file_path}\n"
+            f"File Content:\n{file_content}\n\n"
+            f"Your Goal:\n"
+            f"Find any reason why this is a False Positive. Check reachability, "
+            f"framework protections, or logical errors in the original report."
         )
+        
+        skeptic_result = await self._engine.run(self.skeptic, skeptic_prompt)
+        try:
+            s_text = skeptic_result.text.strip()
+            if s_text.startswith("```json"):
+                s_text = s_text[7:].rstrip("`").strip()
+            s_data = json.loads(s_text)
+            is_valid = s_data.get("is_valid", True)
+        except Exception as e:
+            self.log(f"[dim]Skeptic parsing failed: {e}. Defaulting to valid.[/dim]")
+            is_valid = True
 
-        if not skeptic_result.get("is_valid", True):
+        if not is_valid:
             finding.verification_status = "Debunked"
             finding.save(os.path.join(self._project_path, "findings"))
             self._db.update_finding_status(
@@ -459,21 +540,38 @@ class Coordinator(LlmAgent):
             return {"status": "Debunked", "poc_code": ""}
 
         # 2. Run Validator
-        result = await self.validator.verify_finding(
-            finding,
-            self._tech_stack,
-            engine=self._engine,
-            log_fn=self.log,
+        self.log(f"[bold]Validator:[/bold] verifying [bold yellow]{finding.title}[/bold yellow]")
+        validator_prompt = (
+            f"Please verify this potential finding by generating and executing a Proof-of-Concept (PoC):\n\n"
+            f"Title: {finding.title}\n"
+            f"Description: {finding.description}\n"
+            f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
+            f"Project Tech Stack: {self._tech_stack}\n"
+            f"File Path: {finding.file_path}\n"
+            f"File Content:\n{file_content}\n\n"
+            f"Instructions:\n"
+            f"1. Generate a PoC (Python script, custom command, etc.) that demonstrates the vulnerability.\n"
+            f"2. Execute the PoC using `container_bash_tool` to see if it successfully exploits the vulnerability in a sandbox.\n"
+            f"3. Analyze the tool output.\n"
+            f"4. Provide a JSON response with: 'status' (Verified/False Positive), "
+            f"'poc_code' (the script/command used), and 'reasoning' (results of the PoC execution)."
         )
-        if result.get("status"):
-            finding.verification_status = result["status"]
-            self.log(
-                f"Verification Result: "
-                f"[bold {'green' if result['status'] == 'Verified' else 'red'}]"
-                f"{result['status']}[/bold]"
-            )
-        if result.get("poc_code"):
-            finding.poc = result["poc_code"]
+        
+        val_result = await self._engine.run(self.validator, validator_prompt)
+        try:
+            v_text = val_result.text.strip()
+            if v_text.startswith("```json"):
+                v_text = v_text[7:].rstrip("`").strip()
+            v_data = json.loads(v_text)
+            status = v_data.get("status", "Unverified")
+            poc_code = v_data.get("poc_code", "")
+        except Exception as e:
+            self.log(f"[dim]Validator parsing failed: {e}.[/dim]")
+            status = "Unverified"
+            poc_code = ""
+
+        finding.verification_status = status
+        finding.poc = poc_code
         finding.save(os.path.join(self._project_path, "findings"))
         self._db.update_finding_status(
             self._project_path,
@@ -483,8 +581,6 @@ class Coordinator(LlmAgent):
             finding.poc,
         )
 
-        self.log(
-            f"Finished: [bold green]VERIFY[/bold green] ([dim]{finding.title}[/dim]) — "
-            f"{finding.verification_status}"
-        )
-        return {"status": finding.verification_status, "poc_code": finding.poc}
+        status_color = "green" if status == "Verified" else "red" if status == "False Positive" else "yellow"
+        self.log(f"Finished: [bold green]VERIFY[/bold green] ([dim]{finding.title}[/dim]) — [{status_color}]{status}[/{status_color}]")
+        return {"status": status, "poc_code": poc_code}

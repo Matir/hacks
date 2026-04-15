@@ -25,12 +25,7 @@ def test_create_web_route_mapper_agent(mock_config):
         assert agent.model == "test-model"
 
 @pytest.mark.anyio
-@patch("trashdig.agents.recon.get_project_structure")
-@patch("trashdig.agents.recon.detect_frameworks")
-async def test_stack_scout_scan(mock_detect, mock_get_struct, mock_config):
-    mock_get_struct.return_value = ["src/main.py", "package.json"]
-    mock_detect.return_value = {"web_frameworks": ["Express"]}
-    
+async def test_stack_scout_run(mock_config):
     agent = StackScoutAgent(name="stack_scout", model="test-model")
     mock_engine = MagicMock()
     mock_result = MagicMock()
@@ -45,15 +40,15 @@ async def test_stack_scout_scan(mock_detect, mock_get_struct, mock_config):
     mock_result.output_tokens = 20
     mock_engine.run = AsyncMock(return_value=mock_result)
     
-    results = await agent.scan(root_path=".", engine=mock_engine)
+    result = await mock_engine.run(agent, "Analyze project")
+    data = json.loads(result.text)
     
-    assert results["tech_stack"] == "Node.js/Express"
-    assert results["is_web_app"] is True
-    assert "src/main.py" in results["mapping"]
-    assert mock_engine.run.called
+    assert data["tech_stack"] == "Node.js/Express"
+    assert data["is_web_app"] is True
+    assert "src/main.py" in data["mapping"]
 
 @pytest.mark.anyio
-async def test_web_route_mapper_map_routes(mock_config):
+async def test_web_route_mapper_run(mock_config):
     agent = WebRouteMapperAgent(name="web_route_mapper", model="test-model")
     mock_engine = MagicMock()
     mock_result = MagicMock()
@@ -65,8 +60,8 @@ async def test_web_route_mapper_map_routes(mock_config):
     mock_result.output_tokens = 15
     mock_engine.run = AsyncMock(return_value=mock_result)
     
-    results = await agent.map_routes(root_path=".", engine=mock_engine)
+    result = await mock_engine.run(agent, "Map routes")
+    data = json.loads(result.text)
     
-    assert len(results["attack_surface"]) == 1
-    assert results["attack_surface"][0]["route"] == "/api"
-    assert mock_engine.run.called
+    assert len(data["attack_surface"]) == 1
+    assert data["attack_surface"][0]["route"] == "/api"

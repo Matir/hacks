@@ -1,14 +1,11 @@
 import os
-import json
-from typing import Dict, Any, Optional
+from typing import Optional
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import read_file_content, google_provider_extras
 from trashdig.services.permissions import PermissionManager
-from trashdig.engine.engine import Engine
 from trashdig.tools import ripgrep_search, bash_tool, container_bash_tool, web_fetch
-from trashdig.findings import Finding
 
 
 def load_prompt(file_path: str) -> str:
@@ -19,97 +16,7 @@ def load_prompt(file_path: str) -> str:
 
 class ValidatorAgent(LlmAgent):
     """Validator Agent for TrashDig."""
-
-    async def verify_finding(
-        self,
-        finding: Finding,
-        tech_stack: str = "",
-        log_fn=None,
-        engine: Optional[Engine] = None,
-        conversation_log_fn=None,
-    ) -> Dict[str, Any]:
-        """Attempts to verify a potential finding by running a PoC.
-
-        Args:
-            finding: The potential vulnerability to verify.
-            tech_stack: The detected project tech stack.
-            log_fn: Optional callable for progress messages (Rich markup supported).
-            engine: Optional Engine instance to use.
-            conversation_log_fn: Optional callable for recording the LLM conversation.
-
-        Returns:
-            A dictionary with the verification results (status, poc_code, output).
-        """
-        if engine is None:
-            engine = Engine()
-
-        def _log(msg: str) -> None:
-            if log_fn:
-                log_fn(msg)
-
-        _log(
-            f"[bold]Validator:[/bold] verifying [bold yellow]{finding.title}[/bold yellow]"
-        )
-        _log(f"  [dim]file: {finding.file_path}[/dim]")
-
-        file_content = read_file_content(finding.file_path)
-        _log("[bold]Validator:[/bold] generating and executing PoC…")
-
-        prompt = (
-            f"Please verify this potential finding by generating and executing a Proof-of-Concept (PoC):\n\n"
-            f"Title: {finding.title}\n"
-            f"Description: {finding.description}\n"
-            f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
-            f"Project Tech Stack: {tech_stack}\n"
-            f"File Path: {finding.file_path}\n"
-            f"File Content:\n{file_content}\n\n"
-            f"Instructions:\n"
-            f"1. Generate a PoC (Python script, custom command, etc.) that demonstrates the vulnerability.\n"
-            f"2. Execute the PoC using `container_bash_tool` to see if it successfully exploits the vulnerability in a sandbox.\n"
-            f"3. Analyze the tool output.\n"
-            f"4. Provide a JSON response with: 'status' (Verified/False Positive), "
-            f"'poc_code' (the script/command used), and 'reasoning' (results of the PoC execution)."
-        )
-
-        result = await engine.run(self, prompt)
-        text = result.text
-
-        if conversation_log_fn:
-            conversation_log_fn(
-                self.name,
-                prompt,
-                text,
-                result.tool_calls,
-                result.input_tokens,
-                result.output_tokens,
-            )
-
-        try:
-            cleaned_response = text.strip()
-            if cleaned_response.startswith("```json"):
-                cleaned_response = cleaned_response[7:].rstrip("`").strip()
-            result = json.loads(cleaned_response)
-            status = result.get("status", "Unverified")
-            status_color = (
-                "green"
-                if status == "Verified"
-                else "red"
-                if status == "False Positive"
-                else "yellow"
-            )
-            _log(f"[bold]Validator:[/bold] [{status_color}]{status}[/{status_color}]")
-            if result.get("reasoning"):
-                _log(
-                    f"  [dim]{result['reasoning'][:120]}{'…' if len(result.get('reasoning', '')) > 120 else ''}[/dim]"
-                )
-            return result
-        except (json.JSONDecodeError, AttributeError):
-            _log("[bold]Validator:[/bold] [red]failed to parse response[/red]")
-            return {
-                "status": "Unverified",
-                "error": "Failed to parse Validator response",
-                "raw": text,
-            }
+    pass
 
 
 def create_validator_agent(

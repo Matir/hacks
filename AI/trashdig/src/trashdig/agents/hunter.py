@@ -1,12 +1,10 @@
 import os
-import json
-from typing import List, Dict, Any, Optional
+from typing import Optional
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool, load_artifacts as load_artifacts_tool
 from trashdig.config import AgentConfig
-from trashdig.agents.utils import read_file_content, google_provider_extras
+from trashdig.agents.utils import google_provider_extras
 from trashdig.services.permissions import PermissionManager
-from trashdig.engine.engine import Engine
 from trashdig.tools import (
     ripgrep_search,
     semgrep_scan,
@@ -21,7 +19,6 @@ from trashdig.tools import (
     web_fetch,
     read_file,
 )
-from trashdig.findings import Finding
 
 
 def load_prompt(file_path: str) -> str:
@@ -39,124 +36,7 @@ def load_prompt(file_path: str) -> str:
 
 class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
-
-    async def hunt_vulnerabilities(
-        self,
-        targets: List[str],
-        project_root: str = ".",
-        log_fn=None,
-        engine: Optional[Engine] = None,
-        conversation_log_fn=None,
-    ) -> Dict[str, Any]:
-        """Deep-dive into specific files to identify vulnerabilities.
-
-        Args:
-            targets: List of file paths to analyze.
-            project_root: Root directory of the project.
-            log_fn: Optional callable for progress messages (Rich markup supported).
-            engine: Optional Engine instance to use.
-            conversation_log_fn: Optional callable for recording the LLM conversation.
-
-        Returns:
-            A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
-        """
-        if engine is None:
-            engine = Engine()
-
-        def _log(msg: str) -> None:
-            if log_fn:
-                log_fn(msg)
-
-        all_findings = []
-        all_hypotheses = []
-
-        for i, target in enumerate(targets, 1):
-            _log(
-                f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] "
-                f"([dim]{i}/{len(targets)}[/dim])"
-            )
-            content = read_file_content(os.path.join(project_root, target))
-
-            prompt = (
-                f"Analyze the following file for potential security vulnerabilities:\n\n"
-                f"File: {target}\n"
-                f"Content:\n{content}\n\n"
-                f"Identify and document each finding or follow-up hypothesis in a JSON response with two keys:\n"
-                f"1. 'findings': A list of vulnerability objects:\n"
-                f"   - title, description, severity, vulnerable_code, impact, exploitation_path, remediation, cwe_id\n"
-                f"2. 'hypotheses': A list of follow-up tasks if you need to trace data flow into other files:\n"
-                f"   - target: (The file path or symbol to investigate next)\n"
-                f"   - description: (Why you need to look there)\n"
-                f"   - confidence: (0.0 to 1.0)\n"
-            )
-
-            result = await engine.run(self, prompt)
-            text = result.text
-
-            if conversation_log_fn:
-                conversation_log_fn(
-                    self.name,
-                    prompt,
-                    text,
-                    result.tool_calls,
-                    result.input_tokens,
-                    result.output_tokens,
-                )
-
-            try:
-                cleaned_response = text.strip()
-                if cleaned_response.startswith("```json"):
-                    cleaned_response = cleaned_response[7:].rstrip("`").strip()
-
-                data = json.loads(cleaned_response)
-
-                # Handle findings
-                raw_findings = data.get("findings", [])
-                if not isinstance(raw_findings, list):
-                    raw_findings = [raw_findings]
-
-                for raw in raw_findings:
-                    finding = Finding(
-                        title=raw.get("title", "Untitled"),
-                        description=raw.get("description", "N/A"),
-                        severity=raw.get("severity", "N/A"),
-                        vulnerable_code=raw.get("vulnerable_code", "N/A"),
-                        file_path=target,
-                        impact=raw.get("impact", "N/A"),
-                        exploitation_path=raw.get("exploitation_path", "N/A"),
-                        remediation=raw.get("remediation", "N/A"),
-                        cwe_id=raw.get("cwe_id"),
-                    )
-                    finding.save(os.path.join(project_root, "findings"))
-                    all_findings.append(finding)
-                    sev_color = {
-                        "critical": "red",
-                        "high": "red",
-                        "medium": "yellow",
-                        "low": "green",
-                    }.get((finding.severity or "").lower(), "white")
-                    _log(
-                        f"  [bold {sev_color}]■[/bold {sev_color}] "
-                        f"[bold]{finding.title}[/bold] "
-                        f"([{sev_color}]{finding.severity}[/{sev_color}])"
-                        f" — {finding.description[:80]}{'…' if len(finding.description) > 80 else ''}"
-                    )
-
-                hypos = data.get("hypotheses", [])
-                all_hypotheses.extend(hypos)
-                if hypos:
-                    _log(
-                        f"  [dim]→ {len(hypos)} follow-up hypothesis{'es' if len(hypos) != 1 else ''} queued[/dim]"
-                    )
-
-                if not raw_findings:
-                    _log(f"  [dim]no findings in {target}[/dim]")
-
-            except (json.JSONDecodeError, AttributeError):
-                _log(f"  [red]failed to parse Hunter response for {target}[/red]")
-                continue
-
-        return {"findings": all_findings, "hypotheses": all_hypotheses}
+    pass
 
 
 def create_hunter_agent(

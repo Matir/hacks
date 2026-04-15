@@ -12,6 +12,10 @@ run = "uv run pytest tests"
 [tasks.lint]
 run = "uv run ruff check ."
 
+[tasks.check]
+description = "Run all lints and tests"
+depends = ["lint", "test"]
+
 [tasks.format]
 run = "uv run ruff format ."
 

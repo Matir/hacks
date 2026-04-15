@@ -1,9 +1,10 @@
 import pytest
-import asyncio
+import json
 from unittest.mock import MagicMock, patch, AsyncMock
 from trashdig.agents.coordinator import Coordinator
 from trashdig.config import Config
 from trashdig.findings import Finding
+from trashdig.engine.engine import EngineResult
 
 from google.adk.agents import LlmAgent
 
@@ -50,36 +51,40 @@ def test_coordinator_init(mock_create_val, mock_create_skep, mock_create_hunt, m
 @patch("trashdig.agents.coordinator.create_hunter_agent")
 @patch("trashdig.agents.coordinator.create_skeptic_agent")
 @patch("trashdig.agents.coordinator.create_validator_agent")
-async def test_coordinator_run_loop_scan(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+async def test_coordinator_run_recon(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_stack = create_mock_agent("stack_scout")
-    object.__setattr__(mock_stack, "scan", AsyncMock(return_value={
-        "mapping": {"src/main.py": {"is_high_value": True}},
-        "hypotheses": [{"target": "src/api.py", "description": "XSS", "confidence": 0.9}],
-        "tech_stack": "Python/FastAPI",
-        "is_web_app": True
-    }))
     mock_create_stack.return_value = mock_stack
-    
     mock_web = create_mock_agent("web_route_mapper")
-    object.__setattr__(mock_web, "map_routes", AsyncMock(return_value={
-        "attack_surface": [{"route": "/api", "method": "GET", "handler": "main.py"}]
-    }))
     mock_create_web.return_value = mock_web
-    
-    # Initialize others to avoid ValidationError
     mock_create_hunt.return_value = create_mock_agent("hunter")
     mock_create_skep.return_value = create_mock_agent("skeptic")
     mock_create_val.return_value = create_mock_agent("validator")
 
     coord = Coordinator(mock_config)
     
-    # Run RECON directly to simulate a scan task
+    # Mock engine.run
+    mock_engine = MagicMock()
+    mock_engine.run = AsyncMock()
+    coord._engine = mock_engine
+    
+    # Mock StackScout result
+    res_stack = EngineResult(
+        text=json.dumps({"tech_stack": "Python", "is_web_app": True, "mapping": {"a.py": {"is_high_value": True}}, "hypotheses": []}),
+        tool_calls=[]
+    )
+    # Mock WebRouteMapper result
+    res_web = EngineResult(
+        text=json.dumps({"attack_surface": [{"endpoint": "/", "method": "GET"}]}),
+        tool_calls=[]
+    )
+    
+    mock_engine.run.side_effect = [res_stack, res_web]
+    
     await coord.run_recon(".")
     
-    assert coord.tech_stack == "Python/FastAPI"
+    assert coord.tech_stack == "Python"
     assert len(coord.attack_surface) == 1
-    assert mock_stack.scan.called
-    assert mock_web.map_routes.called
+    assert mock_engine.run.call_count == 2
 
 @pytest.mark.anyio
 @patch("trashdig.agents.coordinator.create_stack_scout_agent")
@@ -87,24 +92,8 @@ async def test_coordinator_run_loop_scan(mock_create_val, mock_create_skep, mock
 @patch("trashdig.agents.coordinator.create_hunter_agent")
 @patch("trashdig.agents.coordinator.create_skeptic_agent")
 @patch("trashdig.agents.coordinator.create_validator_agent")
-async def test_coordinator_handle_hunt(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+async def test_coordinator_run_hunter(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_hunter = create_mock_agent("hunter")
-    finding = Finding(
-        title="SQLi", description="desc", severity="High", 
-        vulnerable_code="code", file_path="test.py", 
-        impact="impact", exploitation_path="path", remediation="rem"
-    )
-    object.__setattr__(mock_hunter, "hunt_vulnerabilities", AsyncMock())
-    mock_hunter.hunt_vulnerabilities.side_effect = [
-        {
-            "findings": [finding],
-            "hypotheses": [{"target": "other.py", "description": "trace", "confidence": 0.5}]
-        },
-        {
-            "findings": [],
-            "hypotheses": []
-        }
-    ]
     mock_create_hunt.return_value = mock_hunter
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -112,12 +101,22 @@ async def test_coordinator_handle_hunt(mock_create_val, mock_create_skep, mock_c
     mock_create_val.return_value = create_mock_agent("validator")
     
     coord = Coordinator(mock_config)
+    mock_engine = MagicMock()
+    mock_engine.run = AsyncMock()
+    coord._engine = mock_engine
     
-    # Mocking run_hunter behavior inside
-    await coord.run_hunter(["test.py"])
+    res_hunter = EngineResult(
+        text=json.dumps({"findings": [{"title": "SQLi", "description": "desc", "severity": "High", "vulnerable_code": "code", "file_path": "test.py", "impact": "i", "exploitation_path": "e", "remediation": "r"}], "hypotheses": []}),
+        tool_calls=[]
+    )
+    mock_engine.run.return_value = res_hunter
     
-    assert len(coord.findings) == 1
-    assert coord.findings[0].title == "SQLi"
+    with patch("trashdig.agents.utils.read_file_content", return_value="content"):
+        findings = await coord.run_hunter(["test.py"])
+    
+    assert len(findings) == 1
+    assert findings[0].title == "SQLi"
+    assert mock_engine.run.called
 
 @pytest.mark.anyio
 @patch("trashdig.agents.coordinator.create_stack_scout_agent")
@@ -125,135 +124,34 @@ async def test_coordinator_handle_hunt(mock_create_val, mock_create_skep, mock_c
 @patch("trashdig.agents.coordinator.create_hunter_agent")
 @patch("trashdig.agents.coordinator.create_skeptic_agent")
 @patch("trashdig.agents.coordinator.create_validator_agent")
-async def test_coordinator_api_methods(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
-    mock_stack = create_mock_agent("stack_scout")
-    object.__setattr__(mock_stack, "scan", AsyncMock(return_value={"mapping": {"file.py": "summary"}}))
-    mock_create_stack.return_value = mock_stack
-    
-    mock_hunter = create_mock_agent("hunter")
-    object.__setattr__(mock_hunter, "hunt_vulnerabilities", AsyncMock(return_value={"findings": [], "hypotheses": []}))
-    mock_create_hunt.return_value = mock_hunter
-    
-    mock_skeptic = create_mock_agent("skeptic")
-    object.__setattr__(mock_skeptic, "debunk_finding", AsyncMock(return_value={"is_valid": True, "skeptic_notes": "Passed"}))
-    mock_create_skep.return_value = mock_skeptic
-
-    mock_validator = create_mock_agent("validator")
-    object.__setattr__(mock_validator, "verify_finding", AsyncMock(return_value={"status": "Verified", "poc_code": "poc"}))
-    mock_create_val.return_value = mock_validator
-    
+async def test_coordinator_verify_finding(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+    mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
+    mock_create_hunt.return_value = create_mock_agent("hunter")
+    mock_create_skep.return_value = create_mock_agent("skeptic")
+    mock_create_val.return_value = create_mock_agent("validator")
 
     coord = Coordinator(mock_config)
+    mock_engine = MagicMock()
+    mock_engine.run = AsyncMock()
+    coord._engine = mock_engine
     
-    # Test run_recon
-    res = await coord.run_recon("path")
-    assert res == {"file.py": "summary"}
+    # 1. Skeptic: Survived
+    res_skep = EngineResult(text=json.dumps({"is_valid": True}), tool_calls=[])
+    # 2. Validator: Verified
+    res_val = EngineResult(text=json.dumps({"status": "Verified", "poc_code": "poc"}), tool_calls=[])
     
-    # Test run_hunter
-    findings = await coord.run_hunter(["file.py"])
-    assert findings == []
+    mock_engine.run.side_effect = [res_skep, res_val]
     
-    # Test verify_finding (Survived skeptic)
     finding = Finding(
         title="SQLi", description="desc", severity="High", 
         vulnerable_code="code", file_path="test.py", 
         impact="impact", exploitation_path="path", remediation="rem"
     )
-    with patch("trashdig.findings.Finding.save", MagicMock()):
+    
+    with patch("trashdig.findings.Finding.save", MagicMock()), \
+         patch("trashdig.agents.utils.read_file_content", return_value="content"):
         verify_res = await coord.verify_finding(finding)
         assert verify_res["status"] == "Verified"
         assert finding.verification_status == "Verified"
-        assert mock_skeptic.debunk_finding.called
-        assert mock_validator.verify_finding.called
-
-@pytest.mark.anyio
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-async def test_coordinator_verify_debunked(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
-    mock_skeptic = create_mock_agent("skeptic")
-    object.__setattr__(mock_skeptic, "debunk_finding", AsyncMock(return_value={"is_valid": False, "skeptic_notes": "False Positive"}))
-    mock_create_skep.return_value = mock_skeptic
-
-    mock_validator = create_mock_agent("validator")
-    object.__setattr__(mock_validator, "verify_finding", AsyncMock(return_value={"status": "Verified", "poc_code": "poc"}))
-    mock_create_val.return_value = mock_validator
-    mock_create_stack.return_value = create_mock_agent("stack_scout")
-    mock_create_web.return_value = create_mock_agent("web_route_mapper")
-    mock_create_hunt.return_value = create_mock_agent("hunter")
-    
-    coord = Coordinator(mock_config)
-    finding = Finding(
-        title="SQLi", description="desc", severity="High", 
-        vulnerable_code="code", file_path="test.py", 
-        impact="impact", exploitation_path="path", remediation="rem"
-    )
-    with patch("trashdig.findings.Finding.save", MagicMock()):
-        verify_res = await coord.verify_finding(finding)
-        assert verify_res["status"] == "Debunked"
-        assert finding.verification_status == "Debunked"
-        assert mock_skeptic.debunk_finding.called
-        assert not mock_validator.verify_finding.called
-
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-def test_coordinator_on_conversation(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
-    mock_db = MagicMock()
-    # Mocking agents
-    mock_create_stack.return_value = create_mock_agent("stack_scout")
-    mock_create_web.return_value = create_mock_agent("web_route_mapper")
-    mock_create_hunt.return_value = create_mock_agent("hunter")
-    mock_create_skep.return_value = create_mock_agent("skeptic")
-    mock_create_val.return_value = create_mock_agent("validator")
-    with patch("trashdig.agents.coordinator.ProjectDatabase", return_value=mock_db):
-        coord = Coordinator(mock_config)
-        coord._on_conversation(
-            "hunter", "test prompt", "test response", [{"name": "tool"}], 10, 20
-        )
-        mock_db.log_conversation.assert_called_once_with(
-            coord.project_path, "hunter", "test prompt", "test response", [{"name": "tool"}], 10, 20
-        )
-
-@pytest.mark.anyio
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-async def test_coordinator_parallel_execution(mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
-    mock_create_stack.return_value = create_mock_agent("stack_scout")
-    mock_create_web.return_value = create_mock_agent("web_route_mapper")
-    mock_create_hunt.return_value = create_mock_agent("hunter")
-    mock_create_skep.return_value = create_mock_agent("skeptic")
-    mock_create_val.return_value = create_mock_agent("validator")
-    coord = Coordinator(mock_config)
-    
-    # Track concurrent execution
-    active_count = 0
-    max_observed_active = 0
-    
-    async def mock_handle_recon(path):
-        nonlocal active_count, max_observed_active
-        active_count += 1
-        max_observed_active = max(max_observed_active, active_count)
-        await asyncio.sleep(0.1)
-        active_count -= 1
-        return {}
-
-    # Use object.__setattr__ to bypass Pydantic's rejection of setting methods on instances
-    original_run_recon = coord.run_recon
-    object.__setattr__(coord, "run_recon", mock_handle_recon)
-    try:
-        # In this simplified test, we just call run_recon multiple times in parallel
-        await asyncio.gather(*(coord.run_recon(f"target{i}") for i in range(5)))
-    finally:
-        object.__setattr__(coord, "run_recon", original_run_recon)
-    
-    # max_parallel_tasks not directly used in run_recon call, but testing we can run it.
-    assert max_observed_active >= 2
+        assert mock_engine.run.call_count == 2

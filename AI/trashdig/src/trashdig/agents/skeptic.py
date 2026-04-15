@@ -1,14 +1,11 @@
 import os
-import json
-from typing import Dict, Any, Optional
+from typing import Optional
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import read_file_content, google_provider_extras
 from trashdig.services.permissions import PermissionManager
-from trashdig.engine.engine import Engine
 from trashdig.tools import ripgrep_search, web_fetch
-from trashdig.findings import Finding
 
 
 def load_prompt(file_path: str) -> str:
@@ -19,80 +16,7 @@ def load_prompt(file_path: str) -> str:
 
 class SkepticAgent(LlmAgent):
     """Skeptic Agent for TrashDig."""
-
-    async def debunk_finding(
-        self,
-        finding: Finding,
-        project_root: str = ".",
-        log_fn=None,
-        engine: Optional[Engine] = None,
-    ) -> Dict[str, Any]:
-        """Attempts to debunk a potential finding by performing an adversarial review.
-
-        Args:
-            finding: The potential vulnerability to debunk.
-            project_root: The project root directory.
-            log_fn: Optional callable for progress messages.
-            engine: Optional Engine instance to use.
-
-        Returns:
-            A dictionary with the debunking results (is_valid, skeptic_notes).
-        """
-        if engine is None:
-            engine = Engine()
-
-        def _log(msg: str) -> None:
-            if log_fn:
-                log_fn(msg)
-
-        _log(
-            f"[bold]Skeptic:[/bold] reviewing [bold yellow]{finding.title}[/bold yellow]"
-        )
-
-        file_content = read_file_content(finding.file_path)
-        _log("[bold]Skeptic:[/bold] analyzing for logical flaws…")
-
-        prompt = (
-            f"Please review this potential finding and try to debunk it:\n\n"
-            f"Title: {finding.title}\n"
-            f"Description: {finding.description}\n"
-            f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
-            f"File Path: {finding.file_path}\n"
-            f"File Content:\n{file_content}\n\n"
-            f"Your Goal:\n"
-            f"Find any reason why this is a False Positive. Check reachability, "
-            f"framework protections, or logical errors in the original report."
-        )
-
-        result = await engine.run(self, prompt)
-        text = result.text
-
-        try:
-            cleaned_response = text.strip()
-            if cleaned_response.startswith("```json"):
-                cleaned_response = cleaned_response[7:].rstrip("`").strip()
-            result_data = json.loads(cleaned_response)
-            
-            is_valid = result_data.get("is_valid", True)
-            status = "Survived Scrutiny" if is_valid else "Debunked"
-            status_color = "green" if is_valid else "red"
-            
-            _log(f"[bold]Skeptic:[/bold] [{status_color}]{status}[/{status_color}]")
-            if result_data.get("skeptic_notes"):
-                _log(
-                    f"  [dim]{result_data['skeptic_notes'][:120]}{'…' if len(result_data.get('skeptic_notes', '')) > 120 else ''}[/dim]"
-                )
-            return {
-                "is_valid": is_valid,
-                "skeptic_notes": result_data.get("skeptic_notes", "")
-            }
-        except (json.JSONDecodeError, AttributeError):
-            _log("[bold]Skeptic:[/bold] [red]failed to parse response[/red]")
-            return {
-                "is_valid": True, # Fail safe: assume it is valid if the skeptic fails
-                "error": "Failed to parse Skeptic response",
-                "skeptic_notes": f"Error parsing response: {text}",
-            }
+    pass
 
 
 def create_skeptic_agent(
