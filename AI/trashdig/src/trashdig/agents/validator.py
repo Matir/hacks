@@ -26,9 +26,6 @@ class ValidatorAgent(LlmAgent):
         tech_stack: str = "",
         log_fn=None,
         engine: Optional[Engine] = None,
-        stats_fn=None,
-        error_fn=None,
-        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Attempts to verify a potential finding by running a PoC.
 
@@ -37,9 +34,6 @@ class ValidatorAgent(LlmAgent):
             tech_stack: The detected project tech stack.
             log_fn: Optional callable for progress messages (Rich markup supported).
             engine: Optional Engine instance to use.
-            stats_fn: Optional callable for token usage tracking.
-            error_fn: Optional callable for LLM error tracking.
-            conversation_log_fn: Optional callable for structured conversation logging.
 
         Returns:
             A dictionary with the verification results (status, poc_code, output).
@@ -75,24 +69,8 @@ class ValidatorAgent(LlmAgent):
             f"'poc_code' (the script/command used), and 'reasoning' (results of the PoC execution)."
         )
 
-        result = await engine.run(
-            self,
-            prompt,
-            on_event=log_fn,
-            on_stats=stats_fn,
-            on_error=error_fn,
-        )
+        result = await engine.run(self, prompt)
         text = result.text
-
-        if conversation_log_fn:
-            conversation_log_fn(
-                self.name,
-                prompt,
-                text,
-                result.tool_calls,
-                result.input_tokens,
-                result.output_tokens,
-            )
 
         try:
             cleaned_response = text.strip()
@@ -114,8 +92,6 @@ class ValidatorAgent(LlmAgent):
                 )
             return result
         except (json.JSONDecodeError, AttributeError):
-            if error_fn:
-                error_fn()
             _log("[bold]Validator:[/bold] [red]failed to parse response[/red]")
             return {
                 "status": "Unverified",

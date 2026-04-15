@@ -4,12 +4,14 @@
 - [ ] **[HIGH]** Refactor `Coordinator` from Python loop to `LlmAgent`.
     - [ ] Define sub-agents in `LlmAgent` constructor.
     - [ ] Replace `run_loop` with agentic delegation.
-- [ ] **[HIGH]** Implement `TrashDigCallback` (ADK Callbacks).
-    - [ ] Move TUI updates to `on_tool_call_start` and `on_run_step_end`.
-    - [ ] Integrate `CostTracker` and DB logging into the callback chain.
-- [ ] **[MEDIUM]** Transition to `SessionService` for Shared Context.
-    - [ ] Ensure all agents in a scan session share a single `session_id`.
-    - [ ] Remove manual context passing between `Coordinator` and agents.
+- [x] **[HIGH]** Implement `TrashDigCallback` (ADK Callbacks).
+    - [x] Move TUI tool-call updates to `before_tool_callback`.
+    - [x] Integrate `CostTracker` and DB logging into `after_model_callback`.
+    - [x] Replace `on_error` with `on_model_error_callback`.
+- [x] **[MEDIUM]** Transition to `SessionService` for Shared Context.
+    - [x] Use `SqliteSessionService` backed by `.trashdig/trashdig.db`.
+    - [x] All agents in a scan share a `session_id_prefix`; stable IDs via `{prefix}:{agent.name}`.
+    - [x] Scan sessions tracked in `scan_sessions` table for crash-safe resumption.
 - [ ] **[MEDIUM]** Adopt ADK Artifact API.
     - [ ] Refactor `@artifact_tool` to return `google.adk.artifacts.Artifact`.
     - [ ] Update agents to use artifact references for large analysis blobs (ASTs, routes).
@@ -93,9 +95,9 @@
     - [ ] *Note: `SequentialAgent`/`ParallelAgent` are already noted in the ADK-Native Refactor section above.*
 
 ### Session & Memory
-- [ ] **[MEDIUM]** Adopt a persistent `SessionService` (e.g., database-backed) to allow scan resumption across CLI invocations.
-    - [ ] Currently only `InMemorySessionService` is used; sessions are lost on exit.
-    - [ ] Evaluate `VertexAiSessionService` or a custom SQLite-backed implementation.
+- [x] **[MEDIUM]** Adopt a persistent `SessionService` (e.g., database-backed) to allow scan resumption across CLI invocations.
+    - [x] Using `SqliteSessionService` from `google.adk.sessions.sqlite_session_service`.
+    - [x] Shares `.trashdig/trashdig.db` with `ProjectDatabase` (no schema conflicts).
 - [ ] **[LOW]** Evaluate ADK `MemoryService` for cross-session long-term knowledge retention.
     - [ ] Distinguish from `SessionService` (per-conversation) vs. `MemoryService` (persistent cross-session facts).
     - [ ] Assess overlap with existing `ProjectDatabase` — may be redundant.

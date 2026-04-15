@@ -87,6 +87,14 @@ CREATE TABLE IF NOT EXISTS conversations (
     output_tokens INTEGER,
     timestamp    TEXT    NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS scan_sessions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_path TEXT    NOT NULL,
+    session_id   TEXT    NOT NULL UNIQUE,
+    started_at   TEXT    NOT NULL,
+    ended_at     TEXT
+);
 """
 
 
@@ -539,4 +547,59 @@ class ProjectDatabase:
                     output_tokens,
                     _now(),
                 ),
+            )
+
+    # ------------------------------------------------------------------
+    # Scan sessions
+    # ------------------------------------------------------------------
+
+    def get_or_create_scan_session(self, project_path: str) -> str:
+        """Return the most recent open scan session ID for *project_path*.
+
+        If no open session exists, create and return a new UUID. This gives
+        the Coordinator a stable ID to pass to Engine.run() so all agent
+        calls within one scan invocation share the same ADK session row.
+        On an unclean exit the open session is reused, enabling resumption.
+
+        Args:
+            project_path: The root directory of the scanned project.
+
+        Returns:
+            A UUID string suitable for use as an ADK ``session_id``.
+        """
+        import uuid as _uuid
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT session_id FROM scan_sessions
+                WHERE project_path = ? AND ended_at IS NULL
+                ORDER BY id DESC LIMIT 1
+                """,
+                (project_path,),
+            ).fetchone()
+            if row:
+                return row["session_id"]
+            new_id = str(_uuid.uuid4())
+            conn.execute(
+                """
+                INSERT INTO scan_sessions (project_path, session_id, started_at)
+                VALUES (?, ?, ?)
+                """,
+                (project_path, new_id, _now()),
+            )
+        return new_id
+
+    def close_scan_session(self, session_id: str) -> None:
+        """Mark a scan session as ended.
+
+        Called on clean exit so the next invocation starts a fresh session
+        rather than resuming the completed one.
+
+        Args:
+            session_id: The UUID of the scan session to close.
+        """
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE scan_sessions SET ended_at = ? WHERE session_id = ?",
+                (_now(), session_id),
             )

@@ -444,6 +444,8 @@ class TrashDigApp(App):
         self.refresh_status()
 
     def action_quit(self) -> None:
+        if hasattr(self, "coordinator") and self.coordinator is not None:
+            self.coordinator.db.close_scan_session(self.coordinator.scan_session_id)
         self.exit()
 
     def action_clear_log(self) -> None:

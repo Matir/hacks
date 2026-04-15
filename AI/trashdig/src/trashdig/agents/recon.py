@@ -47,9 +47,6 @@ class StackScoutAgent(LlmAgent):
         root_path: str = ".",
         log_fn=None,
         engine: Optional[Engine] = None,
-        stats_fn=None,
-        error_fn=None,
-        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Performs initial stack discovery and project mapping.
 
@@ -86,17 +83,8 @@ class StackScoutAgent(LlmAgent):
             "map high-value files, and generate security hypotheses."
         )
 
-        result = await engine.run(
-            self,
-            prompt,
-            on_event=log_fn,
-            on_stats=stats_fn,
-            on_error=error_fn,
-        )
+        result = await engine.run(self, prompt)
         text = result.text
-
-        if conversation_log_fn:
-            conversation_log_fn(self.name, prompt, text, result.tool_calls, result.input_tokens, result.output_tokens)
 
         try:
             cleaned_response = text.strip()
@@ -106,8 +94,6 @@ class StackScoutAgent(LlmAgent):
             _log(f"[bold]StackScout:[/bold] detected stack: [yellow]{data.get('tech_stack', 'Unknown')}[/yellow]")
             return data
         except (json.JSONDecodeError, AttributeError):
-            if error_fn:
-                error_fn()
             return {
                 "tech_stack": stack_summary,
                 "is_web_app": len(frameworks.get("web_frameworks", [])) > 0,
@@ -128,9 +114,6 @@ class WebRouteMapperAgent(LlmAgent):
         root_path: str = ".",
         log_fn=None,
         engine: Optional[Engine] = None,
-        stats_fn=None,
-        error_fn=None,
-        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Identifies web routes and handlers."""
         if engine is None:
@@ -144,17 +127,8 @@ class WebRouteMapperAgent(LlmAgent):
 
         prompt = "Identify all web routes, methods, handlers, and parameters in the project."
 
-        result = await engine.run(
-            self,
-            prompt,
-            on_event=log_fn,
-            on_stats=stats_fn,
-            on_error=error_fn,
-        )
+        result = await engine.run(self, prompt)
         text = result.text
-
-        if conversation_log_fn:
-            conversation_log_fn(self.name, prompt, text, result.tool_calls, result.input_tokens, result.output_tokens)
 
         try:
             cleaned_response = text.strip()
@@ -164,8 +138,6 @@ class WebRouteMapperAgent(LlmAgent):
             _log(f"[bold]WebRouteMapper:[/bold] found [yellow]{len(data.get('attack_surface', []))}[/yellow] endpoints")
             return data
         except (json.JSONDecodeError, AttributeError):
-            if error_fn:
-                error_fn()
             return {"attack_surface": [], "error": "Failed to parse WebRouteMapper response"}
 
 
