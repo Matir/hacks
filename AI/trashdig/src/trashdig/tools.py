@@ -3,10 +3,12 @@ import subprocess
 import os
 import json
 import hashlib
-import asyncio
 import inspect
+from datetime import datetime
 from typing import List, Optional, Any, Dict, Set, Tuple, Callable
 from functools import wraps
+from google.adk.artifacts import BaseArtifactService, FileArtifactService
+from google.genai import types
 from .sandbox import get_sandbox
 from .config import get_config
 
@@ -14,25 +16,64 @@ from .config import get_config
 # Artifact System
 # ---------------------------------------------------------------------------
 
-_ARTIFACT_DIR: str = ".trashdig/artifacts"
+_ARTIFACT_SERVICE: Optional[BaseArtifactService] = None
 
-def init_artifact_manager(data_dir: str):
-    """Initializes the artifact directory based on the global data directory.
+def init_artifact_manager(data_dir: str) -> BaseArtifactService:
+    """Initializes the artifact service based on the global data directory.
 
     Args:
         data_dir: The global data directory (e.g., '.trashdig').
+    
+    Returns:
+        The initialized BaseArtifactService.
     """
-    global _ARTIFACT_DIR
-    _ARTIFACT_DIR = os.path.join(data_dir, "artifacts")
-    os.makedirs(_ARTIFACT_DIR, exist_ok=True)
+    global _ARTIFACT_SERVICE
+    artifact_dir = os.path.join(data_dir, "artifacts")
+    os.makedirs(artifact_dir, exist_ok=True)
+    _ARTIFACT_SERVICE = FileArtifactService(root_dir=artifact_dir)
+    return _ARTIFACT_SERVICE
 
-def _process_tool_result(func_name: str, result: Any, max_chars: int) -> str:
+def get_artifact_service() -> Optional[BaseArtifactService]:
+    """Returns the initialized BaseArtifactService, if any."""
+    return _ARTIFACT_SERVICE
+
+def _process_tool_result_sync(func_name: str, result: Any, max_chars: int) -> str:
+    """Synchronous version of _process_tool_result for legacy/internal use."""
+    if not isinstance(result, str) or len(result) <= max_chars:
+        return result
+
+    global _ARTIFACT_SERVICE
+    artifact_dir = ".trashdig/artifacts"
+    if isinstance(_ARTIFACT_SERVICE, FileArtifactService):
+        artifact_dir = str(_ARTIFACT_SERVICE.root_dir)
+
+    content_hash = hashlib.sha256(result.encode("utf-8")).hexdigest()[:12]
+    filename = f"{func_name}_{content_hash}.txt"
+    artifact_path = os.path.join(artifact_dir, filename)
+
+    os.makedirs(artifact_dir, exist_ok=True)
+    with open(artifact_path, "w", encoding="utf-8") as f:
+        f.write(result)
+
+    summary = (
+        f"[TRUNCATED: Showing first {max_chars} characters]\n"
+        f"{result[:max_chars]}\n"
+        f"---\n"
+        f"Output truncated for context efficiency.\n"
+        f"Full output saved as legacy artifact: {artifact_path}\n"
+        f"Total Size: {len(result)} characters.\n"
+        f"To see more, use: 'read_file' on the artifact path."
+    )
+    return summary
+
+async def _process_tool_result(func_name: str, result: Any, max_chars: int, tool_context: Any = None) -> str:
     """Internal helper to process a tool result and create an artifact if needed.
 
     Args:
         func_name: Name of the tool function.
         result: The raw result from the tool.
         max_chars: Threshold for truncation.
+        tool_context: The ADK ToolContext (Context).
 
     Returns:
         The processed (potentially truncated) result string.
@@ -40,33 +81,39 @@ def _process_tool_result(func_name: str, result: Any, max_chars: int) -> str:
     if not isinstance(result, str) or len(result) <= max_chars:
         return result
 
-    # Generate a stable filename based on the content hash
-    content_hash = hashlib.sha256(result.encode("utf-8")).hexdigest()[:12]
-    filename = f"{func_name}_{content_hash}.txt"
-    artifact_path = os.path.join(_ARTIFACT_DIR, filename)
+    # If we have a tool_context and an artifact service, use the ADK API
+    if tool_context and hasattr(tool_context, "save_artifact"):
+        try:
+            content_hash = hashlib.sha256(result.encode("utf-8")).hexdigest()[:12]
+            filename = f"{func_name}_{content_hash}.txt"
+            
+            # Save the artifact using ADK API
+            artifact_part = types.Part.from_text(text=result)
+            version = await tool_context.save_artifact(filename, artifact_part)
+            
+            # Construct a summary response with the artifact reference
+            summary = (
+                f"[TRUNCATED: Showing first {max_chars} characters]\n"
+                f"{result[:max_chars]}\n"
+                f"---\n"
+                f"Output truncated for context efficiency.\n"
+                f"Full output saved as ADK artifact: {filename} (version {version})\n"
+                f"Total Size: {len(result)} characters.\n"
+                f"To see more, use the 'load_artifacts' tool with name: '{filename}'"
+            )
+            return summary
+        except Exception:
+            # Fallback to legacy sync save if ADK API fails
+            pass
 
-    # Ensure the directory exists (might have been deleted)
-    os.makedirs(_ARTIFACT_DIR, exist_ok=True)
-    
-    with open(artifact_path, "w", encoding="utf-8") as f:
-        f.write(result)
-
-    # Construct the summary response
-    summary = (
-        f"[TRUNCATED: Showing first {max_chars} characters]\n"
-        f"{result[:max_chars]}\n"
-        f"---\n"
-        f"Output truncated for context efficiency.\n"
-        f"Full output saved as artifact: {artifact_path}\n"
-        f"Total Size: {len(result)} characters.\n"
-        f"To see more, use: 'ripgrep_search' or 'read_file' on the artifact path."
-    )
-    return summary
+    # Fallback to legacy sync save
+    return _process_tool_result_sync(func_name, result, max_chars)
 
 def artifact_tool(max_chars: int = 5000):
     """A decorator that automatically saves large tool outputs as artifacts.
 
-    Supports both synchronous and asynchronous functions.
+    Supports both synchronous and asynchronous functions. It automatically
+    detects if a 'tool_context' argument is provided to use the ADK Artifact API.
 
     Args:
         max_chars: Threshold for truncation and artifact creation.
@@ -75,18 +122,39 @@ def artifact_tool(max_chars: int = 5000):
         The decorated tool function.
     """
     def decorator(func: Callable):
+        sig = inspect.signature(func)
+        has_context = "tool_context" in sig.parameters
+
         if inspect.iscoroutinefunction(func):
             @wraps(func)
             async def async_wrapper(*args, **kwargs) -> str:
                 result = await func(*args, **kwargs)
-                return _process_tool_result(func.__name__, result, max_chars)
+                ctx = kwargs.get("tool_context")
+                if ctx is None and has_context:
+                    ctx_idx = list(sig.parameters.keys()).index("tool_context")
+                    if len(args) > ctx_idx:
+                        ctx = args[ctx_idx]
+                
+                return await _process_tool_result(func.__name__, result, max_chars, tool_context=ctx)
             return async_wrapper
         else:
             @wraps(func)
-            def sync_wrapper(*args, **kwargs) -> str:
+            def hybrid_wrapper(*args, **kwargs) -> Any:
+                # If the tool is sync, we run it first.
                 result = func(*args, **kwargs)
-                return _process_tool_result(func.__name__, result, max_chars)
-            return sync_wrapper
+                ctx = kwargs.get("tool_context")
+                if ctx is None and has_context:
+                    ctx_idx = list(sig.parameters.keys()).index("tool_context")
+                    if len(args) > ctx_idx:
+                        ctx = args[ctx_idx]
+                
+                if ctx is not None:
+                    # Return a coroutine so FunctionTool can await it
+                    return _process_tool_result(func.__name__, result, max_chars, tool_context=ctx)
+                else:
+                    # Return string directly for sync internal use
+                    return _process_tool_result_sync(func.__name__, result, max_chars)
+            return hybrid_wrapper
     return decorator
 
 # ---------------------------------------------------------------------------
@@ -132,13 +200,31 @@ def _run_sandboxed(command: List[str], timeout: Optional[int] = None, network: b
         )
 
 @artifact_tool(max_chars=4000)
-def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]] = None) -> str:
+def read_file(file_path: str, tool_context: Any = None) -> str:
+    """Reads the complete content of a file.
+
+    Args:
+        file_path: Path to the file to read.
+        tool_context: ADK context (injected).
+
+    Returns:
+        The file content or an error message.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading file {file_path}: {str(e)}"
+
+@artifact_tool(max_chars=4000)
+def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]] = None, tool_context: Any = None) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
 
     Args:
         pattern: The regex pattern to search for.
         path: The directory or file to search in.
         extra_args: Additional arguments to pass to rg (e.g., ["-i", "-A", "2"]).
+        tool_context: ADK context (injected).
 
     Returns:
         The standard output of the ripgrep command.
@@ -154,12 +240,13 @@ def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]
     return result.stdout if result.stdout else result.stderr
 
 @artifact_tool(max_chars=8000)
-def semgrep_scan(path: str = ".", config: str = "p/security-audit") -> str:
+def semgrep_scan(path: str = ".", config: str = "p/security-audit", tool_context: Any = None) -> str:
     """Scans the codebase for security patterns using semgrep.
 
     Args:
         path: The directory or file to scan.
         config: The semgrep configuration/rules to use (e.g., "p/security-audit", "p/python").
+        tool_context: ADK context (injected).
 
     Returns:
         The JSON output of the semgrep scan as a string.
@@ -213,12 +300,13 @@ def _make_parser(language: str) -> Any:
     return tree_sitter.Parser(lang)
 
 @artifact_tool(max_chars=5000)
-def get_ast_summary(file_path: str, language: str = "python") -> str:
+def get_ast_summary(file_path: str, language: str = "python", tool_context: Any = None) -> str:
     """Generates a simplified AST summary of a file using tree-sitter.
 
     Args:
         file_path: Path to the file to analyze.
         language: Programming language of the file (python, javascript, go, csharp).
+        tool_context: ADK context (injected).
 
     Returns:
         A text representation of the top-level AST nodes (functions, classes, etc.).
@@ -917,4 +1005,72 @@ def query_cwe_database(query: str) -> str:
         return "\n".join(results) if results else f"No results found for query: {query}"
     except Exception as e:
         return f"Error querying CWE database: {str(e)}"
+
+# ---------------------------------------------------------------------------
+# Workflow & Loop Tools
+# ---------------------------------------------------------------------------
+
+def exit_loop(tool_context: Any) -> str:
+    """Exits the current autonomous loop. Call this when no more targets remain.
+
+    Args:
+        tool_context: The ADK ToolContext (injected automatically).
+
+    Returns:
+        A confirmation message.
+    """
+    # ADK uses 'escalate' to break out of a LoopAgent
+    if hasattr(tool_context, "actions"):
+        tool_context.actions.escalate = True
+    return "Loop exit requested."
+
+def get_next_hypothesis(project_path: str, db_path: str = ".trashdig/trashdig.db") -> str:
+    """Retrieves the next pending hypothesis from the database.
+
+    Args:
+        project_path: The root directory of the project.
+        db_path: Path to the SQLite database.
+
+    Returns:
+        A JSON string containing the hypothesis details, or 'None' if no pending tasks.
+    """
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM hypotheses WHERE project_path = ? AND status = 'pending' ORDER BY confidence DESC LIMIT 1",
+            (project_path,)
+        ).fetchone()
+        conn.close()
+        
+        if row:
+            return json.dumps(dict(row))
+        return "None"
+    except Exception as e:
+        return f"Error accessing database: {str(e)}"
+
+def update_hypothesis_status(task_id: str, status: str, db_path: str = ".trashdig/trashdig.db") -> str:
+    """Updates the status of a hypothesis (e.g., to 'completed' or 'failed').
+
+    Args:
+        task_id: The unique ID of the hypothesis task.
+        status: The new status (e.g., 'completed', 'failed').
+        db_path: Path to the SQLite database.
+
+    Returns:
+        A confirmation message.
+    """
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "UPDATE hypotheses SET status = ?, updated_at = ? WHERE task_id = ?",
+            (status, datetime.now().isoformat(), task_id)
+        )
+        conn.commit()
+        conn.close()
+        return f"Hypothesis {task_id} updated to {status}."
+    except Exception as e:
+        return f"Error updating database: {str(e)}"
 

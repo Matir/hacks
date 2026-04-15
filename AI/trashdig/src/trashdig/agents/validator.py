@@ -6,7 +6,7 @@ from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import read_file_content, google_provider_extras
 from trashdig.services.permissions import PermissionManager
-from trashdig.engine.engine import Engine, EngineResult
+from trashdig.engine.engine import Engine
 from trashdig.tools import ripgrep_search, bash_tool, container_bash_tool, web_fetch
 from trashdig.findings import Finding
 
@@ -26,6 +26,7 @@ class ValidatorAgent(LlmAgent):
         tech_stack: str = "",
         log_fn=None,
         engine: Optional[Engine] = None,
+        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Attempts to verify a potential finding by running a PoC.
 
@@ -34,6 +35,7 @@ class ValidatorAgent(LlmAgent):
             tech_stack: The detected project tech stack.
             log_fn: Optional callable for progress messages (Rich markup supported).
             engine: Optional Engine instance to use.
+            conversation_log_fn: Optional callable for recording the LLM conversation.
 
         Returns:
             A dictionary with the verification results (status, poc_code, output).
@@ -71,6 +73,16 @@ class ValidatorAgent(LlmAgent):
 
         result = await engine.run(self, prompt)
         text = result.text
+
+        if conversation_log_fn:
+            conversation_log_fn(
+                self.name,
+                prompt,
+                text,
+                result.tool_calls,
+                result.input_tokens,
+                result.output_tokens,
+            )
 
         try:
             cleaned_response = text.strip()

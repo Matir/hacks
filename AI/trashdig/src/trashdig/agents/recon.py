@@ -1,8 +1,8 @@
 import os
 import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from google.adk.agents import LlmAgent
-from google.adk.tools import FunctionTool
+from google.adk.tools import FunctionTool, load_artifacts as load_artifacts_tool
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import (
     get_project_structure,
@@ -157,6 +157,7 @@ def create_stack_scout_agent(
         FunctionTool(find_references),
         FunctionTool(get_scope_info),
         FunctionTool(web_fetch),
+        load_artifacts_tool,
     ]
     if extras["google_search_tool"]:
         tools.append(extras["google_search_tool"])
@@ -188,6 +189,7 @@ def create_web_route_mapper_agent(
     tools = [
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
+        load_artifacts_tool,
     ]
 
     if permission_manager:

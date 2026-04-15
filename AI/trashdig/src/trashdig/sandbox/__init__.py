@@ -1,5 +1,4 @@
 import sys
-import os
 import shutil
 import logging
 from typing import List, Optional, Dict

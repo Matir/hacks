@@ -2,7 +2,7 @@ import subprocess
 import os
 import shutil
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional
 from .base import Sandbox
 
 logger = logging.getLogger(__name__)

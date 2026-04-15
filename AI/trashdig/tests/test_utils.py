@@ -1,7 +1,5 @@
 import os
 import tempfile
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 from trashdig.agents.utils import get_project_structure, read_file_content, detect_frameworks
 
 def test_get_project_structure():

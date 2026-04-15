@@ -1,9 +1,12 @@
 import os
+import functools
 from typing import Any, Dict, List, Optional, Callable
 
 from pydantic import PrivateAttr
-from google.adk.agents import LlmAgent
+from google.adk.agents import LlmAgent, LoopAgent
 from google.adk.sessions.sqlite_session_service import SqliteSessionService
+from google.adk.tools import FunctionTool
+from google.adk.artifacts import BaseArtifactService
 
 from trashdig.agents.callbacks import TrashDigCallback
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
@@ -17,6 +20,7 @@ from trashdig.services.cost import CostTracker
 from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
 from trashdig.engine.engine import Engine
+from trashdig.tools import get_next_hypothesis, update_hypothesis_status, exit_loop
 
 
 _COORDINATOR_INSTRUCTION = """
@@ -24,46 +28,44 @@ You are TrashDig's Coordinator — an AI orchestrator for a multi-phase vulnerab
 
 ## Sub-agents
 
-- **stack_scout**: Identifies the technology stack, maps high-value source files, and generates initial security hypotheses from the project structure.
+- **stack_scout**: Identifies the technology stack, maps high-value source files, and generates initial security hypotheses.
 - **web_route_mapper**: Maps all HTTP routes and endpoint handlers. Invoke only when stack_scout reports this is a web application.
-- **hunter**: Deep-dive static analysis of individual source files to identify potential vulnerabilities. Returns findings and follow-up hypotheses.
-- **skeptic**: Adversarial reviewer that attempts to debunk findings by identifying false positives, missed sanitizers, and framework protections.
-- **validator**: Generates and executes PoC scripts in a sandbox container to confirm exploitability of findings that survive the skeptic.
+- **hunter_loop**: An autonomous loop that processes all pending security hypotheses using the hunter agent.
+- **skeptic**: Adversarial reviewer that attempts to debunk findings by identifying false positives.
+- **validator**: Generates and executes PoC scripts in a sandbox container to confirm exploitability.
 
 ## Workflow
 
 1. RECON — Run stack_scout on the project root. If is_web_app, also run web_route_mapper.
-2. HUNT — Run hunter on each high-value file and each hypothesis target. Collect new hypotheses and loop.
+2. HUNT — Run hunter_loop. This will automatically process all high-value files and discovered hypotheses.
 3. VERIFY — For each finding: run skeptic first. Only if skeptic confirms validity, run validator.
 
 When asked to coordinate a full scan, follow this pipeline in order.
-When asked for a specific phase (reconnaissance, hunting, or verification), execute only that phase.
+"""
+
+_HUNTER_ORCHESTRATOR_INSTRUCTION = """
+You are the Hunter Orchestrator. Your job is to process ONE pending security hypothesis from the database.
+
+1. Call `get_next_hypothesis` to find the next target.
+2. If it returns "None", call `exit_loop` to finish the hunting phase.
+3. If you get a hypothesis:
+   - Extract the 'target' (file path).
+   - Use the `hunter` agent to perform a deep-dive analysis of that target.
+   - Once the hunter is done, call `update_hypothesis_status` with 'completed'.
 """
 
 
 class Coordinator(LlmAgent):
-    """Coordinates the hypothesis-driven vulnerability scanning workflow.
-
-    ``Coordinator`` is an ADK ``LlmAgent`` whose ``sub_agents`` are the five
-    specialist worker agents (StackScout, WebRouteMapper, Hunter, Skeptic,
-    Validator).  All mutable scan state is stored in ``PrivateAttr`` fields so
-    that Pydantic's ``extra='forbid'`` (inherited from ``BaseAgent``) does not
-    reject them.
-
-    The two TUI-callback attributes (``on_task_event``, ``on_stats_event``) are
-    declared as proper Pydantic model fields so they can be set from outside
-    the class via normal attribute assignment.
-    """
+    """Coordinates the hypothesis-driven vulnerability scanning workflow."""
 
     # ------------------------------------------------------------------
-    # Settable TUI callbacks — declared as Pydantic fields so that
-    # coordinator.on_task_event = fn works through Pydantic's __setattr__.
+    # Settable TUI callbacks
     # ------------------------------------------------------------------
-    on_task_event: Optional[Any] = None   # Callable[[str], None]
-    on_stats_event: Optional[Any] = None  # Callable[[], None]
+    on_task_event: Optional[Any] = None
+    on_stats_event: Optional[Any] = None
 
     # ------------------------------------------------------------------
-    # All mutable state — PrivateAttr keeps them out of the Pydantic schema.
+    # All mutable state
     # ------------------------------------------------------------------
     _db: ProjectDatabase = PrivateAttr()
     _engine: Engine = PrivateAttr()
@@ -84,6 +86,7 @@ class Coordinator(LlmAgent):
         config: Config,
         project_path: str = ".",
         on_confirm: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
+        artifact_service: Optional[BaseArtifactService] = None,
     ):
         """Initialises the Coordinator with the given configuration."""
         perm = PermissionManager(config, on_confirm=on_confirm)
@@ -109,6 +112,26 @@ class Coordinator(LlmAgent):
             permission_manager=perm,
         )
 
+        db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
+        
+        # Create the HunterOrchestrator and wrap it in a LoopAgent
+        hunter_orchestrator = LlmAgent(
+            name="hunter_orchestrator",
+            model=config.get_agent_config("hunter").model,
+            instruction=_HUNTER_ORCHESTRATOR_INSTRUCTION,
+            tools=[
+                FunctionTool(functools.partial(get_next_hypothesis, project_path=project_path, db_path=db_path)),
+                FunctionTool(functools.partial(update_hypothesis_status, db_path=db_path)),
+                FunctionTool(exit_loop),
+            ],
+            sub_agents=[hunter],
+        )
+        hunter_loop = LoopAgent(
+            name="hunter_loop",
+            sub_agents=[hunter_orchestrator],
+            description="Autonomous loop for processing security hypotheses.",
+        )
+
         coordinator_cfg = config.get_agent_config("coordinator")
 
         super().__init__(
@@ -116,11 +139,10 @@ class Coordinator(LlmAgent):
             model=coordinator_cfg.model,
             instruction=_COORDINATOR_INSTRUCTION,
             description="Orchestrates the multi-phase vulnerability scanning pipeline.",
-            sub_agents=[stack_scout, web_route_mapper, hunter, skeptic, validator],
+            sub_agents=[stack_scout, web_route_mapper, hunter_loop, skeptic, validator],
         )
 
         # --- PrivateAttr initialisation ---
-        db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
         db = ProjectDatabase(db_path)
         scan_session_id = db.get_or_create_scan_session(project_path if project_path else ".")
         session_service = SqliteSessionService(db_path=db_path)
@@ -128,6 +150,7 @@ class Coordinator(LlmAgent):
         cost_tracker = CostTracker()
         engine = Engine(
             session_service=session_service,
+            artifact_service=artifact_service,
             session_id_prefix=scan_session_id,
             cost_tracker=cost_tracker,
         )
@@ -146,7 +169,7 @@ class Coordinator(LlmAgent):
 
         # Wire ADK-native callbacks using the singleton manager
         cb = TrashDigCallback.get_instance(self)
-        for _agent in (*self.sub_agents, self):
+        for _agent in (*self.sub_agents, self, hunter_orchestrator):
             cb.attach_to(_agent)
 
     # ------------------------------------------------------------------
@@ -183,12 +206,10 @@ class Coordinator(LlmAgent):
 
     @property
     def task_queue(self) -> list:
-        """Always empty — task-queue machinery replaced by run_full_scan()."""
         return []
 
     @property
     def completed_tasks(self) -> list:
-        """Always empty — task-queue machinery replaced by run_full_scan()."""
         return []
 
     @property
@@ -221,8 +242,16 @@ class Coordinator(LlmAgent):
         return self._agent_by_name("web_route_mapper")
 
     @property
+    def hunter_loop(self):
+        return self._agent_by_name("hunter_loop")
+
+    @property
     def hunter(self):
-        return self._agent_by_name("hunter")
+        # The actual hunter is now nested inside hunter_loop -> hunter_orchestrator
+        orchestrator = next((a for a in self.hunter_loop.sub_agents if a.name == "hunter_orchestrator"), None)
+        if orchestrator:
+            return next((a for a in orchestrator.sub_agents if a.name == "hunter"), None)
+        return None
 
     @property
     def skeptic(self):
@@ -233,7 +262,7 @@ class Coordinator(LlmAgent):
         return self._agent_by_name("validator")
 
     # ------------------------------------------------------------------
-    # Internal helpers (called by TrashDigCallback and internal pipeline)
+    # Internal helpers
     # ------------------------------------------------------------------
 
     def _on_stats(
@@ -243,30 +272,13 @@ class Coordinator(LlmAgent):
         new_msg: bool = False,
         model_name: Optional[str] = None,
     ) -> None:
-        """Inform the TUI that stats have changed.
-
-        The actual accounting is now handled by Engine and CostTracker.
-        This method remains as a signaling hook for the TUI.
-        """
         if self.on_stats_event:
             self.on_stats_event()
 
     def _agent_by_name(self, name: str) -> Any:
-        """Return the sub-agent with *name*, or None if not found.
-
-        Uses the ADK-native ``sub_agents`` list, so no explicit attribute
-        references are needed.
-
-        Args:
-            name: The agent name (e.g. ``"hunter"``).
-
-        Returns:
-            The matching agent instance, or ``None``.
-        """
         return next((a for a in self.sub_agents if a.name == name), None)
 
     def _on_llm_error(self) -> None:
-        """Increment the LLM error counter."""
         self._llm_errors += 1
         if self.on_stats_event:
             self.on_stats_event()
@@ -280,57 +292,36 @@ class Coordinator(LlmAgent):
         input_tokens: int,
         output_tokens: int,
     ) -> None:
-        """Delegate conversation logging to the database.
-
-        Kept for backward compatibility with tests and direct callers.
-        In production, ``TrashDigCallback.on_after_model`` handles this.
-        """
         self._db.log_conversation(
             self._project_path, agent_name, prompt, response,
             tool_calls, input_tokens, output_tokens,
         )
 
     def log(self, message: str) -> None:
-        """Emit a progress message through the TUI event callback.
-
-        Args:
-            message: The message to log (Rich markup supported).
-        """
         if self.on_task_event:
             self.on_task_event(message)
 
     # ------------------------------------------------------------------
-    # Full automated pipeline (replaces the old run_loop / task-queue)
+    # Full automated pipeline
     # ------------------------------------------------------------------
 
     async def run_full_scan(self, path: str = ".") -> None:
-        """Run the full SCAN → HUNT → VERIFY pipeline with hypothesis loop.
-
-        Replaces the old ``run_loop()`` / asyncio task-queue machinery with a
-        clean sequential pipeline.  Use this for fully-automated scanning; use
-        the individual TUI-facing methods for interactive step-by-step scanning.
-
-        Args:
-            path: The project root directory to scan.
-        """
+        """Run the full SCAN → HUNT → VERIFY pipeline with hypothesis loop."""
         # Phase 1: Recon
-        mapping = await self.run_recon(path)
+        await self.run_recon(path)
 
-        # Phase 2: Hypothesis-driven hunting loop
-        targets: set = {
-            p for p, d in mapping.items()
-            if isinstance(d, dict) and d.get("is_high_value")
-        }
-        hunted: set = set()
+        # Phase 2: Hypothesis-driven hunting loop using ADK LoopAgent
+        self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop...")
+        async for _ in self.hunter_loop.run_async(self._engine.ctx):
+            pass
 
-        while targets - hunted:
-            batch = list(targets - hunted)
-            _, new_hypotheses = await self._hunt_batch(batch, path)
-            hunted.update(batch)
-            for hypo in new_hypotheses:
-                target = hypo.get("target", "")
-                if target and target not in hunted:
-                    targets.add(target)
+        # Reload findings from DB as the loop agent populated it
+        db_findings = self._db.get_findings(self._project_path)
+        self._findings = []
+        for f in db_findings:
+            # Filter out internal DB keys (id, project_path)
+            filtered = {k: v for k, v in f.items() if k in Finding.__dataclass_fields__}
+            self._findings.append(Finding(**filtered))
 
         # Phase 3: Verify all accumulated findings
         for finding in list(self._findings):
@@ -339,21 +330,13 @@ class Coordinator(LlmAgent):
     async def _hunt_batch(
         self, targets: List[str], path: str = "."
     ) -> tuple:
-        """Run hunter on *targets*, return (new_findings, new_hypotheses).
-
-        Args:
-            targets: List of file paths to hunt in.
-            path: Project root directory.
-
-        Returns:
-            A tuple of (new_findings: List[Finding], new_hypotheses: List[dict]).
-        """
+        """Kept for backward compatibility, but run_full_scan now uses hunter_loop."""
         new_findings: List[Finding] = []
         all_hypotheses: List[Dict[str, Any]] = []
 
         for target in targets:
             self.log(f"[bold]Coordinator:[/bold] hunting [cyan]{target}[/cyan]")
-            results = await self._agent_by_name("hunter").hunt_vulnerabilities(
+            results = await self.hunter.hunt_vulnerabilities(
                 [target],
                 project_root=path,
                 engine=self._engine,
@@ -371,22 +354,10 @@ class Coordinator(LlmAgent):
         return new_findings, all_hypotheses
 
     # ------------------------------------------------------------------
-    # TUI-facing methods — call agents directly without the task queue,
-    # so each phase stays isolated and the user controls when to advance.
+    # TUI-facing methods
     # ------------------------------------------------------------------
 
     async def run_recon(self, path: str = ".") -> Dict[str, Any]:
-        """Run the Recon (StackScout and WebRouteMapper) scan.
-
-        Calls the StackScout agent directly, and if a web application is
-        detected, also calls WebRouteMapper.  Hypotheses are persisted.
-
-        Args:
-            path: The project path to scan.
-
-        Returns:
-            The file mapping dict.
-        """
         results = await self.stack_scout.scan(
             path,
             engine=self._engine,
@@ -428,19 +399,6 @@ class Coordinator(LlmAgent):
         return self._scan_results
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
-        """Run the Hunter on a list of targets and return new findings.
-
-        Calls the Hunter agent directly for each target.  New findings are
-        appended to ``self.findings``; recursive hypotheses are persisted
-        but not auto-queued (use ``run_full_scan()`` for that).
-
-        Args:
-            targets: List of file paths to hunt in.
-            path: Project root path.
-
-        Returns:
-            The list of findings discovered in this run.
-        """
         new_findings: List[Finding] = []
         for target in targets:
             self.log(f"Hunting: [cyan]{target}[/cyan]")
@@ -479,17 +437,6 @@ class Coordinator(LlmAgent):
         return new_findings
 
     async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
-        """Verify a single finding and update its status in place.
-
-        Calls the Skeptic and Validator agents directly without using any
-        task queue.
-
-        Args:
-            finding: The finding object to verify.
-
-        Returns:
-            A dictionary with ``'status'`` and ``'poc_code'``.
-        """
         # 1. Run Skeptic
         skeptic_result = await self.skeptic.debunk_finding(
             finding,

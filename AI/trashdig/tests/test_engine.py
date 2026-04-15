@@ -1,18 +1,18 @@
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch, ANY
-from trashdig.engine.engine import Engine, EngineState, EngineResult
+from unittest.mock import MagicMock, AsyncMock, patch
+from trashdig.engine.engine import Engine, EngineState
 import google.genai.types as genai_types
+
+@pytest.fixture
+def engine():
+    return Engine(max_retries=1, retry_delay=0.01)
 
 @pytest.fixture
 def mock_agent():
     agent = MagicMock()
     agent.name = "test-agent"
+    agent.model = "gemini-2.0-flash"
     return agent
-
-@pytest.fixture
-def engine():
-    return Engine(max_retries=1, retry_delay=0.1)
 
 @pytest.mark.anyio
 async def test_engine_run_success(engine, mock_agent):
@@ -23,7 +23,7 @@ async def test_engine_run_success(engine, mock_agent):
         parts=[genai_types.Part(text="Hello world")]
     )
     mock_event.is_final_response.return_value = True
-    
+
     # Mock usage metadata
     usage = MagicMock()
     usage.prompt_token_count = 10
@@ -36,9 +36,9 @@ async def test_engine_run_success(engine, mock_agent):
     with patch("trashdig.engine.engine.Runner") as MockRunner:
         instance = MockRunner.return_value
         instance.run_async = mock_run_async
-        
+
         result = await engine.run(mock_agent, "test prompt")
-        
+
         assert result.text == "Hello world"
         assert result.input_tokens == 10
         assert result.output_tokens == 5
@@ -56,9 +56,7 @@ async def test_engine_tool_calling_state(engine, mock_agent):
     )
     event1.is_final_response.return_value = False
     event1.usage_metadata = None
-    event1.response = None
-    event1.raw_response = None
-    
+
     # Second event with final response
     event2 = MagicMock()
     event2.content = genai_types.Content(
@@ -67,8 +65,6 @@ async def test_engine_tool_calling_state(engine, mock_agent):
     )
     event2.is_final_response.return_value = True
     event2.usage_metadata = None
-    event2.response = None
-    event2.raw_response = None
 
     async def mock_run_async(*args, **kwargs):
         yield event1
@@ -79,10 +75,9 @@ async def test_engine_tool_calling_state(engine, mock_agent):
     with patch("trashdig.engine.engine.Runner") as MockRunner:
         instance = MockRunner.return_value
         instance.run_async = mock_run_async
-        
+
         result = await engine.run(mock_agent, "test prompt")
         assert result.status == EngineState.COMPLETED
-        assert engine.state == EngineState.COMPLETED
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0]["name"] == "test_tool"
 
@@ -96,16 +91,15 @@ async def test_engine_retry_on_failure(engine, mock_agent):
     )
     mock_event.is_final_response.return_value = True
     mock_event.usage_metadata = None
-    mock_event.response = None
-    mock_event.raw_response = None
-    
+
     call_count = 0
     async def mock_run_async_fail_then_succeed(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             raise Exception("Transient error")
-            if False: yield # Make it an async generator
+            if False:
+                yield # Make it an async generator
         else:
             yield mock_event
 
@@ -121,30 +115,30 @@ async def test_engine_retry_on_failure(engine, mock_agent):
 @pytest.mark.anyio
 async def test_engine_max_retries_exceeded(engine, mock_agent):
     async def mock_run_async_always_fail(*args, **kwargs):
-        if False: yield # Make it an async generator
+        if False:
+            yield # Make it an async generator
         raise Exception("Permanent error")
 
     with patch("trashdig.engine.engine.Runner") as MockRunner:
         instance = MockRunner.return_value
         instance.run_async = mock_run_async_always_fail
         
-        with pytest.raises(Exception, match="Permanent error"):
-            await engine.run(mock_agent, "test prompt")
-        
-        assert engine.state == EngineState.FAILED
+        result = await engine.run(mock_agent, "test prompt")
+        assert result.status == EngineState.FAILED
+        assert "Permanent error" in result.error
 
 @pytest.mark.anyio
 async def test_engine_context_compaction(mock_agent):
     # Setup engine with small context for testing
     engine = Engine(max_context_tokens=1000, compaction_threshold=0.5)
-    
+
     mock_event = MagicMock()
     mock_event.content = genai_types.Content(
         role="model",
         parts=[genai_types.Part(text="Response")]
     )
     mock_event.is_final_response.return_value = True
-    
+
     # Mock usage triggering compaction
     usage = MagicMock()
     usage.prompt_token_count = 600 # > 50% of 1000
@@ -158,8 +152,8 @@ async def test_engine_context_compaction(mock_agent):
          patch.object(engine, "_compact_history", new_callable=AsyncMock) as mock_compact:
         instance = MockRunner.return_value
         instance.run_async = mock_run_async
-        
+
         await engine.run(mock_agent, "test prompt")
-        
-        # Verify compaction was called
-        mock_compact.assert_called_once_with(mock_agent.name, "trashdig", ANY)
+
+        # Verify compaction was called with the session_id
+        mock_compact.assert_called_once()

@@ -4,6 +4,7 @@ from trashdig.agents.callbacks import TrashDigCallback
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
 import google.genai.types as genai_types
+from google.adk.agents import LlmAgent
 
 @pytest.fixture(autouse=True)
 def reset_callback_singleton():
@@ -72,7 +73,8 @@ def test_callback_on_before_tool(mock_coordinator):
 
 def test_callback_attach_to(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
-    agent = MagicMock()
+    # Use a mock that spec-es LlmAgent so isinstance works
+    agent = MagicMock(spec=LlmAgent)
     
     cb.attach_to(agent)
     

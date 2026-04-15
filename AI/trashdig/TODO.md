@@ -12,9 +12,10 @@
     - [x] Use `SqliteSessionService` backed by `.trashdig/trashdig.db`.
     - [x] All agents in a scan share a `session_id_prefix`; stable IDs via `{prefix}:{agent.name}`.
     - [x] Scan sessions tracked in `scan_sessions` table for crash-safe resumption.
-- [ ] **[MEDIUM]** Adopt ADK Artifact API.
-    - [ ] Refactor `@artifact_tool` to return `google.adk.artifacts.Artifact`.
-    - [ ] Update agents to use artifact references for large analysis blobs (ASTs, routes).
+- [x] **[MEDIUM]** Adopt ADK Artifact API.
+    - [x] Refactor `@artifact_tool` to use `ToolContext.save_artifact` with legacy fallback.
+    - [x] Update agents to use artifact references for large analysis blobs (ASTs, routes).
+    - [x] Initialize `FileArtifactService` in `main.py` and pass to `Engine`.
 - [ ] **[LOW]** Standardize Agent Interfaces.
     - [ ] Remove custom `.scan()`, `.hunt()`, `.map_routes()` methods.
     - [ ] Move domain logic into prompts and use `agent.run()`.
@@ -91,8 +92,8 @@
 ## ADK Feature Gaps (not yet tracked)
 
 ### Workflow Agents
-- [ ] **[MEDIUM]** Use `LoopAgent` for the hypothesis-driven hunting cycle.
-    - [ ] Replace the manual `asyncio` retry/loop in `Coordinator.run_loop()` with ADK's `LoopAgent` + escalation condition.
+- [x] **[MEDIUM]** Use `LoopAgent` for the hypothesis-driven hunting cycle.
+    - [x] Replace the manual `asyncio` retry/loop in `Coordinator.run_loop()` with ADK's `LoopAgent` + escalation condition.
     - [ ] *Note: `SequentialAgent`/`ParallelAgent` are already noted in the ADK-Native Refactor section above.*
 
 ### Session & Memory
@@ -127,7 +128,7 @@
     - [ ] See ADK docs: A2A integration example in `adk-python` README.
 
 ### Evaluation & Testing
-- [ ] **[HIGH]** Implement ADK Evaluation (`adk eval`) for agent regression testing.
+- [ ] **[HIGH]** Implement ADK Evaluation (`adk eval`) for agent regression testing. [DEFERRED]
     - [ ] Build an eval dataset of known vulnerable code samples with expected findings (CWE labels, file/line).
     - [ ] Run `adk eval` in CI to catch agent prompt regressions.
     - [ ] See ADK docs: `docs/evaluate/index.md`.

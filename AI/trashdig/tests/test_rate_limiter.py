@@ -65,7 +65,7 @@ async def test_concurrent_requests():
     # 1st: immediate, tokens -> 0
     # 2nd: waits 0.1s, tokens -> 0
     # 3rd: waits 0.2s, tokens -> 0
-    results = await asyncio.gather(make_request(), make_request(), make_request())
+    await asyncio.gather(make_request(), make_request(), make_request())
     end = time.monotonic()
     
     assert end - start >= 0.15
@@ -76,7 +76,6 @@ async def test_low_rpm_limit():
     limiter = RateLimiter(rpm_limit=1)
     limiter._rpm_tokens = 0.0 # No tokens left
     
-    start = time.monotonic()
     # Should wait for a while. Let's just check if it waits at least 0.2s 
     # (since we can't wait 60s in a test).
     # Actually we can mock time or just use a slightly higher limit.

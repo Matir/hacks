@@ -1,14 +1,10 @@
 import os
-import uuid
 from typing import List, Dict, Optional, TYPE_CHECKING, Any
 from pathspec import PathSpec
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 import google.genai.types as genai_types
 
 if TYPE_CHECKING:
     from trashdig.config import Config, ProviderConfig
-    from google.adk.agents import BaseAgent
 
 
 def google_provider_extras(provider: str) -> dict[str, Any]:

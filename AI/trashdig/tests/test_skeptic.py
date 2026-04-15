@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock, ANY
+from unittest.mock import MagicMock, patch, AsyncMock
 from trashdig.agents.skeptic import SkepticAgent, create_skeptic_agent, load_prompt
 from trashdig.findings import Finding
 from trashdig.config import AgentConfig

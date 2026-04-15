@@ -3,7 +3,7 @@ import os
 import json
 import tempfile
 from unittest.mock import MagicMock, patch, AsyncMock, ANY
-from trashdig.agents.hunter import HunterAgent, create_hunter_agent, load_prompt
+from trashdig.agents.hunter import HunterAgent, create_hunter_agent
 from trashdig.config import AgentConfig
 from trashdig.engine.engine import EngineResult
 

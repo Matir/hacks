@@ -1,6 +1,4 @@
 import pytest
-import subprocess
-import os
 import sys
 from unittest.mock import MagicMock, patch
 from trashdig.sandbox import get_sandbox, NullSandbox

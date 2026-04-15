@@ -1,7 +1,5 @@
-import os
-import tomllib
 from unittest.mock import patch
-from trashdig.config import load_config, Config, AgentConfig
+from trashdig.config import load_config
 
 @patch("trashdig.config._find_user_config", return_value=None)
 def test_load_config_defaults(mock_user_config, tmp_path, monkeypatch):

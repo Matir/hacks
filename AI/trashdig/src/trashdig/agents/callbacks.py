@@ -65,14 +65,22 @@ class TrashDigCallback:
     def attach_to(self, agent: Any) -> None:
         """Attach this callback manager to an ADK agent.
 
-        Wires up the tool, model, and error hooks.
+        Wires up the tool, model, and error hooks if the agent supports them.
 
         Args:
             agent: The ADK agent (LlmAgent, BaseAgent, etc.) to monitor.
         """
-        agent.before_tool_callback = self.on_before_tool
-        agent.after_model_callback = self.on_after_model
-        agent.on_model_error_callback = self.on_model_error
+        from google.adk.agents import LlmAgent
+        
+        # Only LlmAgent supports these specific callbacks in its schema
+        if isinstance(agent, LlmAgent):
+            agent.before_tool_callback = self.on_before_tool
+            agent.after_model_callback = self.on_after_model
+            agent.on_model_error_callback = self.on_model_error
+        else:
+            # For non-LlmAgents (like LoopAgent), we don't attach model-specific callbacks
+            # but we could potentially attach before/after agent callbacks if needed.
+            pass
 
     # ------------------------------------------------------------------
     # Tool hook

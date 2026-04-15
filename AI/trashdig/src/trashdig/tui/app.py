@@ -287,7 +287,11 @@ class TrashDigApp(App):
         self._file_log = _setup_file_logger(log_path)
         self._file_log.info("Session started — workspace: %s", workspace_root)
         log_auth_info(self.config, self._file_log)
-        self.coordinator = Coordinator(self.config, project_path=workspace_root)
+        
+        from trashdig.tools import get_artifact_service
+        art_service = get_artifact_service()
+        
+        self.coordinator = Coordinator(self.config, project_path=workspace_root, artifact_service=art_service)
         self.coordinator.on_task_event = lambda msg: self.call_from_thread(self._on_coordinator_log, msg)
         self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)
         self.prioritized_targets: List[str] = []

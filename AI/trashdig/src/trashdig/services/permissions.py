@@ -48,15 +48,18 @@ class PermissionManager:
         
         return True
 
-    def wrap_tool(self, tool: FunctionTool) -> FunctionTool:
+    def wrap_tool(self, tool: Any) -> Any:
         """Wraps a FunctionTool to intercept calls for permission checks.
 
         Args:
             tool: The tool to wrap.
 
         Returns:
-            A new FunctionTool with permission checks.
+            A new FunctionTool with permission checks, or the original tool if not a FunctionTool.
         """
+        if not isinstance(tool, FunctionTool):
+            return tool
+
         original_func = tool.func
         tool_name = tool.name or original_func.__name__
 

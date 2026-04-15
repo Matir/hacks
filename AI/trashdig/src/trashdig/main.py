@@ -1,12 +1,18 @@
 import argparse
 import os
+import sys
+import asyncio
 import warnings
-
-# Suppress experimental ADK feature warnings
-warnings.filterwarnings("ignore", message=".*FeatureName.PLUGGABLE_AUTH.*")
+from rich.console import Console
 
 from trashdig.tui.app import TrashDigApp
 from trashdig.config import load_config
+from trashdig.services.rate_limiter import init_rate_limiter
+from trashdig.tools import init_artifact_manager
+from trashdig.agents.coordinator import Coordinator
+
+# Suppress experimental ADK feature warnings
+warnings.filterwarnings("ignore", message=".*FeatureName.PLUGGABLE_AUTH.*")
 
 def main():
     """Main entry point for TrashDig."""
@@ -33,6 +39,11 @@ def main():
         "--dump-config",
         action="store_true",
         help="Dump the loaded configuration as TOML and exit",
+    )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Run in batch mode (non-interactive, skip TUI)",
     )
     args = parser.parse_args()
 
@@ -62,14 +73,39 @@ def main():
         print(tomli_w.dumps(config_dict))
         return
     
-    from trashdig.services.rate_limiter import init_rate_limiter
-    from trashdig.tools import init_artifact_manager
-    
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)
-    init_artifact_manager(data_dir=config.data_dir)
+    art_service = init_artifact_manager(data_dir=config.data_dir)
 
-    app = TrashDigApp(config=config, workspace_root=workspace_root)
-    app.run()
+    # Automatic batch mode if not a TTY or explicitly requested
+    is_batch = args.batch or not sys.stdout.isatty()
+
+    if is_batch:
+        console = Console()
+        console.print("[bold blue]TrashDig:[/bold blue] running in batch mode...")
+        
+        coordinator = Coordinator(
+            config, 
+            project_path=workspace_root, 
+            artifact_service=art_service
+        )
+        
+        # Connect simple console logger
+        coordinator.on_task_event = lambda msg: console.print(msg)
+        coordinator.on_stats_event = lambda: None
+        
+        try:
+            asyncio.run(coordinator.run_full_scan(workspace_root))
+            console.print("\n[bold green]Scan Complete.[/bold green]")
+            console.print(f"Total Findings: {len(coordinator.findings)}")
+            console.print(f"Total Cost: ${coordinator.total_cost:.4f}")
+        except Exception as e:
+            console.print(f"[bold red]Error during scan:[/bold red] {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    else:
+        app = TrashDigApp(config=config, workspace_root=workspace_root)
+        app.run()
 
 if __name__ == "__main__":
     main()

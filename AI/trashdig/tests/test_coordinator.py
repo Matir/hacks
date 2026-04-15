@@ -3,7 +3,6 @@ import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 from trashdig.agents.coordinator import Coordinator
 from trashdig.config import Config
-from trashdig.agents.types import Task, TaskType, TaskStatus
 from trashdig.findings import Finding
 
 from google.adk.agents import LlmAgent
@@ -115,7 +114,7 @@ async def test_coordinator_handle_hunt(mock_create_val, mock_create_skep, mock_c
     coord = Coordinator(mock_config)
     
     # Mocking run_hunter behavior inside
-    new_findings = await coord.run_hunter(["test.py"])
+    await coord.run_hunter(["test.py"])
     
     assert len(coord.findings) == 1
     assert coord.findings[0].title == "SQLi"

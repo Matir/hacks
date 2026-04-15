@@ -16,6 +16,7 @@ You have access to several powerful tools. Use them to enhance your analysis:
 8.  **web_fetch**: Retrieve the text content of a specific web page. Use this to read documentation, CVE details, or security blogs.
 9.  **google_search**: Perform a broad web search. Use this to find known vulnerabilities in libraries, frameworks, or specific versions used in the project.
 10. **query_cwe_database**: Use this to lookup descriptions, impact, and remediation examples for specific CWE IDs or vulnerability types.
+11. **read_file**: Use this to read the full content of a file. Use this if the file content was not provided in the initial prompt or if you need to re-read it.
 
 ## Instructions
 

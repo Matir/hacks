@@ -1,12 +1,12 @@
 import os
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from google.adk.agents import LlmAgent
-from google.adk.tools import FunctionTool
+from google.adk.tools import FunctionTool, load_artifacts as load_artifacts_tool
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import read_file_content, google_provider_extras
 from trashdig.services.permissions import PermissionManager
-from trashdig.engine.engine import Engine, EngineResult
+from trashdig.engine.engine import Engine
 from trashdig.tools import (
     ripgrep_search,
     semgrep_scan,
@@ -19,6 +19,7 @@ from trashdig.tools import (
     trace_variable_semantic,
     trace_taint_cross_file,
     web_fetch,
+    read_file,
 )
 from trashdig.findings import Finding
 
@@ -45,6 +46,7 @@ class HunterAgent(LlmAgent):
         project_root: str = ".",
         log_fn=None,
         engine: Optional[Engine] = None,
+        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Deep-dive into specific files to identify vulnerabilities.
 
@@ -53,6 +55,7 @@ class HunterAgent(LlmAgent):
             project_root: Root directory of the project.
             log_fn: Optional callable for progress messages (Rich markup supported).
             engine: Optional Engine instance to use.
+            conversation_log_fn: Optional callable for recording the LLM conversation.
 
         Returns:
             A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
@@ -89,6 +92,16 @@ class HunterAgent(LlmAgent):
 
             result = await engine.run(self, prompt)
             text = result.text
+
+            if conversation_log_fn:
+                conversation_log_fn(
+                    self.name,
+                    prompt,
+                    text,
+                    result.tool_calls,
+                    result.input_tokens,
+                    result.output_tokens,
+                )
 
             try:
                 cleaned_response = text.strip()
@@ -177,6 +190,8 @@ def create_hunter_agent(
         FunctionTool(trace_variable_semantic),
         FunctionTool(trace_taint_cross_file),
         FunctionTool(web_fetch),
+        FunctionTool(read_file),
+        load_artifacts_tool,
     ]
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])

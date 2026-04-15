@@ -2,7 +2,6 @@
 
 import os
 import tempfile
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -70,7 +69,7 @@ def test_args_hash_differs_for_different_args():
 def test_db_creates_directory_and_file():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = os.path.join(tmp, "nested", "dir", "trashdig.db")
-        db = ProjectDatabase(db_path=db_path)
+        ProjectDatabase(db_path=db_path)
         assert os.path.exists(db_path)
 
 
