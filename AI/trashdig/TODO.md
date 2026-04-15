@@ -84,3 +84,57 @@
 - [ ] **[LOW]** "Agent Ask" mechanism for structured questioning (Phase 4).
 - [ ] **[MEDIUM]** Progress Tracking: Add real-time progress bars or a task status dashboard.
 - [ ] **[LOW]** Command History Persistence: Save REPL history between sessions.
+
+## ADK Feature Gaps (not yet tracked)
+
+### Workflow Agents
+- [ ] **[MEDIUM]** Use `LoopAgent` for the hypothesis-driven hunting cycle.
+    - [ ] Replace the manual `asyncio` retry/loop in `Coordinator.run_loop()` with ADK's `LoopAgent` + escalation condition.
+    - [ ] *Note: `SequentialAgent`/`ParallelAgent` are already noted in the ADK-Native Refactor section above.*
+
+### Session & Memory
+- [ ] **[MEDIUM]** Adopt a persistent `SessionService` (e.g., database-backed) to allow scan resumption across CLI invocations.
+    - [ ] Currently only `InMemorySessionService` is used; sessions are lost on exit.
+    - [ ] Evaluate `VertexAiSessionService` or a custom SQLite-backed implementation.
+- [ ] **[LOW]** Evaluate ADK `MemoryService` for cross-session long-term knowledge retention.
+    - [ ] Distinguish from `SessionService` (per-conversation) vs. `MemoryService` (persistent cross-session facts).
+    - [ ] Assess overlap with existing `ProjectDatabase` — may be redundant.
+
+### Tool Ecosystem
+- [ ] **[MEDIUM]** Integrate MCP (Model Context Protocol) tools via ADK's native MCP support.
+    - [ ] Evaluate existing security-focused MCP servers (e.g., static analysis, CVE lookup) as drop-in tools.
+    - [ ] See ADK docs: `docs/mcp/index.md` and `docs/tools/mcp-tools.md`.
+- [ ] **[LOW]** Use ADK OpenAPI tool generation for third-party security APIs.
+    - [ ] Candidates: NVD/CVE API, bug bounty platform APIs (HackerOne, Bugcrowd), GitHub Security Advisory API.
+    - [ ] See ADK docs: `docs/tools/openapi-tools.md`.
+
+### Runtime Configuration
+- [ ] **[LOW]** Leverage ADK `RunConfig` for explicit streaming mode and response modality control.
+    - [ ] Currently streaming is implicit via `runner.run_async()`; `RunConfig` enables finer-grained control.
+    - [ ] See ADK docs: `docs/runtime/runconfig.md`.
+
+### Provider & Model Backends
+- [ ] **[LOW]** Document and test LiteLLM as a model backend option via ADK's model abstraction.
+    - [ ] ADK supports LiteLLM natively; would enable Claude, Mistral, and other non-Gemini models without custom provider hacks.
+    - [ ] See ADK docs: `docs/agents/models.md`.
+
+### Agent-to-Agent (A2A) Protocol
+- [ ] **[LOW]** Evaluate A2A protocol for distributed/remote agent deployment.
+    - [ ] Useful if agents are deployed as separate services (e.g., Hunter on GPU node, Validator in isolated cloud VM).
+    - [ ] See ADK docs: A2A integration example in `adk-python` README.
+
+### Evaluation & Testing
+- [ ] **[HIGH]** Implement ADK Evaluation (`adk eval`) for agent regression testing.
+    - [ ] Build an eval dataset of known vulnerable code samples with expected findings (CWE labels, file/line).
+    - [ ] Run `adk eval` in CI to catch agent prompt regressions.
+    - [ ] See ADK docs: `docs/evaluate/index.md`.
+- [ ] **[LOW]** Use ADK Dev UI during development for interactive agent debugging.
+    - [ ] `adk web` provides a built-in chat UI to test individual agents without the full TUI.
+    - [ ] Useful for prompt iteration on Hunter/Skeptic/Validator without running a full scan.
+
+### Deployment
+- [ ] **[LOW]** Add Cloud Run deployment configuration for running TrashDig as a service.
+    - [ ] Containerize with Docker; configure ADK for Cloud Run target.
+    - [ ] See ADK docs: `docs/deploy/cloud-run.md`.
+- [ ] **[LOW]** Evaluate Vertex AI Agent Engine for production-scale managed deployment.
+    - [ ] See ADK docs: `docs/deploy/agent-engine.md`.

@@ -14,3 +14,4 @@ trashdig.db
 MagicMock
 .env
 .coverage
+/.vscode
