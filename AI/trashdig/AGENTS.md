@@ -1,49 +1,54 @@
 # TrashDig: Agent Foundation & Mandates
 
-TrashDig is an AI-powered, language-agnostic vulnerability scanner and security research assistant. It uses a multi-agent system built on the **Agent Development Kit (ADK)** to map codebases, trace data flows, and verify security findings.
+TrashDig is an AI-powered, language-agnostic vulnerability scanner and security research assistant. It is built on the **Agent Development Kit (ADK)** and leverages a decentralized, agentic architecture to map codebases, trace data flows, and verify security findings.
 
 ## 🏗 Architecture & Agent Personas
 
-TrashDig operates as a coordinated team of specialized agents, managed by a central **Coordinator**:
+TrashDig operates as a team of specialized agents coordinated by a top-level **Coordinator Agent**. Unlike scripted workflows, TrashDig uses ADK's native delegation, where the Coordinator dynamically assigns tasks to sub-agents.
 
-1.  **Recon Suite**:
+1.  **Coordinator Agent (Orchestrator)**:
+    *   **Role**: Strategic Lead.
+    *   **Tasks**: High-level planning, delegation to specialized agents, and cross-agent state management.
+    *   **Goal**: Oversee the end-to-end vulnerability discovery lifecycle.
+2.  **Recon Suite (Sub-Agents)**:
     *   **StackScout Agent**:
         *   **Role**: Hybrid Environment Detection.
-        *   **Tasks**: Detects framework/tech stacks using deterministic checks and LLM inference. assigns "high-value" flags to entry points and sensitive configurations.
+        *   **Tasks**: Detects framework/tech stacks using deterministic checks and LLM inference.
         *   **Goal**: Build a project profile and initial hunt hypotheses.
     *   **WebRouteMapper Agent**:
         *   **Role**: Attack Surface Mapper.
-        *   **Tasks**: (Conditional) Invoked if StackScout detects a web application. Uses AST-aware parsing to map all web endpoints (e.g., Express routes, FastAPI decorators).
+        *   **Tasks**: Uses AST-aware parsing to map all web endpoints (e.g., Express routes, FastAPI decorators).
         *   **Goal**: Generate a structured artifact of the application's attack surface.
-2.  **Hunter Agent**:
+3.  **Hunter Agent (Sub-Agent)**:
     *   **Role**: Deep-Dive Researcher.
     *   **Tasks**: Performs hypothesis-driven analysis, AST-aware taint analysis, and **Cross-File** symbol tracing.
     *   **Goal**: Connect untrusted user input to dangerous sinks.
-3.  **Verification Pipeline**:
+4.  **Verification Pipeline (Sub-Agents)**:
     *   **Skeptic Agent**:
         *   **Role**: Adversarial Reviewer.
-        *   **Tasks**: Pre-validation gate for all Hunter findings. Attempts to debunk findings by identifying missed sanitizers, middleware, or logic-level defenses.
+        *   **Tasks**: Pre-validation gate for all Hunter findings. Attempts to debunk findings by identifying missed sanitizers or logic-level defenses.
         *   **Goal**: Reduce false positives and ensure high-quality findings.
     *   **Validator Agent**:
         *   **Role**: Proof-of-Concept Specialist.
-        *   **Tasks**: Only invoked after Skeptic approval. Generates and executes PoC scripts in a containerized environment to prove reachability and exploitability.
+        *   **Tasks**: Generates and executes PoC scripts in a containerized environment to prove reachability and exploitability.
         *   **Goal**: Empirical proof of vulnerability.
-4.  **TUI (Human-in-the-Loop)**:
-    *   **Role**: Steering & Prioritization.
-    *   **Interface**: Built with `Textual`.
-    *   **Goal**: Allow researchers to "star" files and guide the Hunter agent.
 
-## 🛠 Technical Stack & Services
+## 🛠 Technical Stack & ADK Integration
 
-*   **Engine**: A custom state-machine-based execution loop (`src/trashdig/engine/`) that handles multi-turn tool calls, transient LLM failures (retries), and **Context Compaction** (summarizing/pruning history when token limits are hit).
-*   **Concurrency**: Parallel task execution in the Coordinator using `asyncio.Semaphore` to manage agent workloads.
+TrashDig is designed to be "ADK-Native," leveraging the framework's high-level abstractions for orchestration and state:
+
+*   **Orchestration**: Uses ADK's `LlmAgent` with `sub_agents` for dynamic delegation. The manual Python task loop is replaced by an agentic "brain" that decides which tool or agent to call next.
+*   **State & Memory**: Uses ADK `SessionService` and `MemoryService` to maintain shared context across all agents. This ensures that the Hunter agent understands the project structure discovered by StackScout without redundant re-analysis.
+*   **Observability (Callbacks)**: Employs a unified `TrashDigCallback` (inheriting from ADK's `BaseCallback`) to handle real-time TUI updates, cost tracking, and database logging.
+*   **Artifacts**: Uses the native **ADK Artifact API** to manage large tool outputs (ASTs, call graphs, scan results), ensuring context efficiency by referencing files instead of inlining massive text blocks.
 *   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
-*   **Services Layer** (`src/trashdig/services/`):
-    *   **ProjectDatabase**: SQLite-backed persistence for findings, symbols, and session history.
-    *   **CostTracker**: Real-time USD usage monitoring based on model rates.
-    *   **PermissionManager**: Logic-level middleware that intercepts tool calls based on security policies (e.g., confirming unsandboxed `bash_tool`).
-    *   **RateLimiter**: Manages LLM API throughput (RPM/TPM).
+*   **Services Layer**:
+    *   **ProjectDatabase**: ADK-compatible storage for findings, symbols, and session history.
+    *   **CostTracker**: Integrated into the ADK callback chain for real-time USD monitoring.
+    *   **PermissionManager**: ADK `Tool` wrapper that intercepts calls based on security policies (e.g., TUI confirmation for unsandboxed commands).
 *   **Isolation**: PoCs are executed in isolated **Docker containers** (Validator) or **Minijail** sandboxes (Hunter tools) to ensure host safety.
+
+## 🛡️ Security & Tool Sandboxing
 
 ## 🛡️ Security & Tool Sandboxing
 

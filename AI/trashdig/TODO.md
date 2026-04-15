@@ -1,5 +1,22 @@
 # TrashDig TODO List
 
+## 🏗️ ADK-Native Refactor (Priority)
+- [ ] **[HIGH]** Refactor `Coordinator` from Python loop to `LlmAgent`.
+    - [ ] Define sub-agents in `LlmAgent` constructor.
+    - [ ] Replace `run_loop` with agentic delegation.
+- [ ] **[HIGH]** Implement `TrashDigCallback` (ADK Callbacks).
+    - [ ] Move TUI updates to `on_tool_call_start` and `on_run_step_end`.
+    - [ ] Integrate `CostTracker` and DB logging into the callback chain.
+- [ ] **[MEDIUM]** Transition to `SessionService` for Shared Context.
+    - [ ] Ensure all agents in a scan session share a single `session_id`.
+    - [ ] Remove manual context passing between `Coordinator` and agents.
+- [ ] **[MEDIUM]** Adopt ADK Artifact API.
+    - [ ] Refactor `@artifact_tool` to return `google.adk.artifacts.Artifact`.
+    - [ ] Update agents to use artifact references for large analysis blobs (ASTs, routes).
+- [ ] **[LOW]** Standardize Agent Interfaces.
+    - [ ] Remove custom `.scan()`, `.hunt()`, `.map_routes()` methods.
+    - [ ] Move domain logic into prompts and use `agent.run()`.
+
 ## Core Infrastructure
 - [x] Implement `tree-sitter` for AST-based analysis.
 - [x] Integrate `semgrep` for pattern-based vulnerability scanning.
@@ -8,15 +25,15 @@
 - [x] Implement `bash_tool` for secure command execution (Phase 1).
 - [x] Integrate `google_search` and `web_fetch` for automated security research.
 - [x] **[HIGH]** Setup SQLite Project Database for persistent knowledge and session management (Phase 4).
-- [x] **[HIGH]** Implement `Engine` State Machine (`src/trashdig/engine/`).
+- [ ] **[REFAC]** Implement `Engine` State Machine (`src/trashdig/engine/`).
     - [x] Move core logic from `utils.run_prompt` into a formal `Engine` class.
-    - [x] Manage the "Observer-Actor" loop, tool-call retries, and JSON schema validation.
-- [x] **[MEDIUM]** Context Compaction & History Management.
+    - [ ] *Note: Custom Engine is being deprecated in favor of ADK Runner + Callbacks.*
+- [ ] **[REFAC]** Context Compaction & History Management.
     - [x] Implement a `ContextManager` to monitor tokens.
-    - [x] Add "History Pruning" and "Recursive Summarization" to preserve model intent within context limits.
-- [x] **[MEDIUM]** Implement Parallel Task Execution in `Coordinator`.
-    - [x] Use `asyncio.Semaphore` for a configurable concurrency limit (e.g., `max_parallel_tasks` in `trashdig.toml`).
-    - [x] Adopt a worker-pool pattern to handle recursive hypothesis generation without exhausting resources.
+    - [ ] *Note: Moving to ADK native compaction/summarization.*
+- [ ] **[REFAC]** Implement Parallel Task Execution in `Coordinator`.
+    - [x] Use `asyncio.Semaphore` for a configurable concurrency limit.
+    - [ ] *Note: Moving to ADK native parallel agent execution.*
 
 ## Recon Agent Suite (Replacing Archaeologist)
 - [x] **[HIGH]** StackScout Agent: Hybrid Environment Detection.
