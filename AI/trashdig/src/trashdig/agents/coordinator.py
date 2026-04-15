@@ -1,6 +1,8 @@
 import os
+import uuid
 from typing import Dict, Any, List, Optional, Callable, Set
 import asyncio
+from google.adk.sessions.sqlite_session_service import SqliteSessionService
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.validator import create_validator_agent
@@ -56,7 +58,6 @@ class Coordinator:
             permission_manager=self.permission_manager,
         )
 
-        self.engine = Engine()
         self.cost_tracker = CostTracker()
         self.semaphore = asyncio.Semaphore(config.max_parallel_tasks)
         self.active_tasks: Set[asyncio.Task] = set()
@@ -80,9 +81,23 @@ class Coordinator:
         self._current_msg_input: int = 0
         self._current_msg_output: int = 0
 
-        # Persistent knowledge store
+        # Persistent knowledge store — must be initialised before Engine so
+        # we can retrieve/create the scan session ID.
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
         self.db = ProjectDatabase(db_path)
+
+        # Stable scan session ID shared across all agent calls in this
+        # invocation.  All ADK session data (event history) is written to
+        # the same SQLite file via SqliteSessionService so sessions survive
+        # process restarts.
+        self.scan_session_id: str = self.db.get_or_create_scan_session(
+            project_path if project_path else "."
+        )
+        session_service = SqliteSessionService(db_path=db_path)
+        self.engine = Engine(
+            session_service=session_service,
+            session_id_prefix=self.scan_session_id,
+        )
 
         # Callback for TUI updates
         self.on_task_event: Optional[Callable[[str], None]] = None
