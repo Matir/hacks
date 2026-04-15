@@ -26,9 +26,6 @@ class SkepticAgent(LlmAgent):
         project_root: str = ".",
         log_fn=None,
         engine: Optional[Engine] = None,
-        stats_fn=None,
-        error_fn=None,
-        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Attempts to debunk a potential finding by performing an adversarial review.
 
@@ -37,9 +34,6 @@ class SkepticAgent(LlmAgent):
             project_root: The project root directory.
             log_fn: Optional callable for progress messages.
             engine: Optional Engine instance to use.
-            stats_fn: Optional callable for token usage tracking.
-            error_fn: Optional callable for LLM error tracking.
-            conversation_log_fn: Optional callable for structured conversation logging.
 
         Returns:
             A dictionary with the debunking results (is_valid, skeptic_notes).
@@ -70,24 +64,8 @@ class SkepticAgent(LlmAgent):
             f"framework protections, or logical errors in the original report."
         )
 
-        result = await engine.run(
-            self,
-            prompt,
-            on_event=log_fn,
-            on_stats=stats_fn,
-            on_error=error_fn,
-        )
+        result = await engine.run(self, prompt)
         text = result.text
-
-        if conversation_log_fn:
-            conversation_log_fn(
-                self.name,
-                prompt,
-                text,
-                result.tool_calls,
-                result.input_tokens,
-                result.output_tokens,
-            )
 
         try:
             cleaned_response = text.strip()
@@ -109,8 +87,6 @@ class SkepticAgent(LlmAgent):
                 "skeptic_notes": result_data.get("skeptic_notes", "")
             }
         except (json.JSONDecodeError, AttributeError):
-            if error_fn:
-                error_fn()
             _log("[bold]Skeptic:[/bold] [red]failed to parse response[/red]")
             return {
                 "is_valid": True, # Fail safe: assume it is valid if the skeptic fails

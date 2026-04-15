@@ -3,6 +3,7 @@ import uuid
 from typing import Dict, Any, List, Optional, Callable, Set
 import asyncio
 from google.adk.sessions.sqlite_session_service import SqliteSessionService
+from trashdig.agents.callbacks import TrashDigCallback
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.validator import create_validator_agent
@@ -99,6 +100,17 @@ class Coordinator:
             session_id_prefix=self.scan_session_id,
         )
 
+        # Wire ADK-native callbacks to all agents so tool calls, token stats,
+        # costs, and DB logging happen automatically without manual threading.
+        cb = TrashDigCallback(self)
+        for _agent in (
+            self.stack_scout, self.web_route_mapper,
+            self.hunter, self.skeptic, self.validator,
+        ):
+            _agent.before_tool_callback = cb.on_before_tool
+            _agent.after_model_callback = cb.on_after_model
+            _agent.on_model_error_callback = cb.on_model_error
+
         # Callback for TUI updates
         self.on_task_event: Optional[Callable[[str], None]] = None
         self.on_stats_event: Optional[Callable[[], None]] = None
@@ -138,44 +150,31 @@ class Coordinator:
         if self.on_stats_event:
             self.on_stats_event()
 
-    def _get_stats_fn(self, agent: Any) -> Callable[[int, int, bool], None]:
-        """Creates a stats callback for a specific agent.
+    def _agent_by_name(self, name: str) -> Any:
+        """Return the agent instance for *name*, or None if not found.
+
+        Used by TrashDigCallback to look up the model name for cost tracking.
 
         Args:
-            agent: The agent instance to wrap.
+            name: The agent name (e.g. ``"hunter"``).
 
         Returns:
-            A callable that matches the Engine's on_stats signature.
+            The matching agent instance, or ``None``.
         """
-        return lambda in_t, out_t, final: self._on_stats(
-            in_t, out_t, final, model_name=getattr(agent, "model", None)
-        )
+        agents = {
+            self.stack_scout.name: self.stack_scout,
+            self.web_route_mapper.name: self.web_route_mapper,
+            self.hunter.name: self.hunter,
+            self.skeptic.name: self.skeptic,
+            self.validator.name: self.validator,
+        }
+        return agents.get(name)
 
     def _on_llm_error(self) -> None:
         """Increment the LLM error counter."""
         self.llm_errors += 1
         if self.on_stats_event:
             self.on_stats_event()
-
-    def _on_conversation(
-        self,
-        agent_name: str,
-        prompt: str,
-        response: Optional[str],
-        tool_calls: List[Dict[str, Any]],
-        input_tokens: int,
-        output_tokens: int,
-    ) -> None:
-        """Persist a conversation turn to the database."""
-        self.db.log_conversation(
-            self.project_path,
-            agent_name,
-            prompt,
-            response,
-            tool_calls,
-            input_tokens,
-            output_tokens,
-        )
 
     def log(self, message: str) -> None:
         """Logs a message through the event callback.
@@ -258,9 +257,6 @@ class Coordinator:
         results = await self.stack_scout.scan(
             task.target,
             engine=self.engine,
-            stats_fn=self._get_stats_fn(self.stack_scout),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
 
         mapping: Dict[str, Any] = results.get("mapping", {})
@@ -273,9 +269,6 @@ class Coordinator:
             route_results = await self.web_route_mapper.map_routes(
                 task.target,
                 engine=self.engine,
-                stats_fn=self._get_stats_fn(self.web_route_mapper),
-                error_fn=self._on_llm_error,
-                conversation_log_fn=self._on_conversation,
             )
             self.attack_surface = route_results.get("attack_surface", [])
 
@@ -315,9 +308,6 @@ class Coordinator:
             [task.target],
             project_root=".",
             engine=self.engine,
-            stats_fn=self._get_stats_fn(self.hunter),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
 
         # Process findings
@@ -374,9 +364,6 @@ class Coordinator:
             self.project_path,
             engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._get_stats_fn(self.skeptic),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
 
         if not skeptic_result.get("is_valid", True):
@@ -400,9 +387,6 @@ class Coordinator:
             self.tech_stack,
             engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._get_stats_fn(self.validator),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
         if result.get("status"):
             finding.verification_status = result["status"]
@@ -440,9 +424,6 @@ class Coordinator:
             path,
             engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._get_stats_fn(self.stack_scout),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
 
         mapping: Dict[str, Any] = results.get("mapping", {})
@@ -456,9 +437,6 @@ class Coordinator:
                 path,
                 engine=self.engine,
                 log_fn=self.log,
-                stats_fn=self._get_stats_fn(self.web_route_mapper),
-                error_fn=self._on_llm_error,
-                conversation_log_fn=self._on_conversation,
             )
             self.attack_surface = route_results.get("attack_surface", [])
 
@@ -505,9 +483,6 @@ class Coordinator:
                 project_root=path,
                 engine=self.engine,
                 log_fn=self.log,
-                stats_fn=self._get_stats_fn(self.hunter),
-                error_fn=self._on_llm_error,
-                conversation_log_fn=self._on_conversation,
             )
 
             for finding in results.get("findings", []):
@@ -553,9 +528,6 @@ class Coordinator:
             self.project_path,
             engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._get_stats_fn(self.skeptic),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
 
         if not skeptic_result.get("is_valid", True):
@@ -579,9 +551,6 @@ class Coordinator:
             self.tech_stack,
             engine=self.engine,
             log_fn=self.log,
-            stats_fn=self._get_stats_fn(self.validator),
-            error_fn=self._on_llm_error,
-            conversation_log_fn=self._on_conversation,
         )
         if result.get("status"):
             finding.verification_status = result["status"]

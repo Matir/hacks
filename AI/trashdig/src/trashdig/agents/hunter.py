@@ -45,9 +45,6 @@ class HunterAgent(LlmAgent):
         project_root: str = ".",
         log_fn=None,
         engine: Optional[Engine] = None,
-        stats_fn=None,
-        error_fn=None,
-        conversation_log_fn=None,
     ) -> Dict[str, Any]:
         """Deep-dive into specific files to identify vulnerabilities.
 
@@ -56,9 +53,6 @@ class HunterAgent(LlmAgent):
             project_root: Root directory of the project.
             log_fn: Optional callable for progress messages (Rich markup supported).
             engine: Optional Engine instance to use.
-            stats_fn: Optional callable for token usage tracking.
-            error_fn: Optional callable for LLM error tracking.
-            conversation_log_fn: Optional callable for structured conversation logging.
 
         Returns:
             A dictionary with 'findings' (List[Finding]) and 'hypotheses' (List[Dict]).
@@ -93,24 +87,8 @@ class HunterAgent(LlmAgent):
                 f"   - confidence: (0.0 to 1.0)\n"
             )
 
-            result = await engine.run(
-                self,
-                prompt,
-                on_event=log_fn,
-                on_stats=stats_fn,
-                on_error=error_fn,
-            )
+            result = await engine.run(self, prompt)
             text = result.text
-
-            if conversation_log_fn:
-                conversation_log_fn(
-                    self.name,
-                    prompt,
-                    text,
-                    result.tool_calls,
-                    result.input_tokens,
-                    result.output_tokens,
-                )
 
             try:
                 cleaned_response = text.strip()
@@ -162,8 +140,6 @@ class HunterAgent(LlmAgent):
                     _log(f"  [dim]no findings in {target}[/dim]")
 
             except (json.JSONDecodeError, AttributeError):
-                if error_fn:
-                    error_fn()
                 _log(f"  [red]failed to parse Hunter response for {target}[/red]")
                 continue
 

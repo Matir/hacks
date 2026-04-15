@@ -60,20 +60,23 @@ class Engine:
         self,
         agent: "BaseAgent",
         prompt: str,
-        on_event: Optional[Callable[[str], None]] = None,
         on_stats: Optional[Callable[[int, int, bool], None]] = None,
-        on_error: Optional[Callable[[], None]] = None,
         session_id: Optional[str] = None,
     ) -> EngineResult:
         """Runs a prompt through the agent with retries and tracking.
-        
+
+        Tool-call logging, conversation DB persistence, cost tracking, and
+        error counting are handled by TrashDigCallback (ADK-native callbacks
+        registered on each agent).  ``on_stats`` is kept here solely for
+        intermediate streaming token updates used by the live TUI display.
+
         Args:
             agent: The ADK agent instance to run.
             prompt: The text prompt to send.
-            on_event: Callback for tool call events.
-            on_stats: Callback for token usage stats (input, output, is_final).
-            on_error: Callback for transient LLM errors.
-            
+            on_stats: Optional callback for intermediate streaming token counts
+                (input, output, is_final=False).  The final accounting is done
+                by TrashDigCallback.on_after_model.
+
         Returns:
             An EngineResult object containing the outcome of the run.
         """
@@ -159,16 +162,13 @@ class Engine:
                         if input_tokens > (self.max_context_tokens * self.compaction_threshold):
                             await self._compact_history(agent.name, user_id, session_id)
 
-                    # Extract tool calls for logging
+                    # Extract tool calls for result tracking
                     if event.content and event.content.parts:
                         for part in event.content.parts:
                             fc = getattr(part, "function_call", None)
                             if fc and getattr(fc, "name", None):
                                 args = getattr(fc, "args", {}) or {}
                                 tool_calls.append({"name": fc.name, "args": args})
-                                if on_event:
-                                    args_str = ", ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
-                                    on_event(f"  [dim]→ {fc.name}({args_str})[/dim]")
 
                     # Capture final response
                     if event.is_final_response() and event.content and event.content.parts:
@@ -189,17 +189,12 @@ class Engine:
                 
                 if limiter:
                     await limiter.update_usage(input_tokens + output_tokens)
-                
-                if on_stats:
-                    on_stats(input_tokens, output_tokens, True)
-                
+
                 return result
 
             except Exception as e:
                 retries += 1
-                if on_error:
-                    on_error()
-                
+
                 if retries > self.max_retries:
                     self.state = EngineState.FAILED
                     result.status = EngineState.FAILED
