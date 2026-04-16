@@ -17,7 +17,7 @@ def test_finding_to_markdown():
         cwe_id="CWE-79",
         poc="print('poc')"
     )
-    
+
     md = finding.to_markdown()
     assert "# Test Finding" in md
     assert "**Severity:** High" in md
@@ -41,7 +41,7 @@ def test_finding_save():
         exploitation_path="path",
         remediation="remediation"
     )
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         path = finding.save(tmpdir)
         assert os.path.exists(path)
@@ -49,7 +49,7 @@ def test_finding_save():
         with open(path) as f:
             content = f.read()
             assert "# Test Save" in content
-            
+
 def test_finding_save_creates_dir():
     finding = Finding(
         title="Test Dir Create",
@@ -61,7 +61,7 @@ def test_finding_save_creates_dir():
         exploitation_path="path",
         remediation="remediation"
     )
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = os.path.join(tmpdir, "new_findings_dir")
         path = finding.save(output_dir)

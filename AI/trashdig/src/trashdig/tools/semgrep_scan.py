@@ -17,11 +17,11 @@ def semgrep_scan(path: str | None = None, config: str = "p/security-audit", tool
     """
     if path is None:
         path = get_config().workspace_root
-        
+
     cmd = ["semgrep", "--json", "--config", config, path]
-    
+
     # Run semgrep with a timeout to avoid hanging
     result = _run_sandboxed(cmd, timeout=120, network=True, workspace_dir=path)
-    if result.returncode == 124:
+    if result.returncode == 124:  # noqa: PLR2004
         return result.stderr
     return result.stdout if result.stdout else result.stderr

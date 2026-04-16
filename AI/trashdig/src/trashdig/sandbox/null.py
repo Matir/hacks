@@ -25,8 +25,8 @@ class NullSandbox(Sandbox):
             A subprocess.CompletedProcess object.
         """
         logger.warning(
-            f"!!! RUNNING COMMAND UNSANDBOXED !!! "
-            f"Command: {' '.join(command)}"
+            "!!! RUNNING COMMAND UNSANDBOXED !!! Command: %s",
+            " ".join(command)
         )
         return subprocess.run(  # noqa: S603
             command,

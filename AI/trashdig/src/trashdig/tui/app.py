@@ -97,7 +97,7 @@ class StatusPane(Vertical):
         yield Label("Status")
         yield Static("", id="status_body")
 
-    def refresh_status(
+    def refresh_status(  # noqa: PLR0913
         self,
         workspace_root: str,
         phase: str,
@@ -152,7 +152,7 @@ class StatusPane(Vertical):
         root_display = os.path.basename(workspace_root) or workspace_root
 
         def _fmt_tokens(n: int) -> str:
-            return f"{n:,}" if n < 1_000_000 else f"{n/1_000_000:.1f}M"
+            return f"{n:,}" if n < 1_000_000 else f"{n/1_000_000:.1f}M"  # noqa: PLR2004
 
         lines = [
             f"[bold]Phase:[/bold]    [{phase_color}]{phase}[/{phase_color}]",
@@ -235,6 +235,53 @@ class REPLPane(Vertical):
                     self.query_one("#repl_input", Input).value = ""
             event.prevent_default()
 
+    def _handle_help_command(self, log: RichLog) -> None:
+        log.write("Available commands: [green]" + ", ".join(self.commands) + "[/green]")
+
+    def _handle_scan_command(self, cmd_parts: list[str], app: TrashDigApp) -> None:
+        path = cmd_parts[1] if len(cmd_parts) > 1 else app.workspace_root
+        app.run_worker(app.run_recon_scan(path))
+
+    def _handle_hunt_command(self, log: RichLog, app: TrashDigApp) -> None:
+        if not app.prioritized_targets:
+            log.write("[red]No targets prioritized. Star some files first![/red]")
+        else:
+            app.run_worker(app.run_hunter_analysis(app.prioritized_targets))
+
+    def _handle_verify_command(self, cmd_parts: list[str], log: RichLog, app: TrashDigApp) -> None:
+        if not app.coordinator.findings:
+            log.write("[red]No findings to verify. Run 'hunt' first![/red]")
+        elif len(cmd_parts) < 2:  # noqa: PLR2004
+            log.write("[yellow]Verifying all findings...[/yellow]")
+            for finding in app.coordinator.findings:
+                app.run_worker(app.run_verification(finding))
+        else:
+            try:
+                idx = int(cmd_parts[1]) - 1
+                finding = app.coordinator.findings[idx]
+                app.run_worker(app.run_verification(finding))
+            except (ValueError, IndexError):
+                log.write(f"[red]Invalid finding index: {cmd_parts[1]}[/red]")
+
+    def _handle_star_command(self, cmd_parts: list[str], log: RichLog, app: TrashDigApp) -> None:
+        if len(cmd_parts) < 2:  # noqa: PLR2004
+            log.write("[red]Usage: star <path>[/red]")
+        else:
+            path = os.path.normpath(cmd_parts[1])  # noqa: ASYNC240
+            if path not in app.prioritized_targets:
+                app.prioritized_targets.append(path)
+                app._file_log.info("Starred: %s", path)
+                log.write(f"[green]Starred {path} for hunting.[/green]")
+                app.refresh_status()
+            else:
+                log.write(f"[yellow]{path} is already starred.[/yellow]")
+
+    def _handle_status_command(self, log: RichLog, app: TrashDigApp) -> None:
+        log.write(
+            f"Prioritized targets: [cyan]{', '.join(app.prioritized_targets) or 'None'}[/cyan]"
+        )
+        app.refresh_status()
+
     async def process_command(self, command: str, log: RichLog) -> None:
         """Parses and executes a command from the REPL.
 
@@ -243,55 +290,23 @@ class REPLPane(Vertical):
             log: The log widget to write output to.
         """
         cmd_parts = command.split()
-        base_cmd = cmd_parts[0].lower() if cmd_parts else ""
+        if not cmd_parts:
+            return
+        base_cmd = cmd_parts[0].lower()
         app = cast("TrashDigApp", self.app)
 
         if base_cmd == "help":
-            log.write(
-                "Available commands: [green]" + ", ".join(self.commands) + "[/green]"
-            )
+            self._handle_help_command(log)
         elif base_cmd == "scan":
-            path = cmd_parts[1] if len(cmd_parts) > 1 else app.workspace_root
-            app.run_worker(app.run_recon_scan(path))
+            self._handle_scan_command(cmd_parts, app)
         elif base_cmd == "hunt":
-            if not app.prioritized_targets:
-                log.write("[red]No targets prioritized. Star some files first![/red]")
-            else:
-                app.run_worker(
-                    app.run_hunter_analysis(app.prioritized_targets)
-                )
+            self._handle_hunt_command(log, app)
         elif base_cmd == "verify":
-            if not app.coordinator.findings:
-                log.write("[red]No findings to verify. Run 'hunt' first![/red]")
-            else:
-                if len(cmd_parts) < 2:
-                    log.write("[yellow]Verifying all findings...[/yellow]")
-                    for finding in app.coordinator.findings:
-                        app.run_worker(app.run_verification(finding))
-                else:
-                    try:
-                        idx = int(cmd_parts[1]) - 1
-                        finding = app.coordinator.findings[idx]
-                        app.run_worker(app.run_verification(finding))
-                    except (ValueError, IndexError):
-                        log.write(f"[red]Invalid finding index: {cmd_parts[1]}[/red]")
+            self._handle_verify_command(cmd_parts, log, app)
         elif base_cmd == "star":
-            if len(cmd_parts) < 2:
-                log.write("[red]Usage: star <path>[/red]")
-            else:
-                path = os.path.normpath(cmd_parts[1])  # noqa: ASYNC240
-                if path not in app.prioritized_targets:
-                    app.prioritized_targets.append(path)
-                    app._file_log.info("Starred: %s", path)
-                    log.write(f"[green]Starred {path} for hunting.[/green]")
-                    app.refresh_status()
-                else:
-                    log.write(f"[yellow]{path} is already starred.[/yellow]")
+            self._handle_star_command(cmd_parts, log, app)
         elif base_cmd == "status":
-            log.write(
-                f"Prioritized targets: [cyan]{', '.join(app.prioritized_targets) or 'None'}[/cyan]"
-            )
-            app.refresh_status()
+            self._handle_status_command(log, app)
         elif base_cmd == "exit":
             await app.action_quit()
         else:
@@ -339,9 +354,9 @@ class TrashDigApp(App):
         self._file_log = _setup_file_logger(log_path)
         self._file_log.info("Session started — workspace: %s", workspace_root)
         log_auth_info(self.config, self._file_log)
-        
+
         art_service = get_artifact_service()
-        
+
         self.coordinator = Coordinator(self.config, project_path=workspace_root, artifact_service=art_service)
         self.coordinator.on_task_event = lambda msg: self.call_from_thread(self._on_coordinator_log, msg)
         self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)

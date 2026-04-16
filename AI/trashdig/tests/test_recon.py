@@ -22,20 +22,20 @@ def mock_config():
 @patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
 async def test_stack_scout_run(mock_run, mock_config):
     agent = StackScoutAgent(name="stack_scout", model="test-model")
-    
+
     text_response = json.dumps({
         "tech_stack": "Node.js/Express",
         "is_web_app": True,
         "mapping": {"src/main.py": {"summary": "entry point", "is_high_value": True}},
         "hypotheses": []
     })
-    
+
     mock_run.return_value = text_response
-    
+
     # In actual usage, we call run_agent
     text = await mock_run(agent, "Analyze project", "session", MagicMock())
     data = json.loads(text)
-    
+
     assert data["tech_stack"] == "Node.js/Express"
     assert data["is_web_app"] is True
     assert "src/main.py" in data["mapping"]
@@ -44,16 +44,16 @@ async def test_stack_scout_run(mock_run, mock_config):
 @patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
 async def test_web_route_mapper_run(mock_run, mock_config):
     agent = WebRouteMapperAgent(name="web_route_mapper", model="test-model")
-    
+
     text_response = json.dumps({
         "attack_surface": [{"route": "/api", "method": "GET", "handler": "main.py"}]
     })
-    
+
     mock_run.return_value = text_response
-    
+
     text = await mock_run(agent, "Map routes", "session", MagicMock())
     data = json.loads(text)
-    
+
     assert len(data["attack_surface"]) == 1
     assert data["attack_surface"][0]["route"] == "/api"
 

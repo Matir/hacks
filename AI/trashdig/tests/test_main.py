@@ -73,7 +73,7 @@ def test_main_batch_mode(mock_asyncio_run, mock_coordinator_class, mock_init_art
     mock_config.data_dir = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_init_art.return_value = MagicMock()
-    
+
     mock_coord = MagicMock()
     mock_coordinator_class.return_value = mock_coord
     mock_coord.findings = []

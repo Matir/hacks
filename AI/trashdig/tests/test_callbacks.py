@@ -31,32 +31,32 @@ def mock_coordinator():
 
 def test_callback_on_after_model(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
-    
+
     ctx = MagicMock(spec=CallbackContext)
     ctx.agent_name = "test_agent"
     ctx.session_id = "test_session"
-    
+
     # Mock UsageMetadata to avoid Pydantic validation issues with field names
     usage = MagicMock()
     usage.prompt_token_count = 100
     usage.candidates_token_count = 50
-    
+
     resp = MagicMock(spec=LlmResponse)
     resp.content = genai_types.Content(parts=[genai_types.Part(text="Response")])
     resp.usage_metadata = usage
-    
+
     cb.on_after_model(ctx, resp)
-    
+
     # Check cost tracker update
     mock_coordinator._cost_tracker.record_usage.assert_called_once_with(
         "gemini-2.0-flash", 100, 50
     )
-    
+
     # Check TUI signaling
     mock_coordinator._on_stats.assert_called_once_with(
         100, 50, new_msg=True, model_name="gemini-2.0-flash"
     )
-    
+
     # Check DB logging
     mock_coordinator.db.log_conversation.assert_called_once()
 
@@ -64,12 +64,12 @@ def test_callback_on_before_tool(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     tool = MagicMock()
     tool.name = "test_tool"
-    
+
     cb.on_before_tool(tool, {"arg1": "val1"}, MagicMock())
-    
+
     # Check state update
     assert mock_coordinator._state == EngineState.WAITING_FOR_TOOLS
-    
+
     # Check logging to TUI
     mock_coordinator.log.assert_called_once()
     assert "test_tool" in mock_coordinator.log.call_args[0][0]
@@ -78,9 +78,9 @@ def test_callback_attach_to(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     # Use a mock that spec-es LlmAgent so isinstance works
     agent = MagicMock(spec=LlmAgent)
-    
+
     cb.attach_to(agent)
-    
+
     assert agent.before_tool_callback == cb.on_before_tool
     assert agent.after_model_callback == cb.on_after_model
     assert agent.on_model_error_callback == cb.on_model_error
@@ -90,9 +90,9 @@ def test_callback_attach_to(mock_coordinator):
 def test_callback_agent_lifecycle(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
-    
+
     cb.on_before_agent(context=ctx, agent=None)
     assert mock_coordinator._state == EngineState.RUNNING
-    
+
     cb.on_after_agent(context=ctx, agent=None)
     assert mock_coordinator._state == EngineState.IDLE

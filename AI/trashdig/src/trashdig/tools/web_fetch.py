@@ -18,22 +18,22 @@ async def web_fetch(url: str) -> str:
     """
     try:
         async with aiohttp.ClientSession() as session, session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-            if response.status != 200:
+            if response.status != 200:  # noqa: PLR2004
                 return f"Error: Failed to fetch page, status code {response.status}"
-            
+
             html = await response.text()
             soup = BeautifulSoup(html, "html.parser")
-            
+
             # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.extract()
-            
+
             # Get text and clean up whitespace
             text = soup.get_text()
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = "\n".join(chunk for chunk in chunks if chunk)
-            
+
             # We return the whole text, the artifact_tool will handle truncation if needed
             return text
     except Exception as e:

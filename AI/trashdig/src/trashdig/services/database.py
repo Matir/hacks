@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS tool_cache (
 
 class ProjectDatabase:
     """Handles persistence of all project-level state and session data.
-    
+
     NOTE: Use `get_database(db_path)` instead of instantiating directly to
     benefit from connection pooling.
     """
@@ -169,7 +169,7 @@ class ProjectDatabase:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO project_profiles 
+                INSERT OR REPLACE INTO project_profiles
                 (project_path, tech_stack, profile_json, updated_at)
                 VALUES (?, ?, ?, ?)
                 """,
@@ -198,8 +198,8 @@ class ProjectDatabase:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO findings 
-                (finding_id, project_path, title, file_path, severity, description, 
+                INSERT INTO findings
+                (finding_id, project_path, title, file_path, severity, description,
                  vulnerable_code, impact, exploitation_path, remediation, cwe_id, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -232,8 +232,8 @@ class ProjectDatabase:
         with self._connect() as conn:
             conn.execute(
                 """
-                UPDATE findings 
-                SET verification_status = ?, poc = ? 
+                UPDATE findings
+                SET verification_status = ?, poc = ?
                 WHERE project_path = ? AND title = ? AND file_path = ?
                 """,
                 (status, poc, project_path, title, file_path),
@@ -256,7 +256,7 @@ class ProjectDatabase:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO hypotheses 
+                INSERT INTO hypotheses
                 (task_id, project_path, type, target, description, confidence, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -285,7 +285,7 @@ class ProjectDatabase:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM hypotheses 
+                SELECT * FROM hypotheses
                 WHERE project_path = ? AND status = 'PENDING'
                 ORDER BY confidence DESC
                 """,
@@ -297,7 +297,7 @@ class ProjectDatabase:
     # Logging & Stats
     # ------------------------------------------------------------------
 
-    def log_conversation(
+    def log_conversation(  # noqa: PLR0913
         self,
         project_path: str,
         agent_name: str,
@@ -311,8 +311,8 @@ class ProjectDatabase:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO conversations 
-                (project_path, agent_name, prompt, response, tool_calls_json, 
+                INSERT INTO conversations
+                (project_path, agent_name, prompt, response, tool_calls_json,
                  input_tokens, output_tokens, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,

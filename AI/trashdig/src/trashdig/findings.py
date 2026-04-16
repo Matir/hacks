@@ -49,16 +49,15 @@ class Finding:
         if output_dir is None:
             config = get_config()
             output_dir = os.path.join(config.data_dir, "findings")
-            
+
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
-            
+
         # Create a safe filename from the title
         safe_title = "".join(c for c in self.title if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
         filename = f"{safe_title}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.md"
         file_path = os.path.join(output_dir, filename)
-        
+
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(self.to_markdown())
-            
-        return
+

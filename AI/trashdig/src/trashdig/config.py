@@ -67,11 +67,11 @@ class Config:
         """
         tokens = self.resolve_workspace_tokens(self.workspace_root)
         tokens["{datadir}"] = self.data.get("data_dir", ".trashdig")
-        
+
         path = path_template
         for token, val in tokens.items():
             path = path.replace(token, val)
-        
+
         return os.path.abspath(path)
 
     def resolve_data_path(self, filename: str) -> str:
@@ -118,7 +118,7 @@ _GLOBAL_CONFIG: Config | None = None
 
 def get_config(config_path: str | None = None) -> Config:
     """Returns the singleton Config instance."""
-    global _GLOBAL_CONFIG
+    global _GLOBAL_CONFIG  # noqa: PLW0603
     if _GLOBAL_CONFIG is None:
         _GLOBAL_CONFIG = Config(config_path)
     return _GLOBAL_CONFIG

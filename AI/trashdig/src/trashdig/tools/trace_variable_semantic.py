@@ -41,12 +41,12 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
                     category = "ASSIGNMENT/DEFINITION"
                 elif parent.type == "argument_list":
                     category = "SINK ARGUMENT"
-                
+
                 usages.append(f"Line {node.start_point[0] + 1}: {category}")
-            
+
             for child in node.children:
                 walk(child)
-        
+
         walk(tree.root_node)
         return "\n".join(usages) if usages else f"Variable '{variable_name}' not found."
 

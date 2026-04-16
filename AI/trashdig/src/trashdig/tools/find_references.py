@@ -18,7 +18,7 @@ def find_references(symbol_name: str, path: str | None = None, tool_context: Any
     """
     if path is None:
         path = get_config().workspace_root
-        
+
     # Use ripgrep to find all usages, but exclude definitions
     extra_args = ["--line-number", "--column", "-v", f"def {symbol_name}|class {symbol_name}"]
     return ripgrep_search(f"\\b{symbol_name}\\b", path, extra_args=extra_args)

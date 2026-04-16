@@ -30,7 +30,7 @@ def mock_cfg():
 @patch("subprocess.run")
 def test_ripgrep_search(mock_run):
     mock_run.return_value = MagicMock(stdout="file:1:1:content", stderr="", returncode=0)
-    
+
     result = ripgrep_search("pattern", "path")
     assert result == "file:1:1:content"
     mock_run.assert_called_once()
@@ -48,7 +48,7 @@ def test_ripgrep_search_not_found(mock_run):
 @patch("subprocess.run")
 def test_semgrep_scan(mock_run):
     mock_run.return_value = MagicMock(stdout='{"results": []}', stderr="", returncode=0)
-    
+
     result = semgrep_scan("path")
     assert result == '{"results": []}'
     mock_run.assert_called_once()
@@ -67,21 +67,21 @@ def test_semgrep_scan_timeout(mock_run):
 def test_get_ast_summary(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()
     mock_get_lang.return_value = mock_lang
-    
+
     mock_parser = MagicMock()
     mock_parser_class.return_value = mock_parser
-    
+
     mock_tree = MagicMock()
     mock_parser.parse.return_value = mock_tree
-    
+
     mock_node = MagicMock()
     mock_node.type = "function_definition"
     mock_name_node = MagicMock()
     mock_name_node.text = b"test_func"
     mock_node.child_by_field_name.return_value = mock_name_node
-    
+
     mock_tree.root_node.children = [mock_node]
-    
+
     with patch("builtins.open", MagicMock()):
         result = get_ast_summary("test.py", "python")
         assert "Function definition: test_func" in result
@@ -118,7 +118,7 @@ def test_container_bash_tool_docker_available(mock_run):
     set_binary_stub("docker", True)
     # Mock docker run ...
     mock_run.return_value = MagicMock(stdout="container output", stderr="", returncode=0)
-    
+
     result = container_bash_tool("ls")
     assert "STDOUT:\ncontainer output" in result
     assert "Exit Code: 0" in result
@@ -134,7 +134,7 @@ def test_container_bash_tool_no_docker(mock_run):
     set_binary_stub("docker", False)
     # Mock fallback to bash_tool
     mock_run.return_value = MagicMock(stdout="host output", stderr="", returncode=0)
-    
+
     result = container_bash_tool("ls")
     assert "Warning: Docker not found" in result
     assert "STDOUT:\nhost output" in result
@@ -151,7 +151,7 @@ def test_query_cwe_database(mock_open, mock_json_load):
             "examples": [{"language": "python", "vulnerable_code": "print(userInput)"}]
         }
     ]
-    
+
     result = query_cwe_database("XSS")
     assert "CWE-79: XSS" in result
     assert "Cross-site Scripting" in result
@@ -171,27 +171,27 @@ def test_get_scope_info(mock_parser_class, mock_get_lang):
     mock_parser_class.return_value = mock_parser
     mock_tree = MagicMock()
     mock_parser.parse.return_value = mock_tree
-    
+
     mock_func_node = MagicMock()
     mock_func_node.type = "function_definition"
     mock_func_node.start_point = (10, 0)
     mock_func_node.end_point = (20, 0)
-    
+
     mock_name_node = MagicMock()
     mock_name_node.text = b"target_func"
     mock_func_node.child_by_field_name.return_value = mock_name_node
-    
+
     mock_params_node = MagicMock()
     mock_param = MagicMock()
     mock_param.type = "identifier"
     mock_param.text = b"param1"
     mock_params_node.children = [mock_param]
-    
+
     # Second call to child_by_field_name returns params
     mock_func_node.child_by_field_name.side_effect = [mock_name_node, mock_params_node]
-    
+
     mock_tree.root_node.children = [mock_func_node]
-    
+
     with patch("builtins.open", MagicMock()):
         result = get_scope_info("test.py", 15, "python")
         assert "Function: target_func" in result
@@ -206,16 +206,16 @@ def test_trace_variable_semantic(mock_parser_class, mock_get_lang):
     mock_parser_class.return_value = mock_parser
     mock_tree = MagicMock()
     mock_parser.parse.return_value = mock_tree
-    
+
     mock_node = MagicMock()
     mock_node.type = "identifier"
     mock_node.text = b"my_var"
     mock_node.start_point = (5, 0)
     mock_node.parent.type = "assignment"
     mock_node.children = []
-    
+
     mock_tree.root_node.children = [mock_node]
-    
+
     with patch("builtins.open", MagicMock()):
         result = trace_variable_semantic("my_var", "test.py", "python")
         assert "Line 6: ASSIGNMENT/DEFINITION" in result
@@ -232,9 +232,9 @@ async def test_web_fetch(mock_get):
     mock_response = MagicMock()
     mock_response.status = 200
     mock_response.text = AsyncMock(return_value="<html><body><h1>Hello</h1></body></html>")
-    
+
     # aiohttp uses async context managers
     mock_get.return_value.__aenter__.return_value = mock_response
-    
+
     result = await web_fetch("http://example.com")
     assert "Hello" in result

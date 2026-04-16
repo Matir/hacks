@@ -4,8 +4,8 @@ import time
 
 class RateLimiter:
     """A global rate limiter for LLM requests (RPM and TPM).
-    
-    This implementation uses a token bucket-like approach. 
+
+    This implementation uses a token bucket-like approach.
     RPM is handled by waiting until a request slot is available.
     TPM is handled by tracking token usage and waiting if the limit is exceeded.
     """
@@ -22,7 +22,7 @@ class RateLimiter:
 
         self._rpm_tokens = float(rpm_limit) if rpm_limit else 0.0
         self._tpm_tokens = float(tpm_limit) if tpm_limit else 0.0
-        
+
         self._last_update = time.monotonic()
         self._lock = asyncio.Lock()
 
@@ -67,7 +67,7 @@ class RateLimiter:
                 if self.tpm_limit and self._tpm_tokens < 0:
                     # Time needed to reach 0 tokens
                     tpm_wait = -self._tpm_tokens / (self.tpm_limit / 60.0)
-                
+
                 wait_time = max(rpm_wait, tpm_wait)
                 if wait_time <= 0:
                     # Grant request slot
@@ -105,5 +105,5 @@ def init_rate_limiter(rpm_limit: int | None = None, tpm_limit: int | None = None
         rpm_limit: Requests per minute limit.
         tpm_limit: Tokens per minute limit.
     """
-    global _global_rate_limiter
+    global _global_rate_limiter  # noqa: PLW0603
     _global_rate_limiter = RateLimiter(rpm_limit, tpm_limit) if rpm_limit or tpm_limit else None

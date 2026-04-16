@@ -31,47 +31,61 @@ def google_provider_extras(provider: str) -> dict[str, Any]:
     }
 
 
+def _describe_google_auth(provider_config: "ProviderConfig | None") -> list[str]:
+    """Return lines describing Google provider authentication."""
+    lines: list[str] = []
+    if provider_config and provider_config.api_key:
+        lines.append("  auth: API key from config.toml (key redacted)")
+    elif os.environ.get("GOOGLE_API_KEY"):
+        lines.append("  auth: API key from GOOGLE_API_KEY environment variable")
+    else:
+        adc_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if adc_file:
+            lines.append(f"  auth: Application Default Credentials (service account file: {adc_file})")
+        else:
+            well_known = os.path.join(
+                os.environ.get("APPDATA", os.path.expanduser("~")),
+                ".config", "gcloud", "application_default_credentials.json",
+            )
+            if os.path.exists(well_known):
+                lines.append(f"  auth: Application Default Credentials (gcloud user credentials at {well_known})")
+            elif os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT"):
+                project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT")
+                lines.append(f"  auth: Application Default Credentials (metadata server / Workload Identity, project={project})")
+            else:
+                lines.append("  auth: Application Default Credentials (no explicit source detected; may use metadata server)")
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCLOUD_PROJECT")
+    if project:
+        lines.append(f"  project: {project}")
+    return lines
+
+
+def _describe_generic_auth(provider_name: str, provider_config: "ProviderConfig | None") -> list[str]:
+    """Return lines describing generic provider authentication."""
+    lines: list[str] = []
+    if provider_config and provider_config.api_key:
+        lines.append("  auth: API key from config.toml (key redacted)")
+    else:
+        env_key = f"{provider_name.upper()}_API_KEY"
+        if os.environ.get(env_key):
+            lines.append(f"  auth: API key from {env_key} environment variable")
+        else:
+            lines.append("  auth: no API key found in config or environment")
+
+    base_url = (provider_config.base_url if provider_config else None) or os.environ.get("OPENAI_BASE_URL")
+    if base_url:
+        lines.append(f"  base_url: {base_url}")
+    return lines
+
+
 def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig | None") -> list[str]:
     """Return human-readable lines describing how a provider is authenticated."""
     lines: list[str] = [f"Provider '{provider_name}':"]
 
     if provider_name == "google":
-        if provider_config and provider_config.api_key:
-            lines.append("  auth: API key from config.toml (key redacted)")
-        elif os.environ.get("GOOGLE_API_KEY"):
-            lines.append("  auth: API key from GOOGLE_API_KEY environment variable")
-        else:
-            adc_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-            if adc_file:
-                lines.append(f"  auth: Application Default Credentials (service account file: {adc_file})")
-            else:
-                well_known = os.path.join(
-                    os.environ.get("APPDATA", os.path.expanduser("~")),
-                    ".config", "gcloud", "application_default_credentials.json",
-                )
-                if os.path.exists(well_known):
-                    lines.append(f"  auth: Application Default Credentials (gcloud user credentials at {well_known})")
-                elif os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT"):
-                    project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT")
-                    lines.append(f"  auth: Application Default Credentials (metadata server / Workload Identity, project={project})")
-                else:
-                    lines.append("  auth: Application Default Credentials (no explicit source detected; may use metadata server)")
-        project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCLOUD_PROJECT")
-        if project:
-            lines.append(f"  project: {project}")
+        lines.extend(_describe_google_auth(provider_config))
     else:
-        if provider_config and provider_config.api_key:
-            lines.append("  auth: API key from config.toml (key redacted)")
-        else:
-            env_key = f"{provider_name.upper()}_API_KEY"
-            if os.environ.get(env_key):
-                lines.append(f"  auth: API key from {env_key} environment variable")
-            else:
-                lines.append("  auth: no API key found in config or environment")
-
-        base_url = (provider_config.base_url if provider_config else None) or os.environ.get("OPENAI_BASE_URL")
-        if base_url:
-            lines.append(f"  base_url: {base_url}")
+        lines.extend(_describe_generic_auth(provider_name, provider_config))
 
     return lines
 
@@ -105,7 +119,7 @@ def load_prompt(file_name: str) -> str:
     # We find it relative to this file: src/trashdig/agents/utils.py -> project_root/prompts
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     prompt_path = os.path.join(base_dir, "prompts", file_name)
-    
+
     if not os.path.exists(prompt_path):
         # Fallback for full paths or if the prompts directory isn't where we expect
         if os.path.exists(file_name):
@@ -125,7 +139,7 @@ def get_project_structure(root_path: str | None = None) -> list[str]:
     """
     if root_path is None:
         root_path = get_config().workspace_root
-        
+
     files: list[str] = []
     gitignore_path = os.path.join(root_path, ".gitignore")
     spec: PathSpec | None = None
@@ -157,7 +171,7 @@ def detect_frameworks(file_list: list[str], project_root: str | None = None) -> 
     """Analyzes dependency files to identify known frameworks and libraries."""
     if project_root is None:
         project_root = get_config().workspace_root
-        
+
     stack: dict[str, list[str]] = {
         "web_frameworks": [],
         "databases": [],
@@ -189,7 +203,7 @@ def get_response_text(resp: Any) -> str:
                 text += part.text
     return text
 
-async def run_agent(
+async def run_agent(  # noqa: PLR0913
     agent: "BaseAgent",
     prompt: str,
     session_id: str,
@@ -219,7 +233,7 @@ async def run_agent(
     )
 
     content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])
-    
+
     final_text = ""
     async for event in runner.run_async(
         new_message=content,
@@ -227,5 +241,5 @@ async def run_agent(
         user_id=user_id,
     ):
         final_text += get_response_text(event)
-    
+
     return final_text

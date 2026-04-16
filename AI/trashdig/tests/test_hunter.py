@@ -26,7 +26,7 @@ async def test_hunter_run(mock_run):
             "confidence": 0.8,
         }],
     })
-    
+
     mock_run.return_value = text_response
 
     agent = HunterAgent(name="hunter", model="gemini-2.0-flash")

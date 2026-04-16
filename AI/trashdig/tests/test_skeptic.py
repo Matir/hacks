@@ -14,7 +14,7 @@ async def test_skeptic_run(mock_run):
         '{"is_valid": true, "skeptic_notes": "Looks legit", "confidence": 0.8}\n'
         '```'
     )
-    
+
     mock_run.return_value = text_response
 
     agent = SkepticAgent(name="skeptic", model="gemini-2.0-flash")

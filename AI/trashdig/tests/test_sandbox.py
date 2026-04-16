@@ -38,14 +38,14 @@ def test_minijail_sandbox_run(mock_exists, mock_run):
     set_binary_stub("minijail0", True)
     mock_exists.return_value = True
     mock_run.return_value = MagicMock(stdout="sandboxed", returncode=0)
-    
+
     sandbox = MinijailSandbox(workspace_dir="/tmp/test", network=False)
     result = sandbox.run(["ls", "-la"])
-    
+
     assert result.stdout == "sandboxed"
     mock_run.assert_called_once()
     args = mock_run.call_args[0][0]
-    
+
     assert "/stub/bin/minijail0" in args
     assert "-v" in args
     assert "-d" in args

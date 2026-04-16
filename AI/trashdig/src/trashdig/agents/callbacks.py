@@ -41,7 +41,7 @@ class TrashDigCallback:
 
     def __init__(self, coordinator: Coordinator) -> None:
         """Initialise the callback manager.
-        
+
         Note: Use get_instance() instead of direct instantiation in most cases.
         """
         self._c = coordinator
@@ -165,7 +165,7 @@ class TrashDigCallback:
 
         # Final accounting
         self._c._cost_tracker.record_usage(model_name, in_t, out_t)
-        
+
         # Signaling hook for the TUI
         self._c._on_stats(in_t, out_t, new_msg=True, model_name=model_name)
 

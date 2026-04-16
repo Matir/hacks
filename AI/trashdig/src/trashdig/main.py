@@ -57,8 +57,8 @@ def main() -> None:
         parser.error(f"Not a directory: {workspace_root}")
 
     config = load_config(
-        config_flag=args.config, 
-        data_dir_flag=args.data_dir, 
+        config_flag=args.config,
+        data_dir_flag=args.data_dir,
         workspace_root=workspace_root
     )
 
@@ -74,7 +74,7 @@ def main() -> None:
         config_dict = filter_none(dataclasses.asdict(config))
         print(tomli_w.dumps(config_dict))  # noqa: T201
         return
-    
+
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)
     art_service = init_artifact_manager(data_dir=config.data_dir)
 
@@ -84,17 +84,17 @@ def main() -> None:
     if is_batch:
         console = Console()
         console.print("[bold blue]TrashDig:[/bold blue] running in batch mode...")
-        
+
         coordinator = Coordinator(
-            config, 
-            project_path=config.workspace_root, 
+            config,
+            project_path=config.workspace_root,
             artifact_service=art_service
         )
-        
+
         # Connect simple console logger
-        coordinator.on_task_event = lambda msg: console.print(msg)
+        coordinator.on_task_event = console.print
         coordinator.on_stats_event = lambda: None
-        
+
         try:
             asyncio.run(coordinator.run_full_scan(config.workspace_root))
             console.print("\n[bold green]Scan Complete.[/bold green]")

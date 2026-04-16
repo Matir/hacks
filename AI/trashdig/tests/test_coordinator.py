@@ -15,11 +15,11 @@ def mock_config(tmp_path):
     config = MagicMock(spec=Config)
     config.agents = {}
     config.max_parallel_tasks = 3
-    
+
     agent_cfg = MagicMock(spec=AgentConfig)
     agent_cfg.model = "gemini-2.0-flash"
     agent_cfg.provider = "google"
-    
+
     config.get_agent_config.return_value = agent_cfg
     config.db_path = str(tmp_path / "test.db")
     return config
@@ -39,7 +39,7 @@ def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_cre
     mock_create_hunt.return_value = create_mock_agent("hunter")
     mock_create_skep.return_value = create_mock_agent("skeptic")
     mock_create_val.return_value = create_mock_agent("validator")
-    
+
     coord = Coordinator(mock_config)
     assert coord.stack_scout is not None
     assert coord.web_route_mapper is not None
@@ -72,7 +72,7 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
     coord = Coordinator(mock_config)
     # Simulate an agent tool call saving results
     coord.scan_results = {"file.py": {"summary": "test"}}
-    
+
     res = await coord.run_recon(".")
     assert res == {"file.py": {"summary": "test"}}
     assert mock_run_agent.called
@@ -99,12 +99,12 @@ async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val
 
     coord = Coordinator(mock_config)
     finding = Finding(
-        title="SQLi", description="desc", severity="High", 
-        vulnerable_code="code", file_path="test.py", 
+        title="SQLi", description="desc", severity="High",
+        vulnerable_code="code", file_path="test.py",
         impact="impact", exploitation_path="path", remediation="rem"
     )
     coord.findings = [finding]
-    
+
     findings = await coord.run_hunter(["test.py"])
     assert len(findings) == 1
     assert findings[0].title == "SQLi"
@@ -133,13 +133,13 @@ async def test_coordinator_verify_finding(mock_run_agent, mock_load, mock_create
     coord = Coordinator(mock_config)
 
     finding = Finding(
-        title="SQLi", description="desc", severity="High", 
-        vulnerable_code="code", file_path="test.py", 
+        title="SQLi", description="desc", severity="High",
+        vulnerable_code="code", file_path="test.py",
         impact="impact", exploitation_path="path", remediation="rem"
     )
     finding.verification_status = "Verified"
     finding.poc = "poc code"
-    
+
     res = await coord.verify_finding(finding)
     assert res["status"] == "Verified"
     assert res["poc_code"] == "poc code"
@@ -154,16 +154,16 @@ def test_coordinator_state_tools(mock_config, tmp_path):
          patch("trashdig.agents.coordinator.create_validator_agent", return_value=create_mock_agent("v")), \
          patch("trashdig.agents.utils.load_prompt", return_value="test prompt"), \
          patch("trashdig.agents.coordinator.get_database", return_value=db):
-        
+
         mock_config.db_path = db_path
         coord = Coordinator(mock_config)
-        
+
         # Test _save_project_profile
         msg = coord._save_project_profile("Python", {"mapping": {"a.py": {}}, "attack_surface": []})
         assert "successfully" in msg
         assert coord.tech_stack == "Python"
         assert "a.py" in coord.scan_results
-        
+
         # Test _save_finding
         finding_data = {
             "title": "XSS", "description": "desc", "severity": "High",

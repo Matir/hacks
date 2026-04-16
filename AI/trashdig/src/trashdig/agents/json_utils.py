@@ -48,7 +48,7 @@ def parse_json_response(text: str) -> dict[str, Any]:
             return data
     except Exception:
         logger.debug("Failed to parse JSON using regex markers: %s", text)
-            
+
     return {}
 
 def extract_json_list(text: str, key: str) -> list[Any]:

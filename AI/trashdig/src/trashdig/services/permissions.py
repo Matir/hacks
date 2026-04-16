@@ -16,8 +16,8 @@ class PermissionManager:
     """
 
     def __init__(
-        self, 
-        config: Config | None = None, 
+        self,
+        config: Config | None = None,
         on_confirm: Callable[[str, dict[str, Any]], bool] | None = None
     ):
         """Initializes the PermissionManager.
@@ -44,11 +44,11 @@ class PermissionManager:
         """
         # 1. Check global policies
         # (Placeholder for future policy checks based on self.config)
-        
+
         # 2. Check for sensitive tools and user confirmation
         if tool_name in self.sensitive_tools and self.on_confirm:
             return self.on_confirm(tool_name, args)
-        
+
         return True
 
     def wrap_tool(self, tool: Any) -> Any:
@@ -114,10 +114,10 @@ class PermissionManager:
 
     def tool_decorator(self, func: Callable) -> Callable:
         """A decorator that can be applied directly to tool functions.
-        
+
         Args:
             func: The function to decorate.
-            
+
         Returns:
             The wrapped function.
         """
@@ -153,5 +153,5 @@ class PermissionManager:
                 if not self.is_allowed(tool_name, tool_args):
                     return f"Permission denied for tool: {tool_name}"
                 return func(*args, **kwargs)
-        
+
         return wrapped

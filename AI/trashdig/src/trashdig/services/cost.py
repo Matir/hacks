@@ -36,14 +36,14 @@ class CostTracker:
         self.total_output_tokens += output_tokens
 
         rate = self.rates.get(model_name)
-        
+
         # If no exact match, try to find a prefix match (e.g., 'gemini-2.0-flash-001')
         if not rate:
             for key, val in self.rates.items():
                 if model_name.startswith(key):
                     rate = val
                     break
-        
+
         if not rate:
             # If still not found, we can't track cost for this model
             return

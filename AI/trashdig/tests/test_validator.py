@@ -14,7 +14,7 @@ async def test_validator_run(mock_run):
         '{"status": "Verified", "poc_code": "python poc.py", "reasoning": "Confirmed"}\n'
         '```'
     )
-    
+
     mock_run.return_value = text_response
 
     agent = ValidatorAgent(name="validator", model="gemini-2.0-flash")

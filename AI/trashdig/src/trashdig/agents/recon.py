@@ -25,7 +25,7 @@ from trashdig.tools import (
 class StackScoutAgent(LlmAgent):
     """StackScout Agent for TrashDig.
 
-    Identifies the tech stack using deterministic checks and LLM inference, 
+    Identifies the tech stack using deterministic checks and LLM inference,
     and generates a project mapping with high-value targets.
     """
     pass

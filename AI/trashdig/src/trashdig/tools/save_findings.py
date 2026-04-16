@@ -19,7 +19,7 @@ def save_findings(findings_json: str, project_path: str, db_path: str | None = N
         data = json.loads(findings_json)
         if not isinstance(data, list):
             data = [data]
-        
+
         count = 0
         db = get_database(db_path)
         for raw in data:

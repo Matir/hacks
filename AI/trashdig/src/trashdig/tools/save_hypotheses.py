@@ -19,7 +19,7 @@ def save_hypotheses(hypotheses_json: str, project_path: str, db_path: str | None
         data = json.loads(hypotheses_json)
         if not isinstance(data, list):
             data = [data]
-        
+
         db = get_database(db_path)
         count = 0
         for h in data:

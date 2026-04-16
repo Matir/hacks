@@ -183,6 +183,43 @@ def _find_function_files(
     return sorted(all_files)
 
 
+def _find_function_node(node: Any, func_name: str) -> Any | None:
+    """Find a function or method definition by name."""
+    if node.type in ("function_definition", "method_definition"):
+        name_node = node.child_by_field_name("name")
+        if name_node and name_node.text.decode("utf-8") == func_name:
+            return node
+    for child in node.children:
+        result = _find_function_node(child, func_name)
+        if result:
+            return result
+    return None
+
+
+def _extract_function_params(func_node: Any) -> list[str]:
+    """Collect parameter names from a function node, excluding self/cls."""
+    params_node = func_node.child_by_field_name("parameters")
+    if params_node is None:
+        return []
+
+    params: list[str] = []
+    for p in params_node.children:
+        if p.type in ("identifier", "typed_parameter", "default_parameter",
+                      "list_splat_pattern", "dictionary_splat_pattern"):
+            # Get the raw name
+            if p.type == "identifier":
+                name = p.text.decode("utf-8")
+            else:
+                name_child = next(
+                    (c for c in p.children if c.type == "identifier"), None
+                )
+                name = name_child.text.decode("utf-8") if name_child else p.text.decode("utf-8")
+
+            if name not in ("self", "cls"):
+                params.append(name)
+    return params
+
+
 def _resolve_param_name(
     func_name: str,
     arg_index: int,
@@ -213,44 +250,122 @@ def _resolve_param_name(
         return None
     tree = parser.parse(content)
 
-    def find_func(node: Any) -> Any | None:
-        if node.type in ("function_definition", "method_definition"):
-            name_node = node.child_by_field_name("name")
-            if name_node and name_node.text.decode("utf-8") == func_name:
-                return node
-        for child in node.children:
-            result = find_func(child)
-            if result:
-                return result
-        return None
-
-    func_node = find_func(tree.root_node)
+    func_node = _find_function_node(tree.root_node, func_name)
     if func_node is None:
         return None
 
-    params_node = func_node.child_by_field_name("parameters")
-    if params_node is None:
-        return None
-
-    # Collect actual parameter nodes (skip self/cls and punctuation)
-    params: list[str] = []
-    for p in params_node.children:
-        if p.type in ("identifier", "typed_parameter", "default_parameter",
-                      "list_splat_pattern", "dictionary_splat_pattern"):
-            # Get the raw name (first identifier inside typed/default params)
-            if p.type == "identifier":
-                name = p.text.decode("utf-8")
-            else:
-                name_child = next(
-                    (c for c in p.children if c.type == "identifier"), None
-                )
-                name = name_child.text.decode("utf-8") if name_child else p.text.decode("utf-8")
-            if name not in ("self", "cls"):
-                params.append(name)
+    params = _extract_function_params(func_node)
 
     if arg_index < len(params):
         return params[arg_index]
     return None
+
+def _process_tainted_calls(  # noqa: PLR0913
+    calls: list[tuple[str, int, int]],
+    var: str,
+    sinks: set[str],
+    report_lines: list[str],
+    indent: str,
+    project_root: str,
+    language: str,
+    depth: int,
+    max_depth: int,
+    visited: set[tuple[str, str]],
+) -> bool:
+    """Process calls where a tainted variable is passed as an argument."""
+    found_sink = False
+    for callee, arg_idx, line_no in calls:
+        if callee in sinks:
+            report_lines.append(
+                f"{indent}  *** SINK *** Line {line_no}: '{var}' passed to '{callee}()' "
+                f"(arg {arg_idx}) — potential vulnerability"
+            )
+            found_sink = True
+        else:
+            report_lines.append(
+                f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
+            )
+            # Resolve callee files and param name
+            callee_files = _find_function_files(callee, project_root, language)
+            if not callee_files:
+                report_lines.append(
+                    f"{indent}    [definition of '{callee}' not found in project — "
+                    f"may be an external library call]"
+                )
+                continue
+
+            if len(callee_files) > 1:
+                report_lines.append(
+                    f"{indent}    [Warning: multiple definitions for '{callee}' found. Following first match in {callee_files[0]}]"
+                )
+
+            callee_file = callee_files[0]
+            abs_callee_file = os.path.join(project_root, callee_file)
+            param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, language)
+            if param_name:
+                _trace_recursive(
+                    param_name, callee_file, depth + 1, max_depth,
+                    visited, report_lines, project_root, language, sinks
+                )
+            else:
+                report_lines.append(
+                    f"{indent}    [could not resolve param at index {arg_idx} in {callee}]"
+                )
+    return found_sink
+
+
+def _trace_recursive(  # noqa: PLR0913
+    var: str,
+    file_path: str,
+    depth: int,
+    max_depth: int,
+    visited: set[tuple[str, str]],
+    report_lines: list[str],
+    project_root: str,
+    language: str,
+    sinks: set[str],
+) -> None:
+    """Internal recursive function for taint tracing."""
+    key = (file_path, var)
+    if depth > max_depth or key in visited:
+        if key in visited:
+            report_lines.append(f"  {'  ' * depth}[cycle detected: {file_path}:{var}]")
+        else:
+            report_lines.append(f"  {'  ' * depth}[max depth {max_depth} reached]")
+        return
+    visited.add(key)
+
+    full_path = os.path.join(project_root, file_path)
+    indent = "  " * depth
+    report_lines.append(f"\n{indent}File: {file_path}  Variable: '{var}'")
+
+    try:
+        with open(full_path, "rb") as f:
+            content = f.read()
+    except OSError:
+        report_lines.append(f"{indent}  [could not read file]")
+        return
+
+    calls = _find_calls_passing_variable(var, content, language)
+    found_sink = _process_tainted_calls(
+        calls, var, sinks, report_lines, indent, project_root,
+        language, depth, max_depth, visited
+    )
+
+    return_lines = _find_returns_variable(var, content, language)
+    for line_no in return_lines:
+        report_lines.append(
+            f"{indent}  RETURN Line {line_no}: '{var}' returned — "
+            f"caller must be traced separately"
+        )
+
+    if not calls and not return_lines:
+        report_lines.append(f"{indent}  SAFE: '{var}' has no outgoing flow in this file")
+    elif not found_sink and not return_lines and all(
+        c[0] not in sinks for c in calls
+    ):
+        pass  # child traces already reported
+
 
 @artifact_tool(max_chars=8000)
 def trace_taint_cross_file(
@@ -266,9 +381,6 @@ def trace_taint_cross_file(
     into callee functions (potentially in other files) until it either reaches a
     known sink, exhausts all paths, or hits the depth limit.
 
-    This implements the **[HIGH] Enhanced Taint Analysis** requirement: cross-file
-    data flow tracing from entry points to sinks.
-
     Args:
         variable: The tainted variable name to trace (e.g. ``"user_id"``).
         source_file: The file where the taint originates (relative to *project_root*).
@@ -277,95 +389,22 @@ def trace_taint_cross_file(
         max_depth: Maximum number of file hops to follow before stopping.
 
     Returns:
-        A human-readable trace report listing each hop, categorising usages as
-        SINK (vulnerability), CALL (data flows into a callee), RETURN, or SAFE
-        (no dangerous usage found within the depth limit).
+        A human-readable trace report listing each hop.
     """
     if project_root is None:
         project_root = get_config().workspace_root
-        
+
     sinks = _SINKS.get(language, set())
     report_lines: list[str] = [
         f"Taint trace: variable='{variable}', start='{source_file}', language={language}",
         "=" * 60,
     ]
-    visited: set[tuple[str, str]] = set()  # (file_path, variable_name) pairs
+    visited: set[tuple[str, str]] = set()
 
-    def _trace(var: str, file_path: str, depth: int) -> None:
-        key = (file_path, var)
-        if depth > max_depth or key in visited:
-            if key in visited:
-                report_lines.append(f"  {'  ' * depth}[cycle detected: {file_path}:{var}]")
-            else:
-                report_lines.append(f"  {'  ' * depth}[max depth {max_depth} reached]")
-            return
-        visited.add(key)
-
-        full_path = os.path.join(project_root, file_path)
-        indent = "  " * depth
-
-        report_lines.append(f"\n{indent}File: {file_path}  Variable: '{var}'")
-
-        try:
-            with open(full_path, "rb") as f:
-                content = f.read()
-        except OSError:
-            report_lines.append(f"{indent}  [could not read file]")
-            return
-
-        # 1. Check for sink calls
-        calls = _find_calls_passing_variable(var, content, language)
-        found_sink = False
-        for callee, arg_idx, line_no in calls:
-            if callee in sinks:
-                report_lines.append(
-                    f"{indent}  *** SINK *** Line {line_no}: '{var}' passed to '{callee}()' "
-                    f"(arg {arg_idx}) — potential vulnerability"
-                )
-                found_sink = True
-            else:
-                report_lines.append(
-                    f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
-                )
-                # Resolve callee files and param name
-                callee_files = _find_function_files(callee, project_root, language)
-                if callee_files:
-                    if len(callee_files) > 1:
-                        report_lines.append(
-                            f"{indent}    [Warning: multiple definitions for '{callee}' found. Following first match in {callee_files[0]}]"
-                        )
-                    
-                    callee_file = callee_files[0]
-                    abs_callee_file = os.path.join(project_root, callee_file)
-                    param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, language)
-                    if param_name:
-                        _trace(param_name, callee_file, depth + 1)
-                    else:
-                        report_lines.append(
-                            f"{indent}    [could not resolve param at index {arg_idx} in {callee}]"
-                        )
-                else:
-                    report_lines.append(
-                        f"{indent}    [definition of '{callee}' not found in project — "
-                        f"may be an external library call]"
-                    )
-
-        # 2. Check for return statements (taint escapes function)
-        return_lines = _find_returns_variable(var, content, language)
-        for line_no in return_lines:
-            report_lines.append(
-                f"{indent}  RETURN Line {line_no}: '{var}' returned — "
-                f"caller must be traced separately"
-            )
-
-        if not calls and not return_lines:
-            report_lines.append(f"{indent}  SAFE: '{var}' has no outgoing flow in this file")
-        elif not found_sink and not return_lines and all(
-            c[0] not in sinks for c in calls
-        ):
-            pass  # child traces already reported
-
-    _trace(variable, source_file, depth=0)
+    _trace_recursive(
+        variable, source_file, 0, max_depth, visited,
+        report_lines, project_root, language, sinks
+    )
 
     report_lines.append("\n" + "=" * 60)
     has_sink = any("*** SINK ***" in line for line in report_lines)

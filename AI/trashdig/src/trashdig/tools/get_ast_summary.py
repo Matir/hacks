@@ -27,16 +27,16 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
 
         parser = _make_parser(language)
         tree = parser.parse(content)
-        
+
         summary: list[str] = []
         root_node = tree.root_node
-        
+
         for node in root_node.children:
             if node.type in ("function_definition", "class_definition", "method_definition"):
                 name_node = node.child_by_field_name("name")
                 name = name_node.text.decode('utf-8') if name_node else "anonymous"
                 summary.append(f"{node.type.replace('_', ' ').capitalize()}: {name}")
-                
+
         return "\n".join(summary) if summary else "No top-level definitions found."
 
     except Exception as e:

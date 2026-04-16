@@ -40,7 +40,7 @@ class MinijailSandbox(Sandbox):
         cwd: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Runs the command using minijail0.
-        
+
         Args:
             command: The command and its arguments.
             timeout: Execution timeout in seconds.
@@ -92,7 +92,7 @@ class MinijailSandbox(Sandbox):
         args.append("--")
         args.extend(command)
 
-        logger.debug(f"Running in Minijail: {' '.join(args)}")
+        logger.debug("Running in Minijail: %s", " ".join(args))
 
         return subprocess.run(  # noqa: S603
             args,

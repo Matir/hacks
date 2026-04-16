@@ -36,7 +36,7 @@ async def test_get_ast_summary_no_definitions():
                     mock_parser = mock_parser_class.return_value
                     mock_tree = mock_parser.parse.return_value
                     mock_tree.root_node.children = [] # No children
-                    
+
                     result = await maybe_await(get_ast_summary("empty.py", "python"))
                     assert result == "No top-level definitions found."
 
@@ -46,7 +46,7 @@ async def test_container_bash_tool_docker_missing(mock_bash):
     """Test container_bash_tool falls back to host bash_tool when Docker is missing."""
     set_binary_stub("docker", False)
     mock_bash.return_value = "host_output"
-    
+
     result = await maybe_await(container_bash_tool("ls"))
     assert "[Warning: Docker not found. Falling back to host bash_tool]" in result
     assert "host_output" in result
@@ -73,12 +73,12 @@ async def test_coordinator_init_validation(tmp_path):
     # Use a real string for db_path to avoid urlparse error with MagicMock
     db_file = tmp_path / "test.db"
     mock_config.db_path = str(db_file)
-    
+
     with patch("trashdig.agents.coordinator.create_stack_scout_agent", return_value=create_mock_agent("stack_scout")), \
          patch("trashdig.agents.coordinator.create_web_route_mapper_agent", return_value=create_mock_agent("web_route_mapper")), \
          patch("trashdig.agents.coordinator.create_hunter_agent", return_value=create_mock_agent("hunter")), \
          patch("trashdig.agents.coordinator.create_skeptic_agent", return_value=create_mock_agent("skeptic")), \
          patch("trashdig.agents.coordinator.create_validator_agent", return_value=create_mock_agent("validator")):
-        
+
         coord = Coordinator(mock_config)
         assert coord.hunter is not None

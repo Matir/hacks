@@ -18,14 +18,14 @@ def ripgrep_search(pattern: str, path: str | None = None, extra_args: list[str] 
     """
     if path is None:
         path = get_config().workspace_root
-        
+
     cmd = ["rg", "--column", "--line-number", "--no-heading", "--color", "never", pattern, path]
     if extra_args:
         cmd.extend(extra_args)
-    
+
     result = _run_sandboxed(cmd, network=False, workspace_dir=path)
-    
+
     # The existing tests expect specific error messages if rg is not found
-    if result.returncode == 127:
+    if result.returncode == 127:  # noqa: PLR2004
         return result.stderr
     return result.stdout if result.stdout else result.stderr

@@ -76,10 +76,10 @@ class Coordinator(LlmAgent):
         """Initialises the Coordinator with the given configuration."""
         if project_path is None:
             project_path = config.workspace_root
-        
+
         # Ensure it's a string even if mocked in tests
         project_path_str = str(project_path)
-        
+
         perm = PermissionManager(config, on_confirm=on_confirm)
 
         stack_scout = create_stack_scout_agent(
@@ -106,7 +106,7 @@ class Coordinator(LlmAgent):
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
         if not isinstance(db_path, str):
             db_path = ".trashdig/trashdig.db"
-        
+
         # Create the HunterOrchestrator and wrap it in a LoopAgent
         hunter_orchestrator = LlmAgent(
             name="hunter_orchestrator",
@@ -141,7 +141,7 @@ class Coordinator(LlmAgent):
         db = get_database(db_path)
         scan_session_id = db.get_or_create_scan_session(project_path_str)
         session_service = SqliteSessionService(db_path=db_path)
-        
+
         cost_tracker = CostTracker()
 
         object.__setattr__(self, "_db", db)
@@ -235,7 +235,7 @@ class Coordinator(LlmAgent):
     @property
     def total_messages(self) -> int:
         """Returns the total number of LLM messages in the session."""
-        return 0 
+        return 0
 
     @property
     def input_tokens(self) -> int:
@@ -324,7 +324,7 @@ class Coordinator(LlmAgent):
         if self.on_stats_event:
             self.on_stats_event()
 
-    def _on_conversation(
+    def _on_conversation(  # noqa: PLR0913
         self,
         agent_name: str,
         prompt: str,
@@ -384,7 +384,7 @@ class Coordinator(LlmAgent):
 
         # Phase 2: Hypothesis-driven hunting loop using ADK LoopAgent
         self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop...")
-        
+
         async for _ in self.hunter_loop.run_async(
             session_id=f"{self._scan_session_id}:hunt_loop",
             user_id="default_user",
@@ -413,9 +413,9 @@ class Coordinator(LlmAgent):
 
         for target in targets:
             self.log(f"[bold]Coordinator:[/bold] hunting [cyan]{target}[/cyan]")
-            
+
             prompt = load_prompt("hunter_batch.md").format(target=target)
-            
+
             text = await run_agent(
                 self.hunter,
                 prompt,
@@ -423,10 +423,10 @@ class Coordinator(LlmAgent):
                 session_service=self._session_service,
                 artifact_service=self._artifact_service
             )
-            
+
             try:
                 data = parse_json_response(text)
-                
+
                 # Handle findings
                 raw_findings = data.get("findings", [])
                 for raw in raw_findings:
@@ -445,7 +445,7 @@ class Coordinator(LlmAgent):
                     self._findings.append(finding)
                     new_findings.append(finding)
                     self._db.save_finding(self._project_path, finding)
-                
+
                 all_hypotheses.extend(data.get("hypotheses", []))
             except Exception:
                 logger.exception("Failed to parse Hunter response for %s", target)
@@ -459,18 +459,18 @@ class Coordinator(LlmAgent):
     async def run_recon(self, path: str = ".") -> dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
-        
+
         abs_path = os.path.abspath(path)  # noqa: ASYNC240
         prompt = load_prompt("recon.md").format(abs_path=abs_path)
-        
+
         text = await run_agent(
             self.stack_scout,
-            prompt, 
+            prompt,
             session_id=f"{self._scan_session_id}:recon:stack_scout",
             session_service=self._session_service,
             artifact_service=self._artifact_service
         )
-        
+
         try:
             data = parse_json_response(text)
         except Exception as e:
@@ -545,10 +545,10 @@ class Coordinator(LlmAgent):
                 session_service=self._session_service,
                 artifact_service=self._artifact_service
             )
-            
+
             try:
                 data = parse_json_response(text)
-                
+
                 # Handle findings
                 raw_findings = data.get("findings", [])
                 if not isinstance(raw_findings, list):
@@ -570,7 +570,7 @@ class Coordinator(LlmAgent):
                     self._findings.append(finding)
                     new_findings.append(finding)
                     self._db.save_finding(self._project_path, finding)
-                    
+
                     sev_color = {"critical": "red", "high": "red", "medium": "yellow", "low": "green"}.get((finding.severity or "").lower(), "white")
                     self.log(f"  [bold {sev_color}]■[/bold {sev_color}] [bold]{finding.title}[/bold] — {finding.description[:80]}…")
 
@@ -603,7 +603,7 @@ class Coordinator(LlmAgent):
         # 1. Run Skeptic
         self.log(f"[bold]Skeptic:[/bold] reviewing [bold yellow]{finding.title}[/bold yellow]")
         file_content = read_file_content(finding.file_path)
-        
+
         skeptic_prompt = load_prompt("skeptic_verify.md").format(
             title=finding.title,
             description=finding.description,
@@ -611,7 +611,7 @@ class Coordinator(LlmAgent):
             file_path=finding.file_path,
             file_content=file_content
         )
-        
+
         s_text = await run_agent(
             self.skeptic,
             skeptic_prompt,
@@ -619,7 +619,7 @@ class Coordinator(LlmAgent):
             session_service=self._session_service,
             artifact_service=self._artifact_service
         )
-        
+
         try:
             s_data = parse_json_response(s_text)
             is_valid = s_data.get("is_valid", True)
@@ -646,7 +646,7 @@ class Coordinator(LlmAgent):
             file_path=finding.file_path,
             tech_stack=self._tech_stack
         )
-        
+
         v_text = await run_agent(
             self.validator,
             validator_prompt,
@@ -654,7 +654,7 @@ class Coordinator(LlmAgent):
             session_service=self._session_service,
             artifact_service=self._artifact_service
         )
-        
+
         try:
             v_data = parse_json_response(v_text)
             status = v_data.get("status", "Unverified")

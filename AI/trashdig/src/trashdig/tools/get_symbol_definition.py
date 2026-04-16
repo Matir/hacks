@@ -16,13 +16,13 @@ def get_symbol_definition(symbol_name: str, path: str | None = None) -> str:
     """
     if path is None:
         path = get_config().workspace_root
-        
+
     patterns = [f"def {symbol_name}", f"class {symbol_name}", f"async def {symbol_name}"]
     results: list[str] = []
-    
+
     for pattern in patterns:
         res = ripgrep_search(f"\\b{pattern}\\b", path, extra_args=["-C", "5"])
         if res and "Error" not in res:
             results.append(res)
-            
+
     return "\n---\n".join(results) if results else f"Definition for '{symbol_name}' not found."

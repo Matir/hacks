@@ -24,7 +24,7 @@ def get_next_hypothesis(project_path: str, db_path: str | None = None) -> str:
             (project_path,)
         ).fetchone()
         conn.close()
-        
+
         if row:
             return json.dumps(dict(row))
         return "None"
