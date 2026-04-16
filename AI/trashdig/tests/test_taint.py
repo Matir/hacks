@@ -14,7 +14,7 @@ from trashdig.tools.trace_taint_cross_file import (
     _extract_callee_name,
     _find_calls_passing_variable,
     _find_returns_variable,
-    _find_function_file,
+    _find_function_files,
     _resolve_param_name,
 )
 
@@ -121,24 +121,23 @@ def test_find_returns_variable_not_found():
 
 
 # ---------------------------------------------------------------------------
-# _find_function_file
+# _find_function_files
 # ---------------------------------------------------------------------------
 
-def test_find_function_file_found():
+def test_find_function_files_found():
     with tempfile.TemporaryDirectory() as tmp:
         target = os.path.join(tmp, "db.py")
         with open(target, "w") as f:
             f.write("def fetch_user(user_id):\n    pass\n")
 
-        result = _find_function_file("fetch_user", tmp, "python")
-        assert result is not None
+        result = _find_function_files("fetch_user", tmp, "python")
         assert "db.py" in result
 
 
-def test_find_function_file_not_found():
+def test_find_function_files_not_found():
     with tempfile.TemporaryDirectory() as tmp:
-        result = _find_function_file("nonexistent_func", tmp, "python")
-        assert result is None
+        result = _find_function_files("nonexistent_func", tmp, "python")
+        assert result == []
 
 
 # ---------------------------------------------------------------------------

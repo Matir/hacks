@@ -1,7 +1,7 @@
 import os
 import subprocess
 from typing import List
-from .base import artifact_tool
+from .base import artifact_tool, get_config
 from .bash_tool import bash_tool
 
 @artifact_tool(max_chars=5000)
@@ -18,9 +18,19 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
         The output of the command or an error message.
     """
     # Check if Docker is available
+    docker_available = False
     try:
         subprocess.run(["docker", "--version"], capture_output=True, check=True)
+        docker_available = True
     except (subprocess.CalledProcessError, FileNotFoundError):
+        docker_available = False
+
+    if not docker_available:
+        if get_config().require_sandbox:
+            raise RuntimeError(
+                "Docker not found. Strict containerization is required by configuration. "
+                "Install Docker or set 'security.require_sandbox = false' in trashdig.toml to proceed."
+            )
         return "[Warning: Docker not found. Falling back to host bash_tool]\n\n" + bash_tool(command, timeout)
 
     # Use a temporary container to run the command

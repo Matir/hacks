@@ -38,12 +38,19 @@ def get_sandbox(
             )
         elif require_sandbox:
             raise RuntimeError(
-                "minijail0 not found. Cannot run in a sandbox on Linux."
+                "minijail0 not found. Cannot run in a sandbox on Linux. "
+                "Install 'minijail' or set 'security.require_sandbox = false' in trashdig.toml to proceed unsandboxed."
             )
     else:
-        # Graceful degradation on non-Linux platforms.
-        # We log a warning but return a NullSandbox to allow the tool to function,
-        # since native sandboxing (like sandbox-exec or app-sandbox) isn't implemented yet.
+        # Check for other native sandboxes here (e.g. sandbox-exec on macOS) in the future.
+        if require_sandbox:
+            raise RuntimeError(
+                f"No native sandbox implementation available for platform: {sys.platform}. "
+                "Sandboxing is required by configuration. To proceed unsandboxed, "
+                "set 'security.require_sandbox = false' in trashdig.toml."
+            )
+
+        # Graceful degradation only if not required
         logger.warning(
             f"No native sandbox implementation available for platform: {sys.platform}. "
             "Falling back to NullSandbox (Unsandboxed execution)."
@@ -55,7 +62,7 @@ def get_sandbox(
             network=network
         )
 
-    # Fallback to NullSandbox if it's not required or no native implementation exists.
+    # Fallback to NullSandbox if it's not required
     return NullSandbox(
         workspace_dir=workspace_dir,
         allowlist=allowlist,

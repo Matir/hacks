@@ -8,7 +8,7 @@ that were previously threaded through every agent wrapper method.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING, List
 
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_request import LlmRequest
@@ -42,6 +42,7 @@ class TrashDigCallback:
         Note: Use get_instance() instead of direct instantiation in most cases.
         """
         self._c = coordinator
+        self._last_prompt: str = ""
 
     @classmethod
     def get_instance(cls, coordinator: Optional["Coordinator"] = None) -> TrashDigCallback:
@@ -84,6 +85,7 @@ class TrashDigCallback:
         # Only LlmAgent supports these specific model/tool callbacks in its schema
         if isinstance(agent, LlmAgent):
             agent.before_tool_callback = self.on_before_tool
+            agent.before_model_callback = self.on_before_model
             agent.after_model_callback = self.on_after_model
             agent.on_model_error_callback = self.on_model_error
 
@@ -122,6 +124,18 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
     # Model hooks
     # ------------------------------------------------------------------
+
+    def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> Optional[LlmRequest]:
+        """Capture the prompt before it is sent to the model."""
+        prompt = ""
+        if req.contents:
+            for content in req.contents:
+                if content.parts:
+                    for part in content.parts:
+                        if hasattr(part, "text") and part.text:
+                            prompt += part.text + "\n"
+        self._last_prompt = prompt.strip()
+        return None
 
     def on_after_model(
         self, ctx: Optional[CallbackContext] = None, resp: Optional[LlmResponse] = None, **kwargs: Any
@@ -171,7 +185,7 @@ class TrashDigCallback:
         self._c.db.log_conversation(
             self._c.project_path,
             agent_name,
-            "",  # prompt not available in after_model_callback; logged upstream
+            self._last_prompt,
             response_text,
             tool_calls,
             in_t,

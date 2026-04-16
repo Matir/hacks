@@ -16,6 +16,7 @@ from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.validator import create_validator_agent
 from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.types import Hypothesis, TaskType, EngineState
+from trashdig.agents.json_utils import parse_json_response, extract_json_list
 from trashdig.agents.utils import run_agent
 from trashdig.config import Config
 from trashdig.services.database import ProjectDatabase, get_database
@@ -305,7 +306,17 @@ class Coordinator(LlmAgent):
             self.on_stats_event()
 
     def _agent_by_name(self, name: str) -> Any:
-        return next((a for a in self.sub_agents if a.name == name), None)
+        """Finds an agent by name, searching recursively through sub-agents."""
+        def _search(agents: List[Any]) -> Any:
+            for a in agents:
+                if a.name == name:
+                    return a
+                if hasattr(a, "sub_agents") and a.sub_agents:
+                    res = _search(a.sub_agents)
+                    if res:
+                        return res
+            return None
+        return _search(self.sub_agents + [self])
 
     def _on_llm_error(self) -> None:
         self._llm_errors += 1
@@ -412,10 +423,7 @@ class Coordinator(LlmAgent):
             )
             
             try:
-                cleaned = text.strip()
-                if cleaned.startswith("```json"):
-                    cleaned = cleaned[7:].rstrip("`").strip()
-                data = json.loads(cleaned)
+                data = parse_json_response(text)
                 
                 # Handle findings
                 raw_findings = data.get("findings", [])
@@ -465,10 +473,7 @@ class Coordinator(LlmAgent):
         )
         
         try:
-            cleaned = text.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:].rstrip("`").strip()
-            data = json.loads(cleaned)
+            data = parse_json_response(text)
         except Exception as e:
             self.log(f"[bold red]Error:[/bold red] Failed to parse StackScout output: {e}")
             data = {}
@@ -491,10 +496,7 @@ class Coordinator(LlmAgent):
                 artifact_service=self._artifact_service
             )
             try:
-                r_cleaned = r_text.strip()
-                if r_cleaned.startswith("```json"):
-                    r_cleaned = r_cleaned[7:].rstrip("`").strip()
-                route_data = json.loads(r_cleaned)
+                route_data = parse_json_response(r_text)
                 self._attack_surface = route_data.get("attack_surface", [])
             except Exception as e:
                 self.log(f"[bold red]Error:[/bold red] Failed to parse WebRouteMapper output: {e}")
@@ -543,10 +545,7 @@ class Coordinator(LlmAgent):
             )
             
             try:
-                cleaned = text.strip()
-                if cleaned.startswith("```json"):
-                    cleaned = cleaned[7:].rstrip("`").strip()
-                data = json.loads(cleaned)
+                data = parse_json_response(text)
                 
                 # Handle findings
                 raw_findings = data.get("findings", [])
@@ -617,10 +616,7 @@ class Coordinator(LlmAgent):
         )
         
         try:
-            s_cleaned = s_text.strip()
-            if s_cleaned.startswith("```json"):
-                s_cleaned = s_cleaned[7:].rstrip("`").strip()
-            s_data = json.loads(s_cleaned)
+            s_data = parse_json_response(s_text)
             is_valid = s_data.get("is_valid", True)
         except Exception:
             is_valid = True
@@ -656,10 +652,7 @@ class Coordinator(LlmAgent):
         )
         
         try:
-            v_cleaned = v_text.strip()
-            if v_cleaned.startswith("```json"):
-                v_cleaned = v_cleaned[7:].rstrip("`").strip()
-            v_data = json.loads(v_cleaned)
+            v_data = parse_json_response(v_text)
             status = v_data.get("status", "Unverified")
             poc_code = v_data.get("poc_code", "")
         except Exception:

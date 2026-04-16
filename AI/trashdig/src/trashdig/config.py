@@ -30,7 +30,7 @@ class Config:
     workspace_root: str = "."
     rpm_limit: int | None = None
     tpm_limit: int | None = None
-    require_sandbox: bool = True
+    require_sandbox: bool = field(default_factory=lambda: os.name == "posix" and os.uname().sysname == "Linux")
     max_parallel_tasks: int = 3
 
     def get_agent_config(self, name: str) -> AgentConfig:
@@ -206,7 +206,8 @@ def load_config(
     global_provider = final_data.get("provider", "google")
     rpm_limit = final_data.get("rate_limit", {}).get("rpm")
     tpm_limit = final_data.get("rate_limit", {}).get("tpm")
-    require_sandbox = final_data.get("security", {}).get("require_sandbox", True)
+    is_linux = os.name == "posix" and os.uname().sysname == "Linux"
+    require_sandbox = final_data.get("security", {}).get("require_sandbox", is_linux)
     max_parallel = final_data.get("concurrency", {}).get("max_parallel_tasks", 3)
 
     # Load Agents

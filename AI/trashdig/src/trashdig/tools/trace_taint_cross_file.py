@@ -147,12 +147,12 @@ def _find_returns_variable(
     return lines
 
 
-def _find_function_file(
+def _find_function_files(
     func_name: str,
     project_root: str = ".",
     language: str = "python",
-) -> Optional[str]:
-    """Find the file that defines *func_name* using ripgrep.
+) -> List[str]:
+    """Find all files that define *func_name* using ripgrep.
 
     Args:
         func_name: The function name to search for.
@@ -160,7 +160,7 @@ def _find_function_file(
         language: Programming language (affects the search pattern).
 
     Returns:
-        The relative file path of the first match, or ``None``.
+        A list of relative file paths of matches.
     """
     if language == "python":
         patterns = [rf"\bdef {re.escape(func_name)}\b", rf"\basync def {re.escape(func_name)}\b"]
@@ -169,13 +169,21 @@ def _find_function_file(
     else:
         patterns = [rf"\b{re.escape(func_name)}\b"]
 
+    all_files: Set[str] = set()
+    abs_project_root = os.path.abspath(project_root)
     for pattern in patterns:
         output = ripgrep_search(pattern, project_root, extra_args=["-l"])
         if output and "Error" not in output:
-            first = output.strip().splitlines()[0].strip()
-            if first:
-                return first
-    return None
+            for line in output.strip().splitlines():
+                path = line.strip()
+                if path:
+                    if os.path.isabs(path):
+                        try:
+                            path = os.path.relpath(path, abs_project_root)
+                        except ValueError:
+                            pass
+                    all_files.add(path)
+    return sorted(list(all_files))
 
 
 def _resolve_param_name(
@@ -322,10 +330,17 @@ def trace_taint_cross_file(
                 report_lines.append(
                     f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
                 )
-                # Resolve callee file and param name
-                callee_file = _find_function_file(callee, project_root, language)
-                if callee_file:
-                    param_name = _resolve_param_name(callee, arg_idx, callee_file, language)
+                # Resolve callee files and param name
+                callee_files = _find_function_files(callee, project_root, language)
+                if callee_files:
+                    if len(callee_files) > 1:
+                        report_lines.append(
+                            f"{indent}    [Warning: multiple definitions for '{callee}' found. Following first match in {callee_files[0]}]"
+                        )
+                    
+                    callee_file = callee_files[0]
+                    abs_callee_file = os.path.join(project_root, callee_file)
+                    param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, language)
                     if param_name:
                         _trace(param_name, callee_file, depth + 1)
                     else:

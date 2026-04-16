@@ -96,14 +96,13 @@
 - [ ] **[MEDIUM]** Interactive finding viewer (Markdown rendering).
 - [ ] **[LOW]** "Agent Ask" mechanism for structured questioning (Phase 4).
 - [ ] **[MEDIUM]** Progress Tracking: Add real-time progress bars or a task status dashboard.
-- [ ] **[LOW]** Command History Persistence: Save REPL history between sessions.
+- [x] **[LOW]** Command History Persistence: Save REPL history between sessions.
 
 ## ADK Feature Gaps (not yet tracked)
 
 ### Workflow Agents
 - [x] **[MEDIUM]** Use `LoopAgent` for the hypothesis-driven hunting cycle.
     - [x] Replace the manual `asyncio` retry/loop in `Coordinator.run_loop()` with ADK's `LoopAgent` + escalation condition.
-    - [ ] *Note: `SequentialAgent`/`ParallelAgent` are already noted in the ADK-Native Refactor section above.*
 
 ### Session & Memory
 - [x] **[MEDIUM]** Adopt a persistent `SessionService` (e.g., database-backed) to allow scan resumption across CLI invocations.
@@ -154,19 +153,27 @@
 
 ## 🛠️ Post-Review Refinements (from April 2026 Review)
 
-### Sandbox & Safety
-- [x] **[HIGH]** Fix Sandbox platform compatibility: Allow graceful degradation or `NullSandbox` on macOS/Darwin when `require_sandbox` is True.
-- [x] **[MEDIUM]** Harden `bash_tool`: Default `network=False` and verify User Namespace (`-U`) behavior in `MinijailSandbox`.
-
-### Database & State Consistency
-- [x] **[MEDIUM]** Standardize Task/Hypothesis IDs: Resolve naming inconsistency between `id` and `task_id` across database schema, types, and tools.
-- [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.
-
-### Taint Analysis & Semantic Engine
-- [ ] **[MEDIUM]** Advanced Taint Analysis: Add support for variable aliasing (data flow through assignments).
+### Semantic Intelligence & Taint Tracing
+- [ ] **[HIGH]** Fix `trace_taint_cross_file` limitations: handle namespaces, imports, and complex callee expressions (e.g., `obj.method()`).
+- [ ] **[MEDIUM]** Improve `get_ast_summary` and `get_scope_info`: support nested definitions, JS arrow functions, and local variable assignments.
+- [ ] **[MEDIUM]** Decouple language-specific logic: move hardcoded node types and skips (like `self`/`cls`) from tools to a configuration or metadata structure.
+- [x] **[MEDIUM]** Advanced Taint Analysis: Add support for variable aliasing (data flow through assignments).
 - [ ] **[MEDIUM]** Broaden AST Support: Expand `tree-sitter` node coverage (e.g., arrow functions, expressions) and language support.
 - [ ] **[LOW]** Optimize `tree-sitter` initialization: Move library imports out of hot paths and validate binary dependencies at startup.
 
-### Reliability & Performance
-- [ ] **[MEDIUM]** Recon Robustness: Add error handling and retry logic for initial scans on large or complex projects.
-- [ ] **[LOW]** Artifact Race Condition: Ensure `@artifact_tool` correctly handles large outputs and ADK context without premature truncation.
+### Sandbox & Safety
+- [x] **[HIGH]** Fix Sandbox platform compatibility: Strictly enforce `require_sandbox` and fail on non-Linux platforms if required.
+- [ ] **[MEDIUM]** Implement native sandboxing for non-Linux platforms (e.g., `sandbox-exec` for macOS) to fulfill the `require_sandbox` mandate natively.
+- [x] **[MEDIUM]** Harden `bash_tool`: Default `network=False` and verify User Namespace (`-U`) behavior in `MinijailSandbox`.
+- [x] **[MEDIUM]** Secure `container_bash_tool`: Enforce containerization when `require_sandbox` is True.
+
+### Infrastructure & Refinement
+- [x] **[HIGH]** Robust JSON Parsing: Implement centralized `parse_json_response` and `extract_json_list` utilities for all agent responses.
+- [x] **[HIGH]** Fix `PermissionManager` metadata loss: Ensure `wrap_tool` preserves original tool name and description.
+- [x] **[MEDIUM]** Capture LLM Prompts: Update `TrashDigCallback` to record the actual prompt sent to the model in the database.
+- [ ] **[MEDIUM]** Configurable Cost Tracking: Refactor `CostTracker` to use configurable or dynamically fetched rates instead of hardcoded ones.
+- [x] **[MEDIUM]** Recursive Agent Search: Update `Coordinator._agent_by_name` to find nested agents for callback accounting.
+- [ ] **[LOW]** Configurable `noisy_dirs`: Move the hardcoded list in `get_project_structure` to `trashdig.toml`.
+- [ ] **[LOW]** Consolidate `Coordinator` logic: Reduce redundancy between `run_full_scan` and TUI-specific methods (`run_recon`, `run_hunter`).
+- [x] **[MEDIUM]** Standardize Task/Hypothesis IDs: Resolve naming inconsistency between `id` and `task_id` across database schema, types, and tools.
+- [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.
