@@ -1,10 +1,10 @@
-from typing import Any, List, Optional
+from typing import Any
 
 from .base import _run_sandboxed, artifact_tool, get_config
 
 
 @artifact_tool(max_chars=4000)
-def ripgrep_search(pattern: str, path: Optional[str] = None, extra_args: Optional[List[str]] = None, tool_context: Any = None) -> str:
+def ripgrep_search(pattern: str, path: str | None = None, extra_args: list[str] | None = None, tool_context: Any = None) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
 
     Args:

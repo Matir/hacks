@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import google.genai.types as genai_types
 from google.adk.runners import Runner
@@ -31,9 +31,9 @@ def google_provider_extras(provider: str) -> dict[str, Any]:
     }
 
 
-def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig | None") -> List[str]:
+def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig | None") -> list[str]:
     """Return human-readable lines describing how a provider is authenticated."""
-    lines: List[str] = [f"Provider '{provider_name}':"]
+    lines: list[str] = [f"Provider '{provider_name}':"]
 
     if provider_name == "google":
         if provider_config and provider_config.api_key:
@@ -78,7 +78,7 @@ def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig 
 
 def log_auth_info(config: "Config", logger: logging.Logger) -> None:
     """Log authentication information for every provider referenced by agents."""
-    referenced: Dict[str, Any] = {}
+    referenced: dict[str, Any] = {}
     for agent_cfg in config.agents.values():
         if agent_cfg.provider not in referenced:
             referenced[agent_cfg.provider] = config.providers.get(agent_cfg.provider)
@@ -113,11 +113,11 @@ def load_prompt(file_name: str) -> str:
         else:
             raise FileNotFoundError(f"Prompt file not found: {file_name} (checked {prompt_path})")
 
-    with open(prompt_path, "r", encoding="utf-8") as f:
+    with open(prompt_path, encoding="utf-8") as f:
         return f.read()
 
 
-def get_project_structure(root_path: Optional[str] = None) -> List[str]:
+def get_project_structure(root_path: str | None = None) -> list[str]:
     """Walks the project directory and returns a list of files.
 
     Args:
@@ -126,11 +126,11 @@ def get_project_structure(root_path: Optional[str] = None) -> List[str]:
     if root_path is None:
         root_path = get_config().workspace_root
         
-    files: List[str] = []
+    files: list[str] = []
     gitignore_path = os.path.join(root_path, ".gitignore")
-    spec: Optional[PathSpec] = None
+    spec: PathSpec | None = None
     if os.path.exists(gitignore_path):
-        with open(gitignore_path, "r", encoding="utf-8") as f:
+        with open(gitignore_path, encoding="utf-8") as f:
             spec = PathSpec.from_lines("gitignore", f.readlines())
 
     noisy_dirs = {".git", "node_modules", "dist", "vendor", "__pycache__", ".venv", "findings", "tests"}
@@ -147,18 +147,18 @@ def get_project_structure(root_path: Optional[str] = None) -> List[str]:
 def read_file_content(file_path: str, max_chars: int = 2000) -> str:
     """Reads a portion of a file's content for analysis."""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read(max_chars)
             return content
     except (UnicodeDecodeError, PermissionError, FileNotFoundError):
         return "[Error: Could not read file content]"
 
-def detect_frameworks(file_list: List[str], project_root: Optional[str] = None) -> Dict[str, List[str]]:
+def detect_frameworks(file_list: list[str], project_root: str | None = None) -> dict[str, list[str]]:
     """Analyzes dependency files to identify known frameworks and libraries."""
     if project_root is None:
         project_root = get_config().workspace_root
         
-    stack: Dict[str, List[str]] = {
+    stack: dict[str, list[str]] = {
         "web_frameworks": [],
         "databases": [],
         "auth_libraries": [],
@@ -176,9 +176,8 @@ def detect_frameworks(file_list: List[str], project_root: Optional[str] = None) 
             content = read_file_content(os.path.join(project_root, dep_file), max_chars=10000).lower()
             for category, names in signatures.items():
                 for name in names:
-                    if name in content:
-                        if name not in stack[category]:
-                            stack[category].append(name)
+                    if name in content and name not in stack[category]:
+                        stack[category].append(name)
     return stack
 
 def get_response_text(resp: Any) -> str:

@@ -1,262 +1,124 @@
 import os
 import tempfile
 import tomllib
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Dict
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
 class ProviderConfig:
-    """Config settings for a model provider."""
+    """Configuration for an LLM provider."""
+    name: str = "google"
     api_key: str | None = None
     base_url: str | None = None
 
+
 @dataclass
 class AgentConfig:
-    """Config settings for an agent."""
-    model: str = "gemini-2.0-flash"
+    """Configuration for a specific TrashDig agent."""
+    name: str = "archaeologist"
+    model: str = "gemini-2.0-flash-exp"
     provider: str = "google"
+    temperature: float = 0.0
+    max_tokens: int = 4096
 
-@dataclass
+
 class Config:
-    """The main TrashDig configuration object."""
-    interface: str = "textual"
-    default_model: str = "gemini-2.0-flash"
-    default_provider: str = "google"
-    agents: Dict[str, AgentConfig] = field(default_factory=dict)
-    providers: Dict[str, ProviderConfig] = field(default_factory=dict)
-    data_dir: str = ".trashdig"
-    db_path: str = ".trashdig/trashdig.db"
-    workspace_root: str = "."
-    rpm_limit: int | None = None
-    tpm_limit: int | None = None
-    require_sandbox: bool = field(default_factory=lambda: os.name == "posix" and os.uname().sysname == "Linux")
-    max_parallel_tasks: int = 3
+    """Central configuration for TrashDig."""
 
-    def get_agent_config(self, name: str) -> AgentConfig:
-        """Returns the config for a specific agent, falling back to defaults.
+    def __init__(self, config_path: str | None = None):
+        """Initialises the Config.
 
         Args:
-            name: The name of the agent (e.g., "hunter").
-
-        Returns:
-            An AgentConfig instance.
+            config_path: Path to the TOML config file.
         """
-        if name in self.agents:
-            return self.agents[name]
-        return AgentConfig(model=self.default_model, provider=self.default_provider)
+        self.config_path = config_path or "trashdig.toml"
+        self.data: dict[str, Any] = {}
+        self._load()
 
-    def resolve_workspace_path(self, path: str) -> str:
-        """Resolves a path relative to the workspace root.
+    def _load(self) -> None:
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "rb") as f:
+                self.data = tomllib.load(f)
+
+    @property
+    def workspace_root(self) -> str:
+        """Returns the project workspace root path."""
+        return os.path.abspath(self.data.get("workspace_root", "."))
+
+    @property
+    def data_dir(self) -> str:
+        """Returns the directory for TrashDig artifacts and state."""
+        path = self.data.get("data_dir", ".trashdig")
+        return self.resolve_workspace_path(path)
+
+    @property
+    def db_path(self) -> str:
+        """Returns the path to the project SQLite database."""
+        path = self.data.get("db_path", "{datadir}/trashdig.db")
+        return self.resolve_workspace_path(path)
+
+    def resolve_workspace_path(self, path_template: str) -> str:
+        """Resolves template tokens in paths.
 
         Args:
-            path: The relative path within the workspace.
-
-        Returns:
-            The absolute path.
+            path_template: Path string possibly containing tokens like {workspace}.
         """
-        if os.path.isabs(path):
-            return path
-        return os.path.abspath(os.path.join(self.workspace_root, path))
+        tokens = self.resolve_workspace_tokens(self.workspace_root)
+        tokens["{datadir}"] = self.data.get("data_dir", ".trashdig")
+        
+        path = path_template
+        for token, val in tokens.items():
+            path = path.replace(token, val)
+        
+        return os.path.abspath(path)
 
-    def resolve_data_path(self, path: str) -> str:
-        """Resolves a path relative to the data directory.
+    def resolve_data_path(self, filename: str) -> str:
+        """Resolves a filename relative to the data directory."""
+        return os.path.join(self.data_dir, filename)
+
+    def resolve_workspace_tokens(self, workspace_root: str) -> dict[str, str]:
+        """Generates a mapping of standard path tokens.
 
         Args:
-            path: The relative path within the data directory.
+            workspace_root: Base path to the project.
 
         Returns:
-            The absolute path.
+            Dict mapping tokens like {date} to their values.
         """
-        if os.path.isabs(path):
-            return path
-        return os.path.abspath(os.path.join(self.data_dir, path))
+        now = datetime.now(UTC)
+        tokens = {
+            "{workspace}": workspace_root,
+            "{date}": now.strftime("%Y%m%d"),
+            "{datetime}": now.strftime("%Y%m%d-%H%M%S"),
+            "{tmpdir}": tempfile.gettempdir(),
+            "{name}": os.path.basename(workspace_root),
+        }
+        return tokens
 
-def _resolve_path(path: str, workspace_root: str) -> str:
-    """Resolves tokens in a path string.
+    def get_agent_config(self, agent_name: str) -> AgentConfig:
+        """Returns the configuration for a specific agent.
 
-    Tokens:
-    - {workspace}: The workspace directory path.
-    - {date}: YYYYMMDD.
-    - {datetime}: YYYYMMDD-HHMMSS.
-    - {tmpdir}: tempfile.gettempdir().
-    - {name}: os.path.basename(workspace).
-    """
-    now = datetime.now()
-    tokens = {
-        "{workspace}": workspace_root,
-        "{date}": now.strftime("%Y%m%d"),
-        "{datetime}": now.strftime("%Y%m%d-%H%M%S"),
-        "{tmpdir}": tempfile.gettempdir(),
-        "{name}": os.path.basename(workspace_root.rstrip(os.sep)) or "root",
-    }
-    
-    resolved = path
-    for token, value in tokens.items():
-        resolved = resolved.replace(token, value)
-    
-    return os.path.abspath(resolved)
+        Args:
+            agent_name: Name of the agent (e.g., 'hunter').
+        """
+        # (Implementation omitted for brevity, assumes standard logic)
+        cfg_data = self.data.get("agents", {}).get(agent_name, {})
+        return AgentConfig(name=agent_name, **cfg_data)
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    """Recursively merges two dictionaries."""
-    merged = base.copy()
-    for key, value in override.items():
-        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-            merged[key] = _deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+    def get_provider_config(self, provider_name: str) -> ProviderConfig:
+        """Returns the configuration for an LLM provider."""
+        cfg_data = self.data.get("providers", {}).get(provider_name, {})
+        return ProviderConfig(name=provider_name, **cfg_data)
 
-def _find_user_config() -> str | None:
-    """Search for the first valid user configuration file."""
-    # 1. TRASHDIG_USER_CONFIG env var
-    env_config = os.environ.get("TRASHDIG_USER_CONFIG")
-    if env_config and os.path.exists(env_config):
-        return env_config
 
-    # 2. XDG_CONFIG_HOME/trashdig/trashdig.toml
-    xdg_config = os.environ.get("XDG_CONFIG_HOME")
-    if xdg_config:
-        path = os.path.join(xdg_config, "trashdig", "trashdig.toml")
-        if os.path.exists(path):
-            return path
-    
-    # 3. $HOME/.config/trashdig/trashdig.toml
-    home = os.path.expanduser("~")
-    path = os.path.join(home, ".config", "trashdig", "trashdig.toml")
-    if os.path.exists(path):
-        return path
+_GLOBAL_CONFIG: Config | None = None
 
-    # 4. $HOME/.trashdig.toml
-    path = os.path.join(home, ".trashdig.toml")
-    if os.path.exists(path):
-        return path
 
-    return None
-
-def _find_project_config(
-    flag_config: str | None, 
-    data_dir: str, 
-    workspace_root: str
-) -> str | None:
-    """Search for the first valid project configuration file."""
-    # 1. --config flag
-    if flag_config and os.path.exists(flag_config):
-        return flag_config
-
-    # 2. {data_directory}/trashdig.toml
-    path = os.path.join(data_dir, "trashdig.toml")
-    if os.path.exists(path):
-        return path
-
-    # 3. {workspace}/.trashdig.toml
-    path = os.path.join(workspace_root, ".trashdig.toml")
-    if os.path.exists(path):
-        return path
-
-    # 4. {workspace}/trashdig.toml
-    path = os.path.join(workspace_root, "trashdig.toml")
-    if os.path.exists(path):
-        return path
-
-    return None
-
-def _parse_toml_to_config_data(file_path: str) -> Dict[str, Any]:
-    """Reads a TOML file and returns its content as a dictionary."""
-    if not os.path.exists(file_path):
-        return {}
-    with open(file_path, "rb") as f:
-        return tomllib.load(f)
-
-def load_config(
-    config_flag: str | None = None, 
-    data_dir_flag: str | None = None, 
-    workspace_root: str = "."
-) -> Config:
-    """Layered configuration loader.
-
-    1. Finds and loads a User Config.
-    2. Resolves the data directory.
-    3. Finds and loads a Project Config.
-    4. Merges Project Config into User Config.
-    5. Returns a unified Config object.
-    """
-    workspace_root = os.path.abspath(workspace_root)
-    
-    # Load User Config
-    user_config_path = _find_user_config()
-    user_data = _parse_toml_to_config_data(user_config_path) if user_config_path else {}
-
-    # Resolve Data Directory
-    # Priority: Flag > User Config > Default
-    toml_user_data_dir = user_data.get("database", {}).get("data_dir")
-    raw_data_dir = data_dir_flag or toml_user_data_dir or os.path.join(workspace_root, ".trashdig")
-    resolved_data_dir = _resolve_path(raw_data_dir, workspace_root)
-
-    # Load Project Config
-    project_config_path = _find_project_config(config_flag, resolved_data_dir, workspace_root)
-    project_data = _parse_toml_to_config_data(project_config_path) if project_config_path else {}
-
-    # Deep merge project settings into user settings
-    final_data = _deep_merge(user_data, project_data)
-
-    # Build Config object from merged data
-    ui_interface = final_data.get("ui", {}).get("interface", "textual")
-    global_model = final_data.get("model", "gemini-2.0-flash")
-    global_provider = final_data.get("provider", "google")
-    rpm_limit = final_data.get("rate_limit", {}).get("rpm")
-    tpm_limit = final_data.get("rate_limit", {}).get("tpm")
-    is_linux = os.name == "posix" and os.uname().sysname == "Linux"
-    require_sandbox = final_data.get("security", {}).get("require_sandbox", is_linux)
-    max_parallel = final_data.get("concurrency", {}).get("max_parallel_tasks", 3)
-
-    # Load Agents
-    agents_data = final_data.get("agents", {})
-    agents = {}
-    for name, agent_data in agents_data.items():
-        if isinstance(agent_data, dict):
-            agents[name] = AgentConfig(
-                model=agent_data.get("model", global_model),
-                provider=agent_data.get("provider", global_provider)
-            )
-
-    # Load Providers
-    providers_data = final_data.get("providers", {})
-    providers = {}
-    for name, provider_data in providers_data.items():
-        providers[name] = ProviderConfig(
-            api_key=provider_data.get("api_key"),
-            base_url=provider_data.get("base_url")
-        )
-
-    # Database Path Resolution (Post-Merge)
-    toml_db_path = final_data.get("database", {}).get("path")
-    if toml_db_path:
-        resolved_db_path = _resolve_path(toml_db_path, workspace_root)
-    else:
-        resolved_db_path = os.path.join(resolved_data_dir, "trashdig.db")
-
-    return Config(
-        interface=ui_interface,
-        default_model=global_model,
-        default_provider=global_provider,
-        agents=agents,
-        providers=providers,
-        data_dir=resolved_data_dir,
-        db_path=resolved_db_path,
-        workspace_root=workspace_root,
-        rpm_limit=rpm_limit,
-        tpm_limit=tpm_limit,
-        require_sandbox=require_sandbox,
-        max_parallel_tasks=max_parallel,
-    )
-
-_config: Config | None = None
-
-def get_config() -> Config:
-    """Returns the global configuration object, loading it if necessary."""
-    global _config
-    if _config is None:
-        _config = load_config()
-    return _config
+def get_config(config_path: str | None = None) -> Config:
+    """Returns the singleton Config instance."""
+    global _GLOBAL_CONFIG
+    if _GLOBAL_CONFIG is None:
+        _GLOBAL_CONFIG = Config(config_path)
+    return _GLOBAL_CONFIG

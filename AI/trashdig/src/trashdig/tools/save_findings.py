@@ -1,11 +1,10 @@
 import json
-from typing import Optional
 
 from ..findings import Finding
 from ..services.database import get_database
 
 
-def save_findings(findings_json: str, project_path: str, db_path: Optional[str] = None) -> str:
+def save_findings(findings_json: str, project_path: str, db_path: str | None = None) -> str:
     """Saves a list of findings to the database.
 
     Args:

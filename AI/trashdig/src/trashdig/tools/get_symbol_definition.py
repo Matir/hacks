@@ -1,11 +1,10 @@
-from typing import List, Optional
 
 from .base import artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
 
 
 @artifact_tool(max_chars=5000)
-def get_symbol_definition(symbol_name: str, path: Optional[str] = None) -> str:
+def get_symbol_definition(symbol_name: str, path: str | None = None) -> str:
     """Finds the definition of a function or class across the project.
 
     Args:
@@ -19,7 +18,7 @@ def get_symbol_definition(symbol_name: str, path: Optional[str] = None) -> str:
         path = get_config().workspace_root
         
     patterns = [f"def {symbol_name}", f"class {symbol_name}", f"async def {symbol_name}"]
-    results: List[str] = []
+    results: list[str] = []
     
     for pattern in patterns:
         res = ripgrep_search(f"\\b{pattern}\\b", path, extra_args=["-C", "5"])

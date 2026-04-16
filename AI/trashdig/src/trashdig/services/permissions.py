@@ -1,6 +1,7 @@
 import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from google.adk.tools import FunctionTool
 
@@ -16,8 +17,8 @@ class PermissionManager:
 
     def __init__(
         self, 
-        config: Optional[Config] = None, 
-        on_confirm: Optional[Callable[[str, Dict[str, Any]], bool]] = None
+        config: Config | None = None, 
+        on_confirm: Callable[[str, dict[str, Any]], bool] | None = None
     ):
         """Initializes the PermissionManager.
 
@@ -31,7 +32,7 @@ class PermissionManager:
         # Tools that are always considered sensitive and require confirmation if a callback is provided.
         self.sensitive_tools = {"bash_tool", "container_bash_tool"}
 
-    def is_allowed(self, tool_name: str, args: Dict[str, Any]) -> bool:
+    def is_allowed(self, tool_name: str, args: dict[str, Any]) -> bool:
         """Checks if a tool call is allowed.
 
         Args:
@@ -45,9 +46,8 @@ class PermissionManager:
         # (Placeholder for future policy checks based on self.config)
         
         # 2. Check for sensitive tools and user confirmation
-        if tool_name in self.sensitive_tools:
-            if self.on_confirm:
-                return self.on_confirm(tool_name, args)
+        if tool_name in self.sensitive_tools and self.on_confirm:
+            return self.on_confirm(tool_name, args)
         
         return True
 
@@ -101,7 +101,7 @@ class PermissionManager:
             func=wrapped
         )
 
-    def wrap_tools(self, tools: List[FunctionTool]) -> List[FunctionTool]:
+    def wrap_tools(self, tools: list[FunctionTool]) -> list[FunctionTool]:
         """Wraps a list of tools.
 
         Args:

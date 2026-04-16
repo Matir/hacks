@@ -1,7 +1,7 @@
 import logging
 import os
 import subprocess
-from typing import Any, List, Optional
+from typing import Any
 
 from trashdig.utils import get_binary_path
 
@@ -22,6 +22,12 @@ class MinijailSandbox(Sandbox):
     ]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the Minijail sandbox.
+
+        Args:
+            *args: Positional arguments for Sandbox.
+            **kwargs: Keyword arguments for Sandbox.
+        """
         super().__init__(*args, **kwargs)
         self.minijail_path = get_binary_path("minijail0")
         if not self.minijail_path:
@@ -29,9 +35,9 @@ class MinijailSandbox(Sandbox):
 
     def run(
         self,
-        command: List[str],
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        command: list[str],
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Runs the command using minijail0.
         
@@ -51,8 +57,9 @@ class MinijailSandbox(Sandbox):
         # -t: Mount a private tmpfs on /tmp.
         # -u, -g: Run as current user/group (requires unprivileged namespaces).
         # -U: Enter a new user namespace (allows -v, -p as non-root).
-        assert self.minijail_path is not None
-        args: List[str] = [
+        if self.minijail_path is None:
+            raise RuntimeError("minijail0 path not resolved.")
+        args: list[str] = [
             self.minijail_path,
             "-v", "-d", "-p", "-r", "-t", "-U"
         ]
@@ -87,7 +94,7 @@ class MinijailSandbox(Sandbox):
 
         logger.debug(f"Running in Minijail: {' '.join(args)}")
 
-        return subprocess.run(
+        return subprocess.run(  # noqa: S603
             args,
             capture_output=True,
             text=True,

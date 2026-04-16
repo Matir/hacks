@@ -72,7 +72,7 @@ def main() -> None:
                 return d
 
         config_dict = filter_none(dataclasses.asdict(config))
-        print(tomli_w.dumps(config_dict))
+        print(tomli_w.dumps(config_dict))  # noqa: T201
         return
     
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)

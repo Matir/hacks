@@ -15,7 +15,7 @@ def read_file(file_path: str, tool_context: Any = None) -> str:
         The file content or an error message.
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             return f.read()
     except Exception as e:
         return f"Error reading file {file_path}: {str(e)}"

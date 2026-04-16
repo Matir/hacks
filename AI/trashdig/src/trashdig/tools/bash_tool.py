@@ -1,4 +1,3 @@
-from typing import List
 
 from .base import _run_sandboxed, artifact_tool
 
@@ -19,7 +18,7 @@ def bash_tool(command: str, timeout: int = 30) -> str:
     try:
         # Defaults to network=False in run_sandboxed
         result = _run_sandboxed(cmd, timeout=timeout)
-        output: List[str] = []
+        output: list[str] = []
         if result.stdout:
             output.append(f"STDOUT:\n{result.stdout}")
         if result.stderr:

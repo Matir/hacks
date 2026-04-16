@@ -46,10 +46,30 @@ url = "https://pypi.org/simple/"
 default = true
 
 [tool.ruff]
+line-length = 100
+target-version = "py312"
 
 [tool.ruff.lint]
-# Select default rules plus isort (I)
-select = ["E4", "E7", "E9", "F", "I"]
+# Select default rules plus isort (I), Bandit (S), Bugbear (B), Pyupgrade (UP),
+# Async (ASYNC), Simplify (SIM), Print (T20), Comprehensions (C4), Datetime (DTZ)
+select = [
+    "E4", "E7", "E9", "F", "I", "D", "N",
+    "S", "B", "UP", "ASYNC", "SIM", "T20", "C4", "DTZ"
+]
+
+ignore = ["D203", "D213", "D100"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = ["D", "S101", "S108", "ASYNC", "SIM", "C4", "B011"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["trashdig"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true

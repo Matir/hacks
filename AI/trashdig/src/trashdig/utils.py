@@ -1,10 +1,10 @@
 import shutil
-from typing import Dict, Optional
 
-_BINARY_STUBS: Dict[str, bool] = {}
+_BINARY_STUBS: dict[str, bool] = {}
 
 def is_binary_available(name: str) -> bool:
     """Checks if a binary is available on the system.
+
     Supports stubs for testing.
 
     Args:
@@ -17,8 +17,9 @@ def is_binary_available(name: str) -> bool:
         return _BINARY_STUBS[name]
     return shutil.which(name) is not None
 
-def get_binary_path(name: str) -> Optional[str]:
+def get_binary_path(name: str) -> str | None:
     """Gets the path to a binary.
+
     Supports stubs for testing.
 
     Args:
@@ -33,6 +34,7 @@ def get_binary_path(name: str) -> Optional[str]:
 
 def set_binary_stub(name: str, available: bool) -> None:
     """Sets a stub for a binary availability check.
+
     Only intended for use in tests.
 
     Args:
@@ -43,6 +45,7 @@ def set_binary_stub(name: str, available: bool) -> None:
 
 def clear_binary_stubs() -> None:
     """Clears all binary stubs.
+
     Only intended for use in tests.
     """
     _BINARY_STUBS.clear()

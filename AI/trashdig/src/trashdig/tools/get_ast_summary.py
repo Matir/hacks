@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from .base import _get_ts_language, _make_parser, artifact_tool, get_config
 
@@ -28,7 +28,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
         parser = _make_parser(language)
         tree = parser.parse(content)
         
-        summary: List[str] = []
+        summary: list[str] = []
         root_node = tree.root_node
         
         for node in root_node.children:

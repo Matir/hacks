@@ -1,6 +1,5 @@
 import os
 import subprocess
-from typing import List
 
 from trashdig.utils import is_binary_available
 
@@ -11,6 +10,7 @@ from .bash_tool import bash_tool
 @artifact_tool(max_chars=5000)
 def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: int = 60) -> str:
     """Executes a bash command or script inside a temporary Docker container.
+
     This provides an isolated environment for running Proof of Concepts.
 
     Args:
@@ -40,20 +40,20 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
         "docker", "run", "--rm",
         "--network", "none", # Isolate network by default
         "-v", f"{project_root}:/app:ro",
-        "-w", "/tmp",
+        "-w", "/tmp",  # noqa: S108
         image,
         "bash", "-c", command
     ]
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
             check=False
         )
-        output: List[str] = []
+        output: list[str] = []
         if result.stdout:
             output.append(f"STDOUT:\n{result.stdout}")
         if result.stderr:

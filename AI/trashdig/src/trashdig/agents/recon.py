@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -40,15 +40,24 @@ class WebRouteMapperAgent(LlmAgent):
 
 
 def create_stack_scout_agent(
-    config: Optional[AgentConfig] = None,
-    permission_manager: Optional[PermissionManager] = None,
-) -> StackScoutAgent:
+    config: AgentConfig | None = None,
+    permission_manager: PermissionManager | None = None,
+) -> LlmAgent:
+    """Creates a StackScout agent for environment and tech stack detection.
+
+    Args:
+        config: Agent configuration.
+        permission_manager: Permission manager for tools.
+
+    Returns:
+        A configured LlmAgent instance.
+    """
     if config is None:
         config = AgentConfig()
 
     instruction = load_prompt("stack_scout.md")
     extras = google_provider_extras(config.provider)
-    tools: List[Any] = [
+    tools: list[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
         FunctionTool(query_cwe_database),
@@ -76,17 +85,25 @@ def create_stack_scout_agent(
         **kwargs,
     )
 
-
 def create_web_route_mapper_agent(
-    config: Optional[AgentConfig] = None,
-    permission_manager: Optional[PermissionManager] = None,
-) -> WebRouteMapperAgent:
+    config: AgentConfig | None = None,
+    permission_manager: PermissionManager | None = None,
+) -> LlmAgent:
+    """Creates a WebRouteMapper agent for attack surface discovery.
+
+    Args:
+        config: Agent configuration.
+        permission_manager: Permission manager for tools.
+
+    Returns:
+        A configured LlmAgent instance.
+    """
     if config is None:
         config = AgentConfig()
 
     instruction = load_prompt("web_route_mapper.md")
     extras = google_provider_extras(config.provider)
-    tools: List[Any] = [
+    tools: list[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
         FunctionTool(get_project_structure),

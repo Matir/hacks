@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -29,7 +29,7 @@ class HunterAgent(LlmAgent):
 
 
 def create_hunter_agent(
-    config: Optional[AgentConfig] = None, permission_manager: Optional[PermissionManager] = None
+    config: AgentConfig | None = None, permission_manager: PermissionManager | None = None
 ) -> HunterAgent:
     """Creates a Hunter agent.
 
@@ -46,7 +46,7 @@ def create_hunter_agent(
     instruction = load_prompt("hunter.md")
 
     extras = google_provider_extras(config.provider)
-    tools: List[Any] = [
+    tools: list[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(semgrep_scan),
         FunctionTool(get_ast_summary),

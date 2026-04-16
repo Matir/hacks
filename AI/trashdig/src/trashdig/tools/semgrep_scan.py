@@ -1,10 +1,10 @@
-from typing import Any, Optional
+from typing import Any
 
 from .base import _run_sandboxed, artifact_tool, get_config
 
 
 @artifact_tool(max_chars=8000)
-def semgrep_scan(path: Optional[str] = None, config: str = "p/security-audit", tool_context: Any = None) -> str:
+def semgrep_scan(path: str | None = None, config: str = "p/security-audit", tool_context: Any = None) -> str:
     """Scans the codebase for security patterns using semgrep.
 
     Args:

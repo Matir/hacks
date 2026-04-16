@@ -1,13 +1,14 @@
 import os
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from contextlib import suppress
+from typing import Any
 
 from .base import _make_parser, artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
 
 # Known dangerous sinks per language. A call to any of these functions is
 # considered a potential vulnerability if tainted data reaches it.
-_SINKS: Dict[str, Set[str]] = {
+_SINKS: dict[str, set[str]] = {
     "python": {
         # SQL
         "execute", "executemany", "executescript", "raw", "RawSQL",
@@ -44,13 +45,10 @@ def _node_contains_identifier(node: Any, name: str) -> bool:
     """
     if node.type == "identifier" and node.text.decode("utf-8") == name:
         return True
-    for child in node.children:
-        if _node_contains_identifier(child, name):
-            return True
-    return False
+    return any(_node_contains_identifier(child, name) for child in node.children)
 
 
-def _extract_callee_name(func_node: Any) -> Optional[str]:
+def _extract_callee_name(func_node: Any) -> str | None:
     """Extract the plain function/method name from a call's callee node.
 
     Handles simple identifiers (``fetch``) and attribute access (``cursor.execute``).
@@ -75,7 +73,7 @@ def _find_calls_passing_variable(
     variable_name: str,
     content: bytes,
     language: str = "python",
-) -> List[Tuple[str, int, int]]:
+) -> list[tuple[str, int, int]]:
     """Find all calls in *content* where *variable_name* appears as an argument.
 
     Args:
@@ -91,7 +89,7 @@ def _find_calls_passing_variable(
         return []
     tree = parser.parse(content)
 
-    results: List[Tuple[str, int, int]] = []
+    results: list[tuple[str, int, int]] = []
 
     def walk(node: Any) -> None:
         if node.type == "call":
@@ -118,7 +116,7 @@ def _find_returns_variable(
     variable_name: str,
     content: bytes,
     language: str = "python",
-) -> List[int]:
+) -> list[int]:
     """Return line numbers where *variable_name* appears in a return statement.
 
     Args:
@@ -133,7 +131,7 @@ def _find_returns_variable(
     if parser is None:
         return []
     tree = parser.parse(content)
-    lines: List[int] = []
+    lines: list[int] = []
 
     def walk(node: Any) -> None:
         if node.type == "return_statement":
@@ -152,7 +150,7 @@ def _find_function_files(
     func_name: str,
     project_root: str = ".",
     language: str = "python",
-) -> List[str]:
+) -> list[str]:
     """Find all files that define *func_name* using ripgrep.
 
     Args:
@@ -170,7 +168,7 @@ def _find_function_files(
     else:
         patterns = [rf"\b{re.escape(func_name)}\b"]
 
-    all_files: Set[str] = set()
+    all_files: set[str] = set()
     abs_project_root = os.path.abspath(project_root)
     for pattern in patterns:
         output = ripgrep_search(pattern, project_root, extra_args=["-l"])
@@ -179,12 +177,10 @@ def _find_function_files(
                 path = line.strip()
                 if path:
                     if os.path.isabs(path):
-                        try:
+                        with suppress(ValueError):
                             path = os.path.relpath(path, abs_project_root)
-                        except ValueError:
-                            pass
                     all_files.add(path)
-    return sorted(list(all_files))
+    return sorted(all_files)
 
 
 def _resolve_param_name(
@@ -192,7 +188,7 @@ def _resolve_param_name(
     arg_index: int,
     func_file: str,
     language: str = "python",
-) -> Optional[str]:
+) -> str | None:
     """Return the parameter name at *arg_index* in the definition of *func_name*.
 
     Reads *func_file* and parses the function signature with tree-sitter.
@@ -217,7 +213,7 @@ def _resolve_param_name(
         return None
     tree = parser.parse(content)
 
-    def find_func(node: Any) -> Optional[Any]:
+    def find_func(node: Any) -> Any | None:
         if node.type in ("function_definition", "method_definition"):
             name_node = node.child_by_field_name("name")
             if name_node and name_node.text.decode("utf-8") == func_name:
@@ -237,7 +233,7 @@ def _resolve_param_name(
         return None
 
     # Collect actual parameter nodes (skip self/cls and punctuation)
-    params: List[str] = []
+    params: list[str] = []
     for p in params_node.children:
         if p.type in ("identifier", "typed_parameter", "default_parameter",
                       "list_splat_pattern", "dictionary_splat_pattern"):
@@ -260,7 +256,7 @@ def _resolve_param_name(
 def trace_taint_cross_file(
     variable: str,
     source_file: str,
-    project_root: Optional[str] = None,
+    project_root: str | None = None,
     language: str = "python",
     max_depth: int = 5,
 ) -> str:
@@ -289,11 +285,11 @@ def trace_taint_cross_file(
         project_root = get_config().workspace_root
         
     sinks = _SINKS.get(language, set())
-    report_lines: List[str] = [
+    report_lines: list[str] = [
         f"Taint trace: variable='{variable}', start='{source_file}', language={language}",
         "=" * 60,
     ]
-    visited: Set[Tuple[str, str]] = set()  # (file_path, variable_name) pairs
+    visited: set[tuple[str, str]] = set()  # (file_path, variable_name) pairs
 
     def _trace(var: str, file_path: str, depth: int) -> None:
         key = (file_path, var)

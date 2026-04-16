@@ -79,7 +79,7 @@ These rules are foundational. Adhere to them for all modifications:
 3.  **Typing**: Strict type hints are mandatory. Every function and method MUST have complete type annotations for all parameters and return values. The codebase must remain `pyright`/`mypy` clean, even with strict rules like `disallow-untyped-defs` enabled.
 4.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.
 5.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
-6.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory.
+6.  **Prompt Management**: ALL agent instructions and dynamic prompts MUST be stored in separate `.md` files within the `prompts/` directory. No prompts should be defined as inline strings in the code. Use the `load_prompt()` utility to retrieve them.
 7.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for inter-agent communication.
 8.  **Path Handling & Portability**:
     *   **Data Directory**: All artifacts and configuration must be relative to the data directory (defined in `Config.data_dir`).

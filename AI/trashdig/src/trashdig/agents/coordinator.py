@@ -1,6 +1,8 @@
 import functools
+import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from google.adk.agents import LlmAgent, LoopAgent
 from google.adk.artifacts import BaseArtifactService
@@ -18,7 +20,7 @@ from trashdig.agents.recon import (
 )
 from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.types import EngineState, Hypothesis, TaskType
-from trashdig.agents.utils import read_file_content, run_agent
+from trashdig.agents.utils import load_prompt, read_file_content, run_agent
 from trashdig.agents.validator import create_validator_agent
 from trashdig.config import Config
 from trashdig.findings import Finding
@@ -33,39 +35,7 @@ from trashdig.tools import (
     update_hypothesis_status,
 )
 
-_COORDINATOR_INSTRUCTION = """
-You are TrashDig's Coordinator — an AI orchestrator for a multi-phase vulnerability scanner.
-
-## Sub-agents
-
-- **stack_scout**: Identifies the technology stack, maps high-value source files, and generates initial security hypotheses.
-- **web_route_mapper**: Maps all HTTP routes and endpoint handlers. Invoke only when stack_scout reports this is a web application.
-- **hunter_loop**: An autonomous loop that processes all pending security hypotheses using the hunter agent.
-- **skeptic**: Adversarial reviewer that attempts to debunk findings by identifying false positives.
-- **validator**: Generates and executes PoC scripts in a sandbox container to confirm exploitability.
-
-## Workflow
-
-1. RECON — Run stack_scout on the project root. If is_web_app, also run web_route_mapper.
-2. HUNT — Run hunter_loop. This will automatically process all high-value files and discovered hypotheses.
-3. VERIFY — For each finding: run skeptic first. Only if skeptic confirms validity, run validator.
-
-When asked to coordinate a full scan, follow this pipeline in order.
-"""
-
-_HUNTER_ORCHESTRATOR_INSTRUCTION = """
-You are the Hunter Orchestrator. Your job is to process ONE pending security hypothesis from the database.
-
-1. Call `get_next_hypothesis` to find the next target.
-2. If it returns "None", call `exit_loop` to finish the hunting phase.
-3. If you get a hypothesis:
-   - Extract the 'target' (file path).
-   - Use the `hunter` agent to perform a deep-dive analysis of that target.
-   - The hunter will return a JSON response with 'findings' and 'hypotheses'.
-   - Call `save_findings` with the 'findings' list.
-   - Call `save_hypotheses` with the 'hypotheses' list.
-   - Once done, call `update_hypothesis_status` with 'completed'.
-"""
+logger = logging.getLogger(__name__)
 
 
 class Coordinator(LlmAgent):
@@ -74,24 +44,24 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     # Settable TUI callbacks
     # ------------------------------------------------------------------
-    on_task_event: Optional[Any] = None
-    on_stats_event: Optional[Any] = None
+    on_task_event: Any | None = None
+    on_stats_event: Any | None = None
 
     # ------------------------------------------------------------------
     # All mutable state
     # ------------------------------------------------------------------
     _db: ProjectDatabase = PrivateAttr()
     _session_service: BaseSessionService = PrivateAttr()
-    _artifact_service: Optional[BaseArtifactService] = PrivateAttr()
+    _artifact_service: BaseArtifactService | None = PrivateAttr()
     _cost_tracker: CostTracker = PrivateAttr()
     _scan_session_id: str = PrivateAttr()
     _project_path: str = PrivateAttr()
     _permission_manager: PermissionManager = PrivateAttr()
     _state: EngineState = PrivateAttr(default=EngineState.IDLE)
 
-    _findings: List[Finding] = PrivateAttr()
-    _scan_results: Dict[str, Any] = PrivateAttr()
-    _attack_surface: List[Dict[str, Any]] = PrivateAttr()
+    _findings: list[Finding] = PrivateAttr()
+    _scan_results: dict[str, Any] = PrivateAttr()
+    _attack_surface: list[dict[str, Any]] = PrivateAttr()
     _tech_stack: str = PrivateAttr()
 
     _llm_errors: int = PrivateAttr()
@@ -99,9 +69,9 @@ class Coordinator(LlmAgent):
     def __init__(
         self,
         config: Config,
-        project_path: Optional[str] = None,
-        on_confirm: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
-        artifact_service: Optional[BaseArtifactService] = None,
+        project_path: str | None = None,
+        on_confirm: Callable[[str, dict[str, Any]], bool] | None = None,
+        artifact_service: BaseArtifactService | None = None,
     ):
         """Initialises the Coordinator with the given configuration."""
         if project_path is None:
@@ -141,7 +111,7 @@ class Coordinator(LlmAgent):
         hunter_orchestrator = LlmAgent(
             name="hunter_orchestrator",
             model=config.get_agent_config("hunter").model,
-            instruction=_HUNTER_ORCHESTRATOR_INSTRUCTION,
+            instruction=load_prompt("hunter_orchestrator.md"),
             tools=[
                 FunctionTool(functools.partial(get_next_hypothesis, project_path=project_path, db_path=db_path)),
                 FunctionTool(functools.partial(update_hypothesis_status, db_path=db_path)),
@@ -162,7 +132,7 @@ class Coordinator(LlmAgent):
         super().__init__(
             name="coordinator",
             model=coordinator_cfg.model,
-            instruction=_COORDINATOR_INSTRUCTION,
+            instruction=load_prompt("coordinator.md"),
             description="Orchestrates the multi-phase vulnerability scanning pipeline.",
             sub_agents=[stack_scout, web_route_mapper, hunter_loop, skeptic, validator],
         )
@@ -199,91 +169,113 @@ class Coordinator(LlmAgent):
 
     @property
     def project_path(self) -> str:
-        return getattr(self, "_project_path")
+        """Returns the absolute path to the project root."""
+        return self._project_path
 
     @property
     def db(self) -> ProjectDatabase:
-        return getattr(self, "_db")
+        """Returns the project database instance."""
+        return self._db
 
     @property
     def session_id(self) -> str:
-        return getattr(self, "_scan_session_id")
+        """Returns the current scan session ID."""
+        return self._scan_session_id
 
     @session_id.setter
     def session_id(self, val: str) -> None:
+        """Sets the current scan session ID."""
         object.__setattr__(self, "_scan_session_id", val)
 
     @property
-    def findings(self) -> List[Finding]:
-        return getattr(self, "_findings")
+    def findings(self) -> list[Finding]:
+        """Returns the list of findings discovered in the current session."""
+        return self._findings
 
     @findings.setter
-    def findings(self, val: List[Finding]) -> None:
+    def findings(self, val: list[Finding]) -> None:
+        """Sets the list of findings."""
         object.__setattr__(self, "_findings", val)
 
     @property
-    def scan_results(self) -> Dict[str, Any]:
-        return getattr(self, "_scan_results")
+    def scan_results(self) -> dict[str, Any]:
+        """Returns the project mapping results from StackScout."""
+        return self._scan_results
 
     @scan_results.setter
-    def scan_results(self, val: Dict[str, Any]) -> None:
+    def scan_results(self, val: dict[str, Any]) -> None:
+        """Sets the project mapping results."""
         object.__setattr__(self, "_scan_results", val)
 
     @property
-    def attack_surface(self) -> List[Dict[str, Any]]:
-        return getattr(self, "_attack_surface")
+    def attack_surface(self) -> list[dict[str, Any]]:
+        """Returns the list of identified web endpoints."""
+        return self._attack_surface
 
     @attack_surface.setter
-    def attack_surface(self, val: List[Dict[str, Any]]) -> None:
+    def attack_surface(self, val: list[dict[str, Any]]) -> None:
+        """Sets the attack surface data."""
         object.__setattr__(self, "_attack_surface", val)
 
     @property
     def tech_stack(self) -> str:
-        return getattr(self, "_tech_stack")
+        """Returns a string description of the project tech stack."""
+        return self._tech_stack
 
     @property
     def task_queue(self) -> list:
+        """Legacy property for task queueing."""
         return []
 
     @property
     def completed_tasks(self) -> list:
+        """Legacy property for completed tasks."""
         return []
 
     @property
     def total_messages(self) -> int:
+        """Returns the total number of LLM messages in the session."""
         return 0 
 
     @property
     def input_tokens(self) -> int:
-        return getattr(self, "_cost_tracker").total_input_tokens
+        """Returns the cumulative count of input tokens used."""
+        return self._cost_tracker.total_input_tokens
 
     @property
     def output_tokens(self) -> int:
-        return getattr(self, "_cost_tracker").total_output_tokens
+        """Returns the cumulative count of output tokens used."""
+        return self._cost_tracker.total_output_tokens
 
     @property
     def total_cost(self) -> float:
-        return getattr(self, "_cost_tracker").total_cost
+        """Returns the cumulative USD cost of LLM interactions."""
+        return self._cost_tracker.total_cost
 
     @property
     def llm_errors(self) -> int:
+        """Returns the count of LLM-related errors encountered."""
         return self._llm_errors
 
     # Convenience accessors for individual sub-agents
     @property
     def stack_scout(self) -> Any:
+        """Returns the StackScout agent instance."""
         return self._agent_by_name("stack_scout")
 
     @property
     def web_route_mapper(self) -> Any:
+        """Returns the WebRouteMapper agent instance."""
         return self._agent_by_name("web_route_mapper")
 
     @property
     def hunter_loop(self) -> Any:
+        """Returns the Hunter LoopAgent instance."""
         return self._agent_by_name("hunter_loop")
 
     @property
     def hunter(self) -> Any:
+        """Returns the inner Hunter agent instance."""
         # The actual hunter is now nested inside hunter_loop -> hunter_orchestrator
         orchestrator = next((a for a in self.hunter_loop.sub_agents if a.name == "hunter_orchestrator"), None)
         if orchestrator:
@@ -292,10 +284,12 @@ class Coordinator(LlmAgent):
 
     @property
     def skeptic(self) -> Any:
+        """Returns the Skeptic agent instance."""
         return self._agent_by_name("skeptic")
 
     @property
     def validator(self) -> Any:
+        """Returns the Validator agent instance."""
         return self._agent_by_name("validator")
 
     # ------------------------------------------------------------------
@@ -307,14 +301,14 @@ class Coordinator(LlmAgent):
         input_tokens: int,
         output_tokens: int,
         new_msg: bool = False,
-        model_name: Optional[str] = None,
+        model_name: str | None = None,
     ) -> None:
         if self.on_stats_event:
             self.on_stats_event()
 
     def _agent_by_name(self, name: str) -> Any:
         """Finds an agent by name, searching recursively through sub-agents."""
-        def _search(agents: List[Any]) -> Any:
+        def _search(agents: list[Any]) -> Any:
             for a in agents:
                 if a.name == name:
                     return a
@@ -335,7 +329,7 @@ class Coordinator(LlmAgent):
         agent_name: str,
         prompt: str,
         response: str,
-        tool_calls: List[Dict[str, Any]],
+        tool_calls: list[dict[str, Any]],
         input_tokens: int,
         output_tokens: int,
     ) -> None:
@@ -345,10 +339,15 @@ class Coordinator(LlmAgent):
         )
 
     def log(self, message: str) -> None:
+        """Emits a log event to the TUI or console.
+
+        Args:
+            message: The text to log (supports Rich markup).
+        """
         if self.on_task_event:
             self.on_task_event(message)
 
-    def _save_project_profile(self, tech_stack: str, profile: Dict[str, Any]) -> str:
+    def _save_project_profile(self, tech_stack: str, profile: dict[str, Any]) -> str:
         """Internal helper to save the project profile and update local state."""
         object.__setattr__(self, "_tech_stack", tech_stack)
         object.__setattr__(self, "_scan_results", profile.get("mapping", {}))
@@ -356,7 +355,7 @@ class Coordinator(LlmAgent):
         self._db.save_project_profile(self._project_path, tech_stack, profile)
         return f"Project profile for {tech_stack} saved successfully."
 
-    def _save_finding(self, raw: Dict[str, Any]) -> str:
+    def _save_finding(self, raw: dict[str, Any]) -> str:
         """Internal helper to save a single finding."""
         finding = Finding(
             title=raw.get("title", "Untitled"),
@@ -406,20 +405,16 @@ class Coordinator(LlmAgent):
             await self.verify_finding(finding)
 
     async def _hunt_batch(
-        self, targets: List[str], path: str = "."
+        self, targets: list[str], path: str = "."
     ) -> tuple:
         """Kept for backward compatibility."""
-        new_findings: List[Finding] = []
-        all_hypotheses: List[Dict[str, Any]] = []
+        new_findings: list[Finding] = []
+        all_hypotheses: list[dict[str, Any]] = []
 
         for target in targets:
             self.log(f"[bold]Coordinator:[/bold] hunting [cyan]{target}[/cyan]")
             
-            prompt = (
-                f"Analyze the following file for potential security vulnerabilities:\n\n"
-                f"File: {target}\n"
-                f"Identify and document each finding or follow-up hypothesis in a JSON response."
-            )
+            prompt = load_prompt("hunter_batch.md").format(target=target)
             
             text = await run_agent(
                 self.hunter,
@@ -453,7 +448,7 @@ class Coordinator(LlmAgent):
                 
                 all_hypotheses.extend(data.get("hypotheses", []))
             except Exception:
-                pass
+                logger.exception("Failed to parse Hunter response for %s", target)
 
         return new_findings, all_hypotheses
 
@@ -461,15 +456,12 @@ class Coordinator(LlmAgent):
     # TUI-facing methods
     # ------------------------------------------------------------------
 
-    async def run_recon(self, path: str = ".") -> Dict[str, Any]:
+    async def run_recon(self, path: str = ".") -> dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
         
-        prompt = (
-            f"Analyze the project at {os.path.abspath(path)}.\n"
-            "Identify the full tech stack, determine if it is a web application, "
-            "map high-value files, and generate security hypotheses."
-        )
+        abs_path = os.path.abspath(path)  # noqa: ASYNC240
+        prompt = load_prompt("recon.md").format(abs_path=abs_path)
         
         text = await run_agent(
             self.stack_scout,
@@ -485,8 +477,8 @@ class Coordinator(LlmAgent):
             self.log(f"[bold red]Error:[/bold red] Failed to parse StackScout output: {e}")
             data = {}
 
-        mapping: Dict[str, Any] = data.get("mapping", {})
-        hypotheses: List[Dict[str, Any]] = data.get("hypotheses", [])
+        mapping: dict[str, Any] = data.get("mapping", {})
+        hypotheses: list[dict[str, Any]] = data.get("hypotheses", [])
         self._tech_stack = data.get("tech_stack", "")
         self._scan_results = mapping
 
@@ -494,7 +486,7 @@ class Coordinator(LlmAgent):
 
         if is_web_app:
             self.log("[bold]Coordinator:[/bold] web application detected, mapping attack surface…")
-            route_prompt = "Identify all web routes, methods, handlers, and parameters in the project."
+            route_prompt = load_prompt("web_route_mapper_route.md")
             r_text = await run_agent(
                 self.web_route_mapper,
                 route_prompt,
@@ -529,18 +521,22 @@ class Coordinator(LlmAgent):
         )
         return self._scan_results
 
-    async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
-        new_findings: List[Finding] = []
+    async def run_hunter(self, targets: list[str], path: str = ".") -> list[Finding]:
+        """Runs the Hunter agent on a specific list of targets.
+
+        Args:
+            targets: List of relative file paths to analyze.
+            path: Base path to the project.
+
+        Returns:
+            A list of new Finding objects discovered.
+        """
+        new_findings: list[Finding] = []
         for i, target in enumerate(targets, 1):
             self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")
             content = read_file_content(os.path.join(path, target))
 
-            prompt = (
-                f"Analyze the following file for potential security vulnerabilities:\n\n"
-                f"File: {target}\n"
-                f"Content:\n{content}\n\n"
-                f"Identify and document each finding or follow-up hypothesis in a JSON response."
-            )
+            prompt = load_prompt("hunter_single.md").format(target=target, content=content)
 
             text = await run_agent(
                 self.hunter,
@@ -595,20 +591,25 @@ class Coordinator(LlmAgent):
         self.log(f"Finished: [bold green]HUNT[/bold green] — {len(new_findings)} findings found")
         return new_findings
 
-    async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
+    async def verify_finding(self, finding: Finding) -> dict[str, Any]:
+        """Runs the verification pipeline (Skeptic and Validator) for a finding.
+
+        Args:
+            finding: The Finding object to verify.
+
+        Returns:
+            A dictionary containing the verification status and PoC code.
+        """
         # 1. Run Skeptic
         self.log(f"[bold]Skeptic:[/bold] reviewing [bold yellow]{finding.title}[/bold yellow]")
         file_content = read_file_content(finding.file_path)
         
-        skeptic_prompt = (
-            f"Please review this potential finding and try to debunk it:\n\n"
-            f"Title: {finding.title}\n"
-            f"Description: {finding.description}\n"
-            f"Vulnerable Code:\n{finding.vulnerable_code}\n\n"
-            f"File Path: {finding.file_path}\n"
-            f"File Content:\n{file_content}\n\n"
-            f"Your Goal:\n"
-            f"Find any reason why this is a False Positive."
+        skeptic_prompt = load_prompt("skeptic_verify.md").format(
+            title=finding.title,
+            description=finding.description,
+            vulnerable_code=finding.vulnerable_code,
+            file_path=finding.file_path,
+            file_content=file_content
         )
         
         s_text = await run_agent(
@@ -640,11 +641,10 @@ class Coordinator(LlmAgent):
 
         # 2. Run Validator
         self.log(f"[bold]Validator:[/bold] verifying [bold yellow]{finding.title}[/bold yellow]")
-        validator_prompt = (
-            f"Please verify this potential finding by generating and executing a Proof-of-Concept (PoC):\n\n"
-            f"Title: {finding.title}\n"
-            f"File Path: {finding.file_path}\n"
-            f"Project Tech Stack: {self._tech_stack}\n"
+        validator_prompt = load_prompt("validator_verify.md").format(
+            title=finding.title,
+            file_path=finding.file_path,
+            tech_stack=self._tech_stack
         )
         
         v_text = await run_agent(

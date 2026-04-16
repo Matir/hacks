@@ -1,6 +1,5 @@
 import subprocess
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
 
 
 class Sandbox(ABC):
@@ -9,8 +8,8 @@ class Sandbox(ABC):
     def __init__(
         self,
         workspace_dir: str,
-        allowlist: Optional[List[str]] = None,
-        env: Optional[Dict[str, str]] = None,
+        allowlist: list[str] | None = None,
+        env: dict[str, str] | None = None,
         network: bool = True,
     ):
         """Initializes the sandbox.
@@ -29,9 +28,9 @@ class Sandbox(ABC):
     @abstractmethod
     def run(
         self,
-        command: List[str],
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        command: list[str],
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Runs a command inside the sandbox.
 

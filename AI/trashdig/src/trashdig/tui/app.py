@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import traceback
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -17,6 +17,9 @@ from trashdig.agents.utils import get_project_structure, log_auth_info
 from trashdig.config import Config
 from trashdig.findings import Finding
 from trashdig.tools import get_artifact_service
+
+if TYPE_CHECKING:
+    from trashdig.agents.coordinator import Coordinator
 
 
 def _setup_file_logger(log_path: str) -> logging.Logger:
@@ -35,11 +38,17 @@ def _setup_file_logger(log_path: str) -> logging.Logger:
 class FileTree(Tree):
     """A tree representing the project file structure."""
 
-    def __init__(self, label: str, data: Dict[str, Dict[str, Any]]):
+    def __init__(self, label: str, data: dict[str, dict[str, Any]]):
+        """Initializes the file tree.
+
+        Args:
+            label: The root label for the tree.
+            data: Project mapping data.
+        """
         super().__init__(label)
         self.data = data
 
-    def update_tree(self, root_path: str = ".", data: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
+    def update_tree(self, root_path: str = ".", data: dict[str, dict[str, Any]] | None = None) -> None:
         """Updates the tree with file structure and optional metadata."""
         self.clear()
         self.data = data or {}
@@ -84,6 +93,7 @@ class StatusPane(Vertical):
     """
 
     def compose(self) -> ComposeResult:
+        """Composes the status pane widgets."""
         yield Label("Status")
         yield Static("", id="status_body")
 
@@ -92,9 +102,9 @@ class StatusPane(Vertical):
         workspace_root: str,
         phase: str,
         tech_stack: str,
-        scan_results: Dict[str, Any],
-        prioritized_targets: List[str],
-        findings: List[Finding],
+        scan_results: dict[str, Any],
+        prioritized_targets: list[str],
+        findings: list[Finding],
         task_queue_len: int,
         completed_len: int,
         total_messages: int = 0,
@@ -102,13 +112,29 @@ class StatusPane(Vertical):
         output_tokens: int = 0,
         llm_errors: int = 0,
     ) -> None:
+        """Refreshes the status display with current engine stats.
+
+        Args:
+            workspace_root: Path to the project root.
+            phase: Current engine phase.
+            tech_stack: Detected technology stack.
+            scan_results: Mapping of files to metadata.
+            prioritized_targets: List of files selected for hunting.
+            findings: List of all findings found so far.
+            task_queue_len: Number of pending tasks.
+            completed_len: Number of completed tasks.
+            total_messages: Count of LLM messages.
+            input_tokens: Cumulative input tokens.
+            output_tokens: Cumulative output tokens.
+            llm_errors: Count of LLM-related errors.
+        """
         high_value = sum(
             1
             for d in scan_results.values()
             if isinstance(d, dict) and d.get("is_high_value")
         )
 
-        severity_counts: Dict[str, int] = {}
+        severity_counts: dict[str, int] = {}
         for f in findings:
             sev = getattr(f, "severity", "Unknown") or "Unknown"
             severity_counts[sev] = severity_counts.get(sev, 0) + 1
@@ -150,12 +176,18 @@ class REPLPane(Vertical):
         app: TrashDigApp
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initializes the REPL pane.
+
+        Args:
+            **kwargs: Keyword arguments for Vertical.
+        """
         super().__init__(**kwargs)
-        self.history: List[str] = []
+        self.history: list[str] = []
         self.history_index: int = -1
         self.commands = ["help", "scan", "hunt", "star", "verify", "status", "exit"]
 
     def compose(self) -> ComposeResult:
+        """Composes the REPL pane widgets."""
         yield Label("Interactive Console")
         yield RichLog(id="repl_log", highlight=True, markup=True, wrap=True)
         yield AutoComplete(
@@ -168,6 +200,7 @@ class REPLPane(Vertical):
         )
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handles command submission from the input field."""
         command = event.value.strip()
         if not command:
             return
@@ -191,19 +224,24 @@ class REPLPane(Vertical):
                 input_widget.value = self.history[self.history_index]
                 input_widget.cursor_position = len(input_widget.value)
                 event.prevent_default()
-        elif event.key == "down":
-            if self.history:
-                if self.history_index != -1:
-                    if self.history_index < len(self.history) - 1:
-                        self.history_index += 1
-                        input_widget = self.query_one("#repl_input", Input)
-                        input_widget.value = self.history[self.history_index]
-                    else:
-                        self.history_index = -1
-                        self.query_one("#repl_input", Input).value = ""
-                event.prevent_default()
+        elif event.key == "down" and self.history:
+            if self.history_index != -1:
+                if self.history_index < len(self.history) - 1:
+                    self.history_index += 1
+                    input_widget = self.query_one("#repl_input", Input)
+                    input_widget.value = self.history[self.history_index]
+                else:
+                    self.history_index = -1
+                    self.query_one("#repl_input", Input).value = ""
+            event.prevent_default()
 
     async def process_command(self, command: str, log: RichLog) -> None:
+        """Parses and executes a command from the REPL.
+
+        Args:
+            command: The raw command string.
+            log: The log widget to write output to.
+        """
         cmd_parts = command.split()
         base_cmd = cmd_parts[0].lower() if cmd_parts else ""
         app = cast("TrashDigApp", self.app)
@@ -241,7 +279,7 @@ class REPLPane(Vertical):
             if len(cmd_parts) < 2:
                 log.write("[red]Usage: star <path>[/red]")
             else:
-                path = os.path.normpath(cmd_parts[1])
+                path = os.path.normpath(cmd_parts[1])  # noqa: ASYNC240
                 if path not in app.prioritized_targets:
                     app.prioritized_targets.append(path)
                     app._file_log.info("Starred: %s", path)
@@ -286,7 +324,13 @@ class TrashDigApp(App):
     }
     """
 
-    def __init__(self, config: Optional[Config] = None, workspace_root: Optional[str] = None):
+    def __init__(self, config: Config | None = None, workspace_root: str | None = None):
+        """Initializes the TUI application.
+
+        Args:
+            config: TrashDig configuration.
+            workspace_root: Path to the project to scan.
+        """
         super().__init__()
         self.config = config or Config()
         self.workspace_root = workspace_root or self.config.workspace_root
@@ -301,7 +345,7 @@ class TrashDigApp(App):
         self.coordinator = Coordinator(self.config, project_path=workspace_root, artifact_service=art_service)
         self.coordinator.on_task_event = lambda msg: self.call_from_thread(self._on_coordinator_log, msg)
         self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)
-        self.prioritized_targets: List[str] = []
+        self.prioritized_targets: list[str] = []
 
     def log_message(self, level: str, message: str) -> None:
         """Write to both the TUI console and the log file."""
@@ -311,7 +355,7 @@ class TrashDigApp(App):
             self.query_one("#repl_log", RichLog).write(message)
             self.refresh_status()
         except Exception:
-            pass
+            self._file_log.debug("REPL log write failed (likely TUI not fully mounted).")
 
     def _on_coordinator_log(self, message: str) -> None:
         self.log_message("info", message)
@@ -326,11 +370,12 @@ class TrashDigApp(App):
                 log = self.query_one("#repl_log", RichLog)
                 log.write(f"[bold red]Error:[/bold red] {err}")
             except Exception:
-                pass
+                self._file_log.debug("Worker error logging to REPL failed.")
             self._phase = "Idle"
             self.refresh_status()
 
     def refresh_status(self) -> None:
+        """Triggers a UI refresh of the status pane."""
         try:
             status_pane = self.query_one(StatusPane)
             status_pane.refresh_status(
@@ -352,6 +397,7 @@ class TrashDigApp(App):
                 self._file_log.error("refresh_status error: %s", e)
 
     def compose(self) -> ComposeResult:
+        """Composes the application layout."""
         yield Header()
         with Horizontal():
             with Vertical(id="sidebar"):
@@ -367,10 +413,12 @@ class TrashDigApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Fires when the app is mounted."""
         self.query_one(FileTree).update_tree(self.workspace_root)
         self.refresh_status()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handles file selection in the tree."""
         path = event.node.data
         if path and path in self.coordinator.scan_results:
             summary_data = self.coordinator.scan_results[path]
@@ -380,6 +428,11 @@ class TrashDigApp(App):
             self.query_one("#summary", Static).update(summary_text)
 
     async def run_recon_scan(self, path: str = ".") -> None:
+        """Runs the reconnaissance phase asynchronously.
+
+        Args:
+            path: Project path to scan.
+        """
         self._phase = "Scanning"
         self._file_log.info("Scan started: %s", path)
         self.refresh_status()
@@ -399,7 +452,12 @@ class TrashDigApp(App):
             self._phase = "Idle"
             self.refresh_status()
 
-    async def run_hunter_analysis(self, targets: List[str]) -> None:
+    async def run_hunter_analysis(self, targets: list[str]) -> None:
+        """Runs the hunting phase for prioritized targets asynchronously.
+
+        Args:
+            targets: List of files to hunt in.
+        """
         self._phase = "Hunting"
         self._file_log.info("Hunt started: %s", targets)
         self.refresh_status()
@@ -417,6 +475,11 @@ class TrashDigApp(App):
             self.refresh_status()
 
     async def run_verification(self, finding: Finding) -> None:
+        """Runs the verification pipeline for a finding asynchronously.
+
+        Args:
+            finding: The Finding to verify.
+        """
         self._phase = "Verifying"
         self._file_log.info("Verification started: %s", finding.title)
         self.refresh_status()
@@ -438,9 +501,11 @@ class TrashDigApp(App):
             self.refresh_status()
 
     def action_scan(self) -> None:
+        """Starts a full scan via a keybinding."""
         self.run_worker(self.run_recon_scan(self.workspace_root))
 
     def action_prioritize(self) -> None:
+        """Automatically stars all high-value files."""
         high_value = [
             p
             for p, d in self.coordinator.scan_results.items()
@@ -459,11 +524,13 @@ class TrashDigApp(App):
         self.refresh_status()
 
     async def action_quit(self) -> None:
+        """Saves session state and exits the application."""
         if hasattr(self, "coordinator") and self.coordinator is not None:
             self.coordinator.db.close_scan_session(self.coordinator.session_id)
         self.exit()
 
     def action_clear_log(self) -> None:
+        """Clears the REPL console log."""
         self.query_one("#repl_log", RichLog).clear()
 
 

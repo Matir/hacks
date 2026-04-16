@@ -1,6 +1,5 @@
 import logging
 import subprocess
-from typing import List, Optional
 
 from .base import Sandbox
 
@@ -11,9 +10,9 @@ class NullSandbox(Sandbox):
 
     def run(
         self,
-        command: List[str],
-        timeout: Optional[int] = None,
-        cwd: Optional[str] = None,
+        command: list[str],
+        timeout: int | None = None,
+        cwd: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Runs the command on the host without any isolation.
 
@@ -29,7 +28,7 @@ class NullSandbox(Sandbox):
             f"!!! RUNNING COMMAND UNSANDBOXED !!! "
             f"Command: {' '.join(command)}"
         )
-        return subprocess.run(
+        return subprocess.run(  # noqa: S603
             command,
             capture_output=True,
             text=True,

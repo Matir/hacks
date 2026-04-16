@@ -1,10 +1,11 @@
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class TaskType(Enum):
+    """Enumeration of task types for agents."""
     SCAN = auto()           # Archaeologist mapping
     HUNT = auto()           # Hunter deep-dive
     VERIFY = auto()         # Validator PoC
@@ -12,12 +13,14 @@ class TaskType(Enum):
     TAINT_TRACE = auto()    # Follow variable
 
 class TaskStatus(Enum):
+    """Enumeration of possible task states."""
     PENDING = auto()
     RUNNING = auto()
     COMPLETED = auto()
     FAILED = auto()
 
 class EngineState(Enum):
+    """Enumeration of global engine states."""
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     WAITING_FOR_TOOLS = "WAITING_FOR_TOOLS"
@@ -39,10 +42,10 @@ class Task:
     """
     type: TaskType
     target: str
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     status: TaskStatus = TaskStatus.PENDING
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     result: Any = None
 
 @dataclass

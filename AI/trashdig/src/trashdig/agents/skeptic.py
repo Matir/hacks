@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -15,7 +15,7 @@ class SkepticAgent(LlmAgent):
 
 
 def create_skeptic_agent(
-    config: Optional[AgentConfig] = None, permission_manager: Optional[PermissionManager] = None
+    config: AgentConfig | None = None, permission_manager: PermissionManager | None = None
 ) -> SkepticAgent:
     """Creates a Skeptic agent."""
     if config is None:
@@ -24,7 +24,7 @@ def create_skeptic_agent(
     instruction = load_prompt("skeptic.md")
 
     extras = google_provider_extras(config.provider)
-    tools: List[Any] = [
+    tools: list[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(read_file_content),
         FunctionTool(web_fetch),

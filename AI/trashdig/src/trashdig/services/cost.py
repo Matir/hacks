@@ -1,4 +1,3 @@
-from typing import Dict
 
 
 class CostTracker:
@@ -13,7 +12,7 @@ class CostTracker:
         "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
     }
 
-    def __init__(self, rates: Dict[str, Dict[str, float]] | None = None):
+    def __init__(self, rates: dict[str, dict[str, float]] | None = None):
         """Initializes the CostTracker.
 
         Args:

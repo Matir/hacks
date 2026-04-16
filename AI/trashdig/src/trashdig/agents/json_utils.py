@@ -1,75 +1,68 @@
 import json
+import logging
 import re
-from typing import Any, Dict, List
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
-def parse_json_response(text: str) -> Dict[str, Any]:
+def parse_json_response(text: str) -> dict[str, Any]:
     """Cleans and parses a JSON response from an LLM.
 
     Handles common issues like markdown blocks and leading/trailing whitespace.
 
     Args:
-        text: The raw response text from the LLM.
+        text: The raw LLM response text.
 
     Returns:
-        A dictionary containing the parsed JSON data.
-        Returns an empty dict if parsing fails.
+        A dictionary parsed from the JSON, or an empty dict on failure.
     """
     if not text:
         return {}
-        
-    cleaned = text.strip()
-    
-    # Remove markdown JSON code blocks if present
-    # Matches ```json { ... } ``` or just ``` { ... } ```
-    pattern = r"```(?:json)?\s*(.*?)\s*```"
-    match = re.search(pattern, cleaned, re.DOTALL)
-    if match:
-        cleaned = match.group(1).strip()
-    
+
+    # 1. Try direct parsing
     try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        # Try to find anything that looks like a JSON object or array
-        # This is a bit more aggressive fallback
+        return json.loads(text.strip())
+    except Exception:  # noqa: S110
+        pass
+
+    # 2. Try stripping markdown block markers
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        # Strip ```json ... ``` or just ``` ... ```
+        cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
         try:
-            # Look for the first '{' and last '}'
-            start = cleaned.find('{')
-            end = cleaned.rfind('}')
-            if start != -1 and end != -1 and end > start:
-                return json.loads(cleaned[start:end+1])
-            
-            # Look for the first '[' and last ']'
-            start = cleaned.find('[')
-            end = cleaned.rfind(']')
-            if start != -1 and end != -1 and end > start:
-                # If it's a list, we wrap it in a dict with a 'data' key?
-                # Actually, many agents expect a dict, so let's see.
-                # If the agent expects a list, this might still fail if it expects a dict.
-                data = json.loads(cleaned[start:end+1])
-                if isinstance(data, list):
-                    return {"items": data}
-                return data
-        except Exception:
+            return json.loads(cleaned.strip())
+        except Exception:  # noqa: S110
             pass
+
+    # 3. Try to find anything between { and }
+    try:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1:
+            data = json.loads(cleaned[start:end+1])
+            if isinstance(data, list):
+                return {"items": data}
+            return data
+    except Exception:
+        logger.debug("Failed to parse JSON using regex markers: %s", text)
             
     return {}
 
-def extract_json_list(text: str, key: str) -> List[Any]:
+def extract_json_list(text: str, key: str) -> list[Any]:
     """Parses JSON from text and returns a list associated with a key.
 
     Args:
-        text: Raw LLM response.
-        key: The key in the JSON object that should contain a list.
+        text: The raw LLM response.
+        key: The key in the JSON object (e.g., 'findings').
 
     Returns:
-        A list of items, or an empty list if not found or not a list.
+        The list of items, or an empty list if not found/invalid.
     """
     data = parse_json_response(text)
     items = data.get(key, [])
     if isinstance(items, list):
         return items
-    elif isinstance(items, dict):
-        # Some LLMs might return a single object instead of a list of one
-        return [items]
-    return []
+    return [items] if items else []

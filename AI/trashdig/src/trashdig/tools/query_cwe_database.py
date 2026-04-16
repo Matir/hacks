@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from .base import artifact_tool
 
@@ -18,9 +18,9 @@ def query_cwe_database(query: str) -> str:
     try:
         # data path is relative to the package
         data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cwe_db.json")
-        with open(data_path, "r", encoding="utf-8") as f:
-            cwe_data: List[Dict[str, Any]] = json.load(f)
-        results: List[str] = []
+        with open(data_path, encoding="utf-8") as f:
+            cwe_data: list[dict[str, Any]] = json.load(f)
+        results: list[str] = []
         q = query.lower()
         for item in cwe_data:
             if (q in item["cwe_id"].lower() or q in item["title"].lower() or q in item["description"].lower()):

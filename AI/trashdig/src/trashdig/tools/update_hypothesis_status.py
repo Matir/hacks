@@ -1,11 +1,10 @@
 import sqlite3
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
 
 from .base import get_config
 
 
-def update_hypothesis_status(task_id: str, status: str, db_path: Optional[str] = None) -> str:
+def update_hypothesis_status(task_id: str, status: str, db_path: str | None = None) -> str:
     """Updates the status of a hypothesis (e.g., to 'completed' or 'failed').
 
     Args:
@@ -22,7 +21,7 @@ def update_hypothesis_status(task_id: str, status: str, db_path: Optional[str] =
         conn = sqlite3.connect(db_path)
         conn.execute(
             "UPDATE hypotheses SET status = ?, updated_at = ? WHERE task_id = ?",
-            (status, datetime.now().isoformat(), task_id)
+            (status, datetime.now(UTC).isoformat(), task_id)
         )
         conn.commit()
         conn.close()

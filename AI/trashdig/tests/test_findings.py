@@ -46,7 +46,7 @@ def test_finding_save():
         path = finding.save(tmpdir)
         assert os.path.exists(path)
         assert os.path.basename(path).startswith("Test_Save_")
-        with open(path, "r") as f:
+        with open(path) as f:
             content = f.read()
             assert "# Test Save" in content
             

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from .base import _get_ts_language, _make_parser, artifact_tool, get_config
 
@@ -27,7 +27,7 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
         parser = _make_parser(language)
         tree = parser.parse(content)
 
-        usages: List[str] = []
+        usages: list[str] = []
         def walk(node: Any) -> None:
             """Recursively traverses the AST to find variable usages.
 

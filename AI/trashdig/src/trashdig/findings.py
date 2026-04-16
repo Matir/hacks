@@ -1,32 +1,16 @@
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional
+from datetime import UTC, datetime
 
 from trashdig.config import get_config
 
 
 @dataclass
 class Finding:
-    """Represents a vulnerability finding discovered by the Hunter agent.
-
-    Attributes:
-        title: A short, descriptive title for the finding.
-        description: A detailed explanation of the vulnerability.
-        severity: The risk level (Critical, High, Medium, Low, Info).
-        vulnerable_code: A snippet of the problematic code.
-        file_path: Path to the file containing the vulnerability.
-        impact: Description of the potential consequences if exploited.
-        exploitation_path: Step-by-step description of how to exploit.
-        remediation: Instructions on how to fix the vulnerability.
-        cwe_id: Optional CWE identifier.
-        verification_status: Current status (Unverified, Verified, False Positive).
-        poc: Optional Proof of Concept code.
-        timestamp: ISO formatted string of when the finding was created.
-    """
+    """Represents a discovered security vulnerability."""
     title: str
     description: str
-    severity: str  # e.g., Critical, High, Medium, Low, Info
+    severity: str
     vulnerable_code: str
     file_path: str
     impact: str
@@ -35,68 +19,46 @@ class Finding:
     cwe_id: str | None = None
     verification_status: str = "Unverified" # Unverified, Verified, False Positive
     poc: str | None = None
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_markdown(self) -> str:
         """Converts the finding to a formatted Markdown string.
 
         Returns:
-            A string containing the Markdown representation of the finding.
+            Markdown representation of the finding.
         """
         md = f"# {self.title}\n\n"
         md += f"**Severity:** {self.severity}\n"
-        md += f"**Status:** {self.verification_status}\n"
-        md += f"**File Path:** `{self.file_path}`\n"
-        if self.cwe_id:
-            md += f"**CWE:** {self.cwe_id}\n"
-        md += f"**Timestamp:** {self.timestamp}\n\n"
-        
-        md += "## Description\n"
-        md += f"{self.description}\n\n"
-        
+        md += f"**CWE:** {self.cwe_id or 'N/A'}\n"
+        md += f"**Status:** {self.verification_status}\n\n"
+        md += f"## Description\n{self.description}\n\n"
+        md += f"## Vulnerable Code\n```\n{self.vulnerable_code}\n```\n\n"
+        md += f"## Impact\n{self.impact}\n\n"
+        md += f"## Exploitation Path\n{self.exploitation_path}\n\n"
+        md += f"## Remediation\n{self.remediation}\n"
         if self.poc:
-            md += "## Proof of Concept\n"
-            md += f"```python\n{self.poc}\n```\n\n"
-
-        md += "## Vulnerable Code\n"
-        # Determine language from file path for syntax highlighting
-        lang = os.path.splitext(self.file_path)[1][1:] or "text"
-        md += f"```{lang}\n{self.vulnerable_code}\n```\n\n"
-        
-        md += "## Impact\n"
-        md += f"{self.impact}\n\n"
-        
-        md += "## Exploitation Path\n"
-        md += f"{self.exploitation_path}\n\n"
-        
-        md += "## Remediation\n"
-        md += f"{self.remediation}\n"
-        
+            md += f"\n## Proof of Concept\n```python\n{self.poc}\n```\n"
         return md
 
-    def save(self, output_dir: Optional[str] = None) -> str:
-        """Saves the finding as a Markdown file in the specified directory.
+    def save(self, output_dir: str | None = None) -> None:
+        """Saves the finding to a Markdown file.
 
         Args:
-            output_dir: The directory where the finding should be saved.
-                       Defaults to Config.data_dir/findings.
-
-        Returns:
-            The absolute path to the saved file.
+            output_dir: Directory to save to. Defaults to config settings.
         """
         if output_dir is None:
-            output_dir = get_config().resolve_data_path("findings")
+            config = get_config()
+            output_dir = os.path.join(config.data_dir, "findings")
             
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
             
         # Create a safe filename from the title
         safe_title = "".join(c for c in self.title if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
-        filename = f"{safe_title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        filename = f"{safe_title}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.md"
         file_path = os.path.join(output_dir, filename)
         
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(self.to_markdown())
             
-        return file_path
-
+        return

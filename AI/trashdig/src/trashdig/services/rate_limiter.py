@@ -1,6 +1,5 @@
 import asyncio
 import time
-from typing import Optional
 
 
 class RateLimiter:
@@ -11,7 +10,7 @@ class RateLimiter:
     TPM is handled by tracking token usage and waiting if the limit is exceeded.
     """
 
-    def __init__(self, rpm_limit: Optional[int] = None, tpm_limit: Optional[int] = None):
+    def __init__(self, rpm_limit: int | None = None, tpm_limit: int | None = None):
         """Initializes the RateLimiter.
 
         Args:
@@ -65,10 +64,9 @@ class RateLimiter:
                         rpm_wait = (1.0 - self._rpm_tokens) / (self.rpm_limit / 60.0)
 
                 tpm_wait = 0.0
-                if self.tpm_limit:
-                    if self._tpm_tokens < 0:
-                        # Time needed to reach 0 tokens
-                        tpm_wait = -self._tpm_tokens / (self.tpm_limit / 60.0)
+                if self.tpm_limit and self._tpm_tokens < 0:
+                    # Time needed to reach 0 tokens
+                    tpm_wait = -self._tpm_tokens / (self.tpm_limit / 60.0)
                 
                 wait_time = max(rpm_wait, tpm_wait)
                 if wait_time <= 0:
@@ -94,13 +92,13 @@ class RateLimiter:
             self._tpm_tokens -= float(tokens)
 
 # Global instance
-_global_rate_limiter: Optional[RateLimiter] = None
+_global_rate_limiter: RateLimiter | None = None
 
-def get_rate_limiter() -> Optional[RateLimiter]:
+def get_rate_limiter() -> RateLimiter | None:
     """Returns the global RateLimiter instance."""
     return _global_rate_limiter
 
-def init_rate_limiter(rpm_limit: Optional[int] = None, tpm_limit: Optional[int] = None) -> None:
+def init_rate_limiter(rpm_limit: int | None = None, tpm_limit: int | None = None) -> None:
     """Initializes the global RateLimiter instance.
 
     Args:
@@ -108,7 +106,4 @@ def init_rate_limiter(rpm_limit: Optional[int] = None, tpm_limit: Optional[int] 
         tpm_limit: Tokens per minute limit.
     """
     global _global_rate_limiter
-    if rpm_limit or tpm_limit:
-        _global_rate_limiter = RateLimiter(rpm_limit, tpm_limit)
-    else:
-        _global_rate_limiter = None
+    _global_rate_limiter = RateLimiter(rpm_limit, tpm_limit) if rpm_limit or tpm_limit else None

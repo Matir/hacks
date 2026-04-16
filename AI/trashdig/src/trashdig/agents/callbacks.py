@@ -8,7 +8,7 @@ that were previously threaded through every agent wrapper method.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
@@ -37,9 +37,9 @@ class TrashDigCallback:
     session share the same accounting and logging logic.
     """
 
-    _instance: Optional[TrashDigCallback] = None
+    _instance: TrashDigCallback | None = None
 
-    def __init__(self, coordinator: "Coordinator") -> None:
+    def __init__(self, coordinator: Coordinator) -> None:
         """Initialise the callback manager.
         
         Note: Use get_instance() instead of direct instantiation in most cases.
@@ -48,7 +48,7 @@ class TrashDigCallback:
         self._last_prompt: str = ""
 
     @classmethod
-    def get_instance(cls, coordinator: Optional["Coordinator"] = None) -> TrashDigCallback:
+    def get_instance(cls, coordinator: Coordinator | None = None) -> TrashDigCallback:
         """Return the singleton instance, creating it if needed.
 
         Args:
@@ -112,7 +112,7 @@ class TrashDigCallback:
 
     def on_before_tool(
         self, tool: BaseTool, args: dict[str, Any], ctx: ToolContext, **kwargs: Any
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Log tool invocations and update state to WAITING_FOR_TOOLS."""
         self._c._state = EngineState.WAITING_FOR_TOOLS
         if self._c.on_stats_event:
@@ -126,7 +126,7 @@ class TrashDigCallback:
     # Model hooks
     # ------------------------------------------------------------------
 
-    def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> Optional[LlmResponse]:
+    def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
         """Capture the prompt before it is sent to the model."""
         prompt = ""
         if req.contents:
@@ -139,8 +139,8 @@ class TrashDigCallback:
         return None
 
     def on_after_model(
-        self, ctx: Optional[CallbackContext] = None, resp: Optional[LlmResponse] = None, **kwargs: Any
-    ) -> Optional[LlmResponse]:
+        self, ctx: CallbackContext | None = None, resp: LlmResponse | None = None, **kwargs: Any
+    ) -> LlmResponse | None:
         """Record token usage, cost, log conversation, and trigger compaction."""
         # Restore RUNNING state after tool call finishes and model resumes
         if self._c._state == EngineState.WAITING_FOR_TOOLS:
@@ -196,7 +196,7 @@ class TrashDigCallback:
 
     def on_model_error(
         self, ctx: CallbackContext, req: LlmRequest, err: Exception
-    ) -> Optional[LlmResponse]:
+    ) -> LlmResponse | None:
         """Increment the LLM error counter on model API failures."""
         agent_name = getattr(ctx, "agent_name", "unknown")
         logger.warning("Model error in agent %s: %s", agent_name, err)

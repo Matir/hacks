@@ -58,7 +58,7 @@ async def test_artifact_tool_truncation(temp_artifact_dir):
     
     # Verify file exists and has correct content
     assert os.path.exists(artifact_path)
-    with open(artifact_path, "r", encoding="utf-8") as f:
+    with open(artifact_path, encoding="utf-8") as f:
         assert f.read() == large_content
 
 @pytest.mark.anyio
@@ -136,5 +136,5 @@ async def test_artifact_tool_async(temp_artifact_dir):
     match = re.search(r"Full output saved as legacy artifact: (.*\.txt)", result)
     artifact_path = match.group(1)
     
-    with open(artifact_path, "r", encoding="utf-8") as f:
+    with open(artifact_path, encoding="utf-8") as f:
         assert f.read() == large_content

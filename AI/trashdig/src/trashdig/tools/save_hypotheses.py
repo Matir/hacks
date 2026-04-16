@@ -1,11 +1,10 @@
 import json
-from typing import Optional
 
 from ..agents.types import Hypothesis, TaskType
 from ..services.database import get_database
 
 
-def save_hypotheses(hypotheses_json: str, project_path: str, db_path: Optional[str] = None) -> str:
+def save_hypotheses(hypotheses_json: str, project_path: str, db_path: str | None = None) -> str:
     """Saves a list of follow-up hypotheses to the database.
 
     Args:

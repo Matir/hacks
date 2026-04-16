@@ -1,11 +1,10 @@
 import json
 import sqlite3
-from typing import Optional
 
 from .base import get_config
 
 
-def get_next_hypothesis(project_path: str, db_path: Optional[str] = None) -> str:
+def get_next_hypothesis(project_path: str, db_path: str | None = None) -> str:
     """Retrieves the next pending hypothesis from the database.
 
     Args:

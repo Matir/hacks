@@ -158,10 +158,9 @@ def test_query_cwe_database(mock_open, mock_json_load):
     assert "Vulnerable Example (python):" in result
 
 def test_query_cwe_database_no_results():
-    with patch("builtins.open", MagicMock()):
-        with patch("json.load", return_value=[]):
-            result = query_cwe_database("nonexistent")
-            assert "No results found" in result
+    with patch("builtins.open", MagicMock()), patch("json.load", return_value=[]):
+        result = query_cwe_database("nonexistent")
+        assert "No results found" in result
 
 @patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")

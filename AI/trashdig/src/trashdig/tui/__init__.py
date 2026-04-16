@@ -1,0 +1,1 @@
+"""TrashDig TUI package."""

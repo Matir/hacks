@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
@@ -15,7 +15,7 @@ class ValidatorAgent(LlmAgent):
 
 
 def create_validator_agent(
-    config: Optional[AgentConfig] = None, permission_manager: Optional[PermissionManager] = None
+    config: AgentConfig | None = None, permission_manager: PermissionManager | None = None
 ) -> ValidatorAgent:
     """Creates a Validator agent."""
     if config is None:
@@ -24,7 +24,7 @@ def create_validator_agent(
     instruction = load_prompt("validator.md")
 
     extras = google_provider_extras(config.provider)
-    tools: List[Any] = [
+    tools: list[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(container_bash_tool),
         FunctionTool(bash_tool),
