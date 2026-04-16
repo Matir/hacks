@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from trashdig.services.database import ProjectDatabase, _args_hash
+from trashdig.services.database import get_database, _args_hash
 from trashdig.findings import Finding
 from trashdig.agents.types import Hypothesis, TaskType
 
@@ -14,8 +14,8 @@ from trashdig.agents.types import Hypothesis, TaskType
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_db(tmp_path: str) -> ProjectDatabase:
-    return ProjectDatabase(db_path=os.path.join(tmp_path, ".trashdig", "trashdig.db"))
+def _make_db(tmp_path: str) -> Any:
+    return get_database(db_path=os.path.join(tmp_path, ".trashdig", "trashdig.db"))
 
 
 def _make_finding(**kwargs) -> Finding:
@@ -69,7 +69,7 @@ def test_args_hash_differs_for_different_args():
 def test_db_creates_directory_and_file():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = os.path.join(tmp, "nested", "dir", "trashdig.db")
-        ProjectDatabase(db_path=db_path)
+        get_database(db_path=db_path)
         assert os.path.exists(db_path)
 
 
@@ -185,7 +185,7 @@ def test_update_hypothesis_status():
         hypo = _make_hypothesis()
         db.save_hypothesis("/proj", hypo)
 
-        db.update_hypothesis_status(hypo.id, "completed", result={"finding_count": 2})
+        db.update_hypothesis_status(hypo.task_id, "completed", result={"finding_count": 2})
 
         rows = db.get_hypotheses("/proj")
         assert rows[0]["status"] == "completed"
@@ -207,7 +207,7 @@ def test_failed_hypothesis_persisted():
         db = _make_db(tmp)
         hypo = _make_hypothesis()
         db.save_hypothesis("/proj", hypo)
-        db.update_hypothesis_status(hypo.id, "failed")
+        db.update_hypothesis_status(hypo.task_id, "failed")
 
         rows = db.get_hypotheses("/proj")
         assert rows[0]["status"] == "failed"

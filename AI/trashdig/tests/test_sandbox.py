@@ -60,15 +60,11 @@ def test_minijail_sandbox_run(mock_exists, mock_run, mock_which):
     assert "-la" in args
 
 @patch("sys.platform", "darwin")
-def test_get_sandbox_macos_fallback():
-    # On MacOS, it should return NullSandbox if not required
-    sandbox = get_sandbox(workspace_dir="/tmp/test", require_sandbox=False)
+def test_get_sandbox_macos_graceful_fallback(caplog):
+    # On MacOS, it should return NullSandbox even if required, with a warning
+    sandbox = get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
     assert isinstance(sandbox, NullSandbox)
-
-@patch("sys.platform", "darwin")
-def test_get_sandbox_macos_require_fails():
-    with pytest.raises(RuntimeError, match="No sandbox implementation available"):
-        get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
+    assert "No native sandbox implementation available" in caplog.text
 
 @patch("sys.platform", "linux")
 @patch("shutil.which")

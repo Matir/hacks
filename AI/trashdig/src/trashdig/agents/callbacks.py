@@ -91,13 +91,13 @@ class TrashDigCallback:
     # Agent lifecycle hooks
     # ------------------------------------------------------------------
 
-    def on_before_agent(self, ctx: CallbackContext, req: Any) -> None:
+    def on_before_agent(self, **kwargs) -> None:
         """Update state to RUNNING when an agent starts."""
         self._c._state = EngineState.RUNNING
         if self._c.on_stats_event:
             self._c.on_stats_event()
 
-    def on_after_agent(self, ctx: CallbackContext, resp: Any) -> None:
+    def on_after_agent(self, **kwargs) -> None:
         """Update state to IDLE when an agent finishes."""
         self._c._state = EngineState.IDLE
         if self._c.on_stats_event:
@@ -108,7 +108,7 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
 
     def on_before_tool(
-        self, tool: BaseTool, args: dict[str, Any], ctx: ToolContext
+        self, tool: BaseTool, args: dict[str, Any], ctx: ToolContext, **kwargs
     ) -> Optional[dict]:
         """Log tool invocations and update state to WAITING_FOR_TOOLS."""
         self._c._state = EngineState.WAITING_FOR_TOOLS
@@ -124,18 +124,25 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
 
     def on_after_model(
-        self, ctx: CallbackContext, resp: LlmResponse
+        self, ctx: Optional[CallbackContext] = None, resp: Optional[LlmResponse] = None, **kwargs
     ) -> Optional[LlmResponse]:
         """Record token usage, cost, log conversation, and trigger compaction."""
         # Restore RUNNING state after tool call finishes and model resumes
         if self._c._state == EngineState.WAITING_FOR_TOOLS:
             self._c._state = EngineState.RUNNING
 
+        # Handle kwargs if passed by name (ADK sometimes does this)
+        if ctx is None: ctx = kwargs.get("callback_context") or kwargs.get("ctx")
+        if resp is None: resp = kwargs.get("response") or kwargs.get("resp")
+
+        if not ctx or not resp:
+            return None
+
         usage = resp.usage_metadata
         in_t = (getattr(usage, "prompt_token_count", None) or 0) if usage else 0
         out_t = (getattr(usage, "candidates_token_count", None) or 0) if usage else 0
 
-        agent_name = ctx.agent_name
+        agent_name = getattr(ctx, "agent_name", "unknown")
         agent = self._c._agent_by_name(agent_name)
         model_name = getattr(agent, "model", None) or "unknown"
 
@@ -171,9 +178,13 @@ class TrashDigCallback:
         return None  # Never replace the model response
 
     def on_model_error(
-        self, ctx: CallbackContext, req: LlmRequest, err: Exception
+        self, ctx: Optional[CallbackContext] = None, err: Optional[Exception] = None, **kwargs
     ) -> Optional[LlmResponse]:
         """Increment the LLM error counter on model API failures."""
-        logger.warning("Model error in agent %s: %s", ctx.agent_name, err)
+        if ctx is None: ctx = kwargs.get("callback_context") or kwargs.get("ctx")
+        if err is None: err = kwargs.get("error") or kwargs.get("err")
+        
+        agent_name = getattr(ctx, "agent_name", "unknown")
+        logger.warning("Model error in agent %s: %s", agent_name, err)
         self._c._on_llm_error()
         return None  # Let the error propagate

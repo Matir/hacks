@@ -86,6 +86,24 @@ def log_auth_info(config: "Config", logger) -> None:
             logger.info(line)
 
 
+def load_prompt(file_name: str) -> str:
+    """Loads a prompt from a markdown file in the prompts directory.
+
+    Args:
+        file_name: Name of the prompt file (e.g., 'stack_scout.md').
+
+    Returns:
+        The content of the prompt file.
+    """
+    prompt_path = os.path.join(os.getcwd(), "prompts", file_name)
+    if not os.path.exists(prompt_path):
+        # Fallback for full paths if filename isn't found in prompts/
+        prompt_path = file_name
+
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def get_project_structure(root_path: str = ".") -> List[str]:
     """Walks the project directory and returns a list of files."""
     files: List[str] = []
@@ -178,6 +196,7 @@ async def run_agent(
         app_name=agent.name,
         session_service=session_service,
         artifact_service=artifact_service,
+        auto_create_session=True,
     )
 
     content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])

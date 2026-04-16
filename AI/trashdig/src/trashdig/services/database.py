@@ -98,6 +98,22 @@ CREATE TABLE IF NOT EXISTS scan_sessions (
 """
 
 
+_db_instances: Dict[str, "ProjectDatabase"] = {}
+
+
+def get_database(db_path: str = ".trashdig/trashdig.db") -> "ProjectDatabase":
+    """Singleton-like factory to return a ProjectDatabase for the given path.
+
+    This ensures we don't frequently re-initialise the database connection
+    and settings for the same file, improving efficiency and reducing the
+    risk of SQLite locking issues in concurrent environments.
+    """
+    abs_path = os.path.abspath(db_path)
+    if abs_path not in _db_instances:
+        _db_instances[abs_path] = ProjectDatabase(db_path=db_path)
+    return _db_instances[abs_path]
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -111,14 +127,15 @@ def _args_hash(args: Dict[str, Any]) -> str:
 class ProjectDatabase:
     """Persistent SQLite knowledge store for a TrashDig session.
 
-    Args:
-        db_path: Path to the SQLite database file.  The parent directory is
-            created automatically if it does not exist.
+    NOTE: Use `get_database(db_path)` instead of instantiating this class
+    directly to benefit from instance caching.
     """
 
     def __init__(self, db_path: str = ".trashdig/trashdig.db") -> None:
         self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
+        self._memory_conn: Optional[sqlite3.Connection] = None
+        if db_path != ":memory:":
+            os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
         self._init_db()
 
     # ------------------------------------------------------------------
@@ -131,6 +148,22 @@ class ProjectDatabase:
 
     @contextmanager
     def _connect(self) -> Generator[sqlite3.Connection, None, None]:
+        if self.db_path == ":memory:":
+            if self._memory_conn is None:
+                self._memory_conn = sqlite3.connect(":memory:")
+                self._memory_conn.row_factory = sqlite3.Row
+                self._memory_conn.execute("PRAGMA journal_mode=WAL")
+                self._memory_conn.execute("PRAGMA foreign_keys=ON")
+            conn = self._memory_conn
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            # Do NOT close for :memory: until object destruction
+            return
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
@@ -143,6 +176,10 @@ class ProjectDatabase:
             raise
         finally:
             conn.close()
+
+    def __del__(self):
+        if self._memory_conn:
+            self._memory_conn.close()
 
     # ------------------------------------------------------------------
     # Project profiles
@@ -331,7 +368,7 @@ class ProjectDatabase:
                 """,
                 (
                     project_path,
-                    hypothesis.id,
+                    hypothesis.task_id,
                     hypothesis.target,
                     getattr(hypothesis, "description", ""),
                     getattr(hypothesis, "confidence", 0.0),
@@ -341,7 +378,7 @@ class ProjectDatabase:
             )
             row = conn.execute(
                 "SELECT id FROM hypotheses WHERE task_id = ?",
-                (hypothesis.id,),
+                (hypothesis.task_id,),
             ).fetchone()
         return row["id"] if row else -1
 

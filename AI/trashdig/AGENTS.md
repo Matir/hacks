@@ -39,7 +39,7 @@ TrashDig is designed to be "ADK-Native," leveraging the framework's high-level a
 
 *   **Orchestration**: Uses ADK's `LlmAgent` with `sub_agents` for dynamic delegation. Agent interactions are handled via native `agent.run()` or `runner.run_async()` methods, allowing the ADK engine to manage the tool execution loop.
 *   **State & Memory**: Uses ADK `SessionService` and `MemoryService` to maintain shared context across all agents. This ensures that the Hunter agent understands the project structure discovered by StackScout without redundant re-analysis.
-*   **Observability (Callbacks)**: Employs a unified `TrashDigCallback` (implementing ADK's agent and model hooks) to handle real-time TUI updates, state tracking (RUNNING, WAITING_FOR_TOOLS), cost accounting, and database logging.
+*   **Observability (Plugins)**: Employs a unified `TrashDigPlugin` (implementing ADK's agent and model hooks) to handle real-time TUI updates, state tracking (RUNNING, WAITING_FOR_TOOLS), cost accounting, and database logging.
 *   **Artifacts**: Uses the native **ADK Artifact API** to manage large tool outputs (ASTs, call graphs, scan results), ensuring context efficiency by referencing files instead of inlining massive text blocks.
 *   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
 *   **Services Layer**:

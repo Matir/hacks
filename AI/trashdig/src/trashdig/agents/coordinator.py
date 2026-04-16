@@ -10,6 +10,7 @@ from google.adk.sessions import BaseSessionService
 from google.adk.tools import FunctionTool
 from google.adk.artifacts import BaseArtifactService
 
+from google.adk.runners import Runner
 from trashdig.agents.callbacks import TrashDigCallback
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.hunter import create_hunter_agent
@@ -18,7 +19,7 @@ from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.types import Hypothesis, TaskType, EngineState
 from trashdig.agents.utils import run_agent
 from trashdig.config import Config
-from trashdig.services.database import ProjectDatabase
+from trashdig.services.database import get_database
 from trashdig.services.cost import CostTracker
 from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
@@ -152,7 +153,7 @@ class Coordinator(LlmAgent):
         )
 
         # --- PrivateAttr initialisation ---
-        db = ProjectDatabase(db_path)
+        db = get_database(db_path)
         scan_session_id = db.get_or_create_scan_session(project_path if project_path else ".")
         session_service = SqliteSessionService(db_path=db_path)
         
@@ -190,20 +191,36 @@ class Coordinator(LlmAgent):
         return self._db
 
     @property
-    def scan_session_id(self) -> str:
+    def session_id(self) -> str:
         return self._scan_session_id
+
+    @session_id.setter
+    def session_id(self, val: str):
+        self._scan_session_id = val
 
     @property
     def findings(self) -> List[Finding]:
         return self._findings
 
+    @findings.setter
+    def findings(self, val: List[Finding]):
+        self._findings = val
+
     @property
     def scan_results(self) -> Dict[str, Any]:
         return self._scan_results
 
+    @scan_results.setter
+    def scan_results(self, val: Dict[str, Any]):
+        self._scan_results = val
+
     @property
     def attack_surface(self) -> List[Dict[str, Any]]:
         return self._attack_surface
+
+    @attack_surface.setter
+    def attack_surface(self, val: List[Dict[str, Any]]):
+        self._attack_surface = val
 
     @property
     def tech_stack(self) -> str:
@@ -305,6 +322,32 @@ class Coordinator(LlmAgent):
     def log(self, message: str) -> None:
         if self.on_task_event:
             self.on_task_event(message)
+
+    def _save_project_profile(self, tech_stack: str, profile: Dict[str, Any]) -> str:
+        """Internal helper to save the project profile and update local state."""
+        self._tech_stack = tech_stack
+        self._scan_results = profile.get("mapping", {})
+        self._attack_surface = profile.get("attack_surface", [])
+        self._db.save_project_profile(self._project_path, tech_stack, profile)
+        return f"Project profile for {tech_stack} saved successfully."
+
+    def _save_finding(self, raw: Dict[str, Any]) -> str:
+        """Internal helper to save a single finding."""
+        finding = Finding(
+            title=raw.get("title", "Untitled"),
+            description=raw.get("description", "N/A"),
+            severity=raw.get("severity", "N/A"),
+            vulnerable_code=raw.get("vulnerable_code", "N/A"),
+            file_path=raw.get("file_path", "N/A"),
+            impact=raw.get("impact", "N/A"),
+            exploitation_path=raw.get("exploitation_path", "N/A"),
+            remediation=raw.get("remediation", "N/A"),
+            cwe_id=raw.get("cwe_id"),
+        )
+        finding.save(os.path.join(self._project_path, "findings"))
+        self._findings.append(finding)
+        self._db.save_finding(self._project_path, finding)
+        return f"Finding '{finding.title}' saved successfully."
 
     # ------------------------------------------------------------------
     # Full automated pipeline

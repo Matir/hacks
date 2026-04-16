@@ -142,3 +142,22 @@
     - [ ] See ADK docs: `docs/deploy/cloud-run.md`.
 - [ ] **[LOW]** Evaluate Vertex AI Agent Engine for production-scale managed deployment.
     - [ ] See ADK docs: `docs/deploy/agent-engine.md`.
+
+## 🛠️ Post-Review Refinements (from April 2026 Review)
+
+### Sandbox & Safety
+- [x] **[HIGH]** Fix Sandbox platform compatibility: Allow graceful degradation or `NullSandbox` on macOS/Darwin when `require_sandbox` is True.
+- [x] **[MEDIUM]** Harden `bash_tool`: Default `network=False` and verify User Namespace (`-U`) behavior in `MinijailSandbox`.
+
+### Database & State Consistency
+- [x] **[MEDIUM]** Standardize Task/Hypothesis IDs: Resolve naming inconsistency between `id` and `task_id` across database schema, types, and tools.
+- [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.
+
+### Taint Analysis & Semantic Engine
+- [ ] **[MEDIUM]** Advanced Taint Analysis: Add support for variable aliasing (data flow through assignments).
+- [ ] **[MEDIUM]** Broaden AST Support: Expand `tree-sitter` node coverage (e.g., arrow functions, expressions) and language support.
+- [ ] **[LOW]** Optimize `tree-sitter` initialization: Move library imports out of hot paths and validate binary dependencies at startup.
+
+### Reliability & Performance
+- [ ] **[MEDIUM]** Recon Robustness: Add error handling and retry logic for initial scans on large or complex projects.
+- [ ] **[LOW]** Artifact Race Condition: Ensure `@artifact_tool` correctly handles large outputs and ADK context without premature truncation.

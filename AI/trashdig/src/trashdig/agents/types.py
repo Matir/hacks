@@ -31,7 +31,7 @@ class Task:
         type: The type of task (SCAN, HUNT, etc.).
         target: The target file path or identifier for the task.
         context: A dictionary containing additional metadata or state for the task.
-        id: A unique identifier for the task.
+        task_id: A unique identifier for the task.
         status: The current status of the task execution.
         parent_id: Optional ID of the task that spawned this one.
         result: The result data generated after completion.
@@ -39,7 +39,7 @@ class Task:
     type: TaskType
     target: str
     context: Dict[str, Any] = field(default_factory=dict)
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     status: TaskStatus = TaskStatus.PENDING
     parent_id: Optional[str] = None
     result: Any = None

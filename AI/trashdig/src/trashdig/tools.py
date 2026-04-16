@@ -161,13 +161,13 @@ def artifact_tool(max_chars: int = 5000):
 # Client Tools
 # ---------------------------------------------------------------------------
 
-def _run_sandboxed(command: List[str], timeout: Optional[int] = None, network: bool = True) -> subprocess.CompletedProcess[str]:
+def _run_sandboxed(command: List[str], timeout: Optional[int] = None, network: bool = False) -> subprocess.CompletedProcess[str]:
     """Internal helper to run a command in the configured sandbox.
 
     Args:
         command: The command to execute.
         timeout: Execution timeout in seconds.
-        network: Whether to allow network access.
+        network: Whether to allow network access. Defaults to False for safety.
 
     Returns:
         The subprocess result.
@@ -900,7 +900,8 @@ def bash_tool(command: str, timeout: int = 30) -> str:
     # Note: Bash commands need to be executed through a shell
     cmd = ["bash", "-c", command]
     try:
-        result = _run_sandboxed(cmd, timeout=timeout, network=True)
+        # Defaults to network=False in _run_sandboxed
+        result = _run_sandboxed(cmd, timeout=timeout)
         output: List[str] = []
         if result.stdout:
             output.append(f"STDOUT:\n{result.stdout}")
@@ -1133,8 +1134,8 @@ def save_findings(findings_json: str, project_path: str, db_path: str = ".trashd
             )
             # We need a ProjectDatabase instance or direct SQL
             # For simplicity in a tool, use direct SQL or import ProjectDatabase
-            from .services.database import ProjectDatabase
-            db = ProjectDatabase(db_path)
+            from .services.database import get_database
+            db = get_database(db_path)
             db.save_finding(project_path, finding)
             count += 1
         return f"Saved {count} findings."
@@ -1158,8 +1159,8 @@ def save_hypotheses(hypotheses_json: str, project_path: str, db_path: str = ".tr
         if not isinstance(data, list):
             data = [data]
         
-        from .services.database import ProjectDatabase
-        db = ProjectDatabase(db_path)
+        from .services.database import get_database
+        db = get_database(db_path)
         count = 0
         for h in data:
             hypo = Hypothesis(

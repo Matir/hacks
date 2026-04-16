@@ -5,7 +5,7 @@ def test_task_creation():
     assert task.type == TaskType.SCAN
     assert task.target == "src/main.py"
     assert task.status == TaskStatus.PENDING
-    assert isinstance(task.id, str)
+    assert isinstance(task.task_id, str)
     assert task.context == {}
 
 def test_hypothesis_creation():

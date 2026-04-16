@@ -41,11 +41,19 @@ def get_sandbox(
                 "minijail0 not found. Cannot run in a sandbox on Linux."
             )
     else:
-        # Future: Implement MacOSSandbox here.
-        if require_sandbox:
-            raise RuntimeError(
-                f"No sandbox implementation available for platform: {sys.platform}"
-            )
+        # Graceful degradation on non-Linux platforms.
+        # We log a warning but return a NullSandbox to allow the tool to function,
+        # since native sandboxing (like sandbox-exec or app-sandbox) isn't implemented yet.
+        logger.warning(
+            f"No native sandbox implementation available for platform: {sys.platform}. "
+            "Falling back to NullSandbox (Unsandboxed execution)."
+        )
+        return NullSandbox(
+            workspace_dir=workspace_dir,
+            allowlist=allowlist,
+            env=env,
+            network=network
+        )
 
     # Fallback to NullSandbox if it's not required or no native implementation exists.
     return NullSandbox(
