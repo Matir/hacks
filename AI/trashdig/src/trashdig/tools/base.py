@@ -74,6 +74,13 @@ def _run_sandboxed(
 
     try:
         return sandbox.run(command, timeout=timeout)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=127,
+            stdout="",
+            stderr=f"Error: Command '{command[0]}' not found in PATH."
+        )
     except subprocess.TimeoutExpired as e:
         return subprocess.CompletedProcess(
             args=command,
@@ -90,21 +97,25 @@ def _run_sandboxed(
         )
 
 
-def _get_ts_language(lang: str) -> Any:
-    """Gets the tree-sitter language object for the given language string."""
-    lang = lang.lower()
-    if lang == "python":
+def _get_ts_language(lang: Any) -> Any:
+    """Gets the tree-sitter language object for the given language string or metadata."""
+    if hasattr(lang, "name"):
+        lang_name = lang.name
+    else:
+        lang_name = str(lang).lower()
+
+    if lang_name == "python":
         return tree_sitter.Language(tree_sitter_python.language())
-    if lang == "go":
+    if lang_name == "go":
         return tree_sitter.Language(tree_sitter_go.language())
-    if lang in ("javascript", "typescript", "js", "ts"):
+    if lang_name in ("javascript", "typescript", "js", "ts"):
         return tree_sitter.Language(tree_sitter_javascript.language())
-    if lang in ("csharp", "cs"):
+    if lang_name in ("csharp", "cs"):
         return tree_sitter.Language(tree_sitter_c_sharp.language())
     return None
 
 
-def _make_parser(lang: str) -> tree_sitter.Parser | None:
+def _make_parser(lang: Any) -> tree_sitter.Parser | None:
     """Creates a tree-sitter parser for the given language."""
     ts_lang = _get_ts_language(lang)
     if ts_lang is None:
@@ -117,6 +128,12 @@ def get_artifact_service() -> BaseArtifactService:
     """Returns the artifact service instance configured for the project."""
     config = get_config()
     return FileArtifactService(config.data_dir)
+
+
+def init_artifact_manager(data_dir: str) -> BaseArtifactService:
+    """Initializes and returns an artifact service."""
+    os.makedirs(data_dir, exist_ok=True)
+    return FileArtifactService(data_dir)
 
 
 def _process_tool_result_sync(func_name: str, result: str, max_chars: int) -> str:

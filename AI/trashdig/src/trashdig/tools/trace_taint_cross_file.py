@@ -3,44 +3,10 @@ import re
 from contextlib import suppress
 from typing import Any
 
+from trashdig.metadata.languages import get_language_metadata
+
 from .base import _make_parser, artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
-
-# Known dangerous sinks per language. A call to any of these functions is
-# considered a potential vulnerability if tainted data reaches it.
-_SINKS: dict[str, set[str]] = {
-    "python": {
-        # SQL
-        "executemany", "executescript", "raw", "RawSQL",
-        # OS / shell
-        "system", "popen", "run", "call", "check_call", "check_output", "Popen",
-        # Code injection
-        "eval", "exec", "compile",
-        # Template injection
-        "render_template_string", "from_string",
-        # Deserialisation
-        "loads", "load",
-        # File write
-        "write",
-    },
-    "javascript": {
-        "eval", "exec", "execSync", "execFile", "spawnSync",
-        "innerHTML", "outerHTML", "write", "query", "execute",
-        "dangerouslySetInnerHTML",
-    },
-    "go": {"Exec", "Command", "Query", "Execute"},
-    "csharp": {"Execute", "ExecuteNonQuery", "ExecuteReader", "ExecuteScalar", "Start"},
-}
-
-# Sinks that are often methods on objects (e.g. conn.execute()).
-# We treat these as sinks if they appear in an attribute call,
-# OR we try to trace them if they are unique.
-_METHOD_SINKS: dict[str, set[str]] = {
-    "python": {"execute", "query", "write"},
-    "javascript": {"query", "execute", "write"},
-    "go": {"Query", "Exec", "Execute"},
-    "csharp": {"Execute", "ExecuteNonQuery", "ExecuteReader", "ExecuteScalar"},
-}
 
 
 def _node_contains_identifier(node: Any, name: str) -> bool:
@@ -79,29 +45,33 @@ def _extract_callee_name(func_node: Any) -> str | None:
     return None
 
 
-def _get_full_callee_path(func_node: Any) -> list[str]:
+def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:
     """Extract the full path of a callee (e.g. ['module', 'func'])."""
     if func_node.type == "identifier":
         return [func_node.text.decode("utf-8")]
-    if func_node.type == "attribute":
+    if func_node.type == "attribute" or (metadata.name == "csharp" and func_node.type == "member_access_expression"):
         # In python: (attribute object: (_) attribute: (identifier))
-        obj = func_node.child_by_field_name("object")
-        attr = func_node.child_by_field_name("attribute")
+        # In JS: (attribute_expression object: (_) property: (property_identifier))
+        # In Go: (selector_expression operand: (_) field: (field_identifier))
+        # This implementation is a bit Python-centric, but trying to generalize
+        
+        obj = func_node.child_by_field_name("object") or func_node.child_by_field_name("operand")
+        attr = func_node.child_by_field_name("attribute") or func_node.child_by_field_name("property") or func_node.child_by_field_name("field") or func_node.child_by_field_name("name")
         
         path: list[str] = []
         if obj:
             if obj.type == "identifier":
                 path.append(obj.text.decode("utf-8"))
-            elif obj.type == "attribute":
-                path.extend(_get_full_callee_path(obj))
-            elif obj.type == "call":
+            elif obj.type in ("attribute", "selector_expression", "member_access_expression", "attribute_expression"):
+                path.extend(_get_full_callee_path(obj, metadata))
+            elif obj.type == "call" or obj.type == "call_expression":
                 # For call().method, we might want to know the call's callee
                 inner_callee_node = obj.child_by_field_name("function")
                 if inner_callee_node:
-                    path.extend(_get_full_callee_path(inner_callee_node))
+                    path.extend(_get_full_callee_path(inner_callee_node, metadata))
                 path.append("()") # Marker for call
         
-        if attr and attr.type == "identifier":
+        if attr and attr.type in ("identifier", "property_identifier", "field_identifier"):
             path.append(attr.text.decode("utf-8"))
         
         return path
@@ -265,24 +235,22 @@ def _find_returns_variable(
 def _find_function_files(
     func_name: str,
     project_root: str = ".",
-    language: str = "python",
+    metadata: Any = None,
 ) -> list[str]:
     """Find all files that define *func_name* using ripgrep.
 
     Args:
         func_name: The function name to search for.
         project_root: Root directory to search in.
-        language: Programming language (affects the search pattern).
+        metadata: Language metadata.
 
     Returns:
         A list of relative file paths of matches.
     """
-    if language == "python":
-        patterns = [rf"\bdef {re.escape(func_name)}\b", rf"\basync def {re.escape(func_name)}\b"]
-    elif language in ("javascript", "go"):
-        patterns = [rf"\bfunction {re.escape(func_name)}\b", rf"\b{re.escape(func_name)}\s*=\s*(?:async\s+)?function"]
-    else:
+    if not metadata:
         patterns = [rf"\b{re.escape(func_name)}\b"]
+    else:
+        patterns = [p.format(name=re.escape(func_name)) for p in metadata.definition_patterns]
 
     all_files: set[str] = set()
     abs_project_root = os.path.abspath(project_root)
@@ -299,29 +267,38 @@ def _find_function_files(
     return sorted(all_files)
 
 
-def _find_function_node(node: Any, func_name: str) -> Any | None:
+def _find_function_node(node: Any, func_name: str, metadata: Any) -> Any | None:
     """Find a function or method definition by name."""
-    if node.type in ("function_definition", "method_definition"):
+    if node.type in metadata.definition_types:
         name_node = node.child_by_field_name("name")
+        if not name_node:
+             for field in ("declarator", "identifier"):
+                name_node = node.child_by_field_name(field)
+                if name_node:
+                    break
         if name_node and name_node.text.decode("utf-8") == func_name:
             return node
     for child in node.children:
-        result = _find_function_node(child, func_name)
+        result = _find_function_node(child, func_name, metadata)
         if result:
             return result
     return None
 
 
-def _extract_function_params(func_node: Any) -> list[str]:
-    """Collect parameter names from a function node, excluding self/cls."""
+def _extract_function_params(func_node: Any, metadata: Any) -> list[str]:
+    """Collect parameter names from a function node, excluding skip symbols."""
     params_node = func_node.child_by_field_name("parameters")
     if params_node is None:
+        # JS arrow function fallback
+        if metadata.name == "javascript" and func_node.type == "arrow_function":
+             p = func_node.child_by_field_name("parameter")
+             if p and p.type == "identifier":
+                 return [p.text.decode('utf-8')]
         return []
 
     params: list[str] = []
     for p in params_node.children:
-        if p.type in ("identifier", "typed_parameter", "default_parameter",
-                      "list_splat_pattern", "dictionary_splat_pattern"):
+        if p.type in metadata.parameter_types:
             # Get the raw name
             if p.type == "identifier":
                 name = p.text.decode("utf-8")
@@ -331,7 +308,7 @@ def _extract_function_params(func_node: Any) -> list[str]:
                 )
                 name = name_child.text.decode("utf-8") if name_child else p.text.decode("utf-8")
 
-            if name not in ("self", "cls"):
+            if name not in metadata.skip_symbols:
                 params.append(name)
     return params
 
@@ -340,7 +317,7 @@ def _resolve_param_name(
     func_name: str,
     arg_index: int,
     func_file: str,
-    language: str = "python",
+    metadata: Any,
 ) -> str | None:
     """Return the parameter name at *arg_index* in the definition of *func_name*.
 
@@ -350,7 +327,7 @@ def _resolve_param_name(
         func_name: The function whose signature to inspect.
         arg_index: Zero-based position of the parameter to resolve.
         func_file: Path to the file containing the function definition.
-        language: Programming language.
+        metadata: Language metadata.
 
     Returns:
         The parameter name string, or ``None`` if it cannot be resolved.
@@ -361,42 +338,52 @@ def _resolve_param_name(
     except OSError:
         return None
 
-    parser = _make_parser(language)
+    parser = _make_parser(metadata.name)
     if parser is None:
         return None
     tree = parser.parse(content)
 
-    func_node = _find_function_node(tree.root_node, func_name)
+    func_node = _find_function_node(tree.root_node, func_name, metadata)
     if func_node is None:
         return None
 
-    params = _extract_function_params(func_node)
+    params = _extract_function_params(func_node, metadata)
 
     if arg_index < len(params):
         return params[arg_index]
     return None
 
+
 def _find_assignment(
     variable_name: str,
     file_content: bytes,
-    language: str = "python",
+    metadata: Any,
 ) -> str | None:
     """Find the value assigned to a variable in the current file."""
-    if language != "python":
-        return None
-
-    parser = _make_parser(language)
+    parser = _make_parser(metadata.name)
     if parser is None:
         return None
     tree = parser.parse(file_content)
 
     # Search for: variable_name = Value(...)
     def walk(node: Any) -> str | None:
-        if node.type == "assignment":
+        if node.type in metadata.assignment_types:
             left = node.child_by_field_name("left")
             right = node.child_by_field_name("right")
+            # For some languages, name might be a child declarator
+            if not left and node.type in ("variable_declaration", "lexical_declaration"):
+                for child in node.children:
+                    if child.type == "variable_declarator":
+                        name_node = child.child_by_field_name("name")
+                        val_node = child.child_by_field_name("value")
+                        if name_node and name_node.text.decode("utf-8") == variable_name and val_node:
+                            if val_node.type in ("call", "call_expression"):
+                                callee = val_node.child_by_field_name("function")
+                                if callee:
+                                    return callee.text.decode("utf-8")
+
             if left and left.text.decode("utf-8") == variable_name and right:
-                if right.type == "call":
+                if right.type in ("call", "call_expression"):
                     # Extract callee of the assignment (e.g. 'Database' in 'db = Database()')
                     callee = right.child_by_field_name("function")
                     if callee:
@@ -410,14 +397,14 @@ def _find_assignment(
     return walk(tree.root_node)
 
 
+
 def _process_tainted_calls(  # noqa: PLR0913
     calls: list[tuple[str, int, int, Any]],
     var: str,
-    sinks: set[str],
     report_lines: list[str],
     indent: str,
     project_root: str,
-    language: str,
+    metadata: Any,
     depth: int,
     max_depth: int,
     visited: set[tuple[str, str]],
@@ -425,11 +412,10 @@ def _process_tainted_calls(  # noqa: PLR0913
 ) -> bool:
     """Process calls where a tainted variable is passed as an argument."""
     found_sink = False
-    method_sinks = _METHOD_SINKS.get(language, set())
 
     for callee, arg_idx, line_no, callee_node in calls:
         # Check if it's a known direct sink
-        if callee in sinks:
+        if callee in metadata.sinks:
             report_lines.append(
                 f"{indent}  *** SINK *** Line {line_no}: '{var}' passed to '{callee}()' "
                 f"(arg {arg_idx}) — potential vulnerability"
@@ -438,7 +424,7 @@ def _process_tainted_calls(  # noqa: PLR0913
             continue
 
         # Check for method sinks (e.g. conn.execute)
-        is_method_sink_candidate = callee in method_sinks
+        is_method_sink_candidate = callee in metadata.method_sinks
         
         report_lines.append(
             f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
@@ -448,18 +434,18 @@ def _process_tainted_calls(  # noqa: PLR0913
         callee_files: list[str] = []
 
         # 1. Check if it's an attribute call (obj.method)
-        path = _get_full_callee_path(callee_node)
+        path = _get_full_callee_path(callee_node, metadata)
         obj_name = None
         if len(path) > 1:
             obj_name = path[0]
             # Try to see where obj_name comes from
             # a) Is it an imported module name?
-            imported_module = _resolve_import(obj_name, file_content, language)
+            imported_module = _resolve_import(obj_name, file_content, metadata.name)
             if not imported_module:
                 # b) Is it a local variable assigned from an imported class?
-                assigned_from = _find_assignment(obj_name, file_content, language)
+                assigned_from = _find_assignment(obj_name, file_content, metadata)
                 if assigned_from:
-                    imported_module = _resolve_import(assigned_from, file_content, language)
+                    imported_module = _resolve_import(assigned_from, file_content, metadata.name)
 
             if imported_module:
                 m_path = _module_to_file_path(imported_module, project_root)
@@ -478,7 +464,7 @@ def _process_tainted_calls(  # noqa: PLR0913
 
         # 2. Check if the function itself is imported
         if not callee_files:
-            imported_module = _resolve_import(callee, file_content, language)
+            imported_module = _resolve_import(callee, file_content, metadata.name)
             if imported_module:
                 m_path = _module_to_file_path(imported_module, project_root)
                 if m_path:
@@ -486,7 +472,7 @@ def _process_tainted_calls(  # noqa: PLR0913
 
         # 3. Fallback to global search
         if not callee_files:
-            callee_files = _find_function_files(callee, project_root, language)
+            callee_files = _find_function_files(callee, project_root, metadata)
 
         # 4. Final heuristic for method sinks:
         # If it's a method sink (like .execute) and we still have NO files OR multiple files 
@@ -513,11 +499,11 @@ def _process_tainted_calls(  # noqa: PLR0913
 
         callee_file = callee_files[0]
         abs_callee_file = os.path.join(project_root, callee_file)
-        param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, language)
+        param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, metadata)
         if param_name:
             _trace_recursive(
                 param_name, callee_file, depth + 1, max_depth,
-                visited, report_lines, project_root, language, sinks
+                visited, report_lines, project_root, metadata
             )
         else:
             report_lines.append(
@@ -534,8 +520,7 @@ def _trace_recursive(  # noqa: PLR0913
     visited: set[tuple[str, str]],
     report_lines: list[str],
     project_root: str,
-    language: str,
-    sinks: set[str],
+    metadata: Any,
 ) -> None:
     """Internal recursive function for taint tracing."""
     key = (file_path, var)
@@ -558,13 +543,13 @@ def _trace_recursive(  # noqa: PLR0913
         report_lines.append(f"{indent}  [could not read file]")
         return
 
-    calls = _find_calls_passing_variable(var, content, language)
+    calls = _find_calls_passing_variable(var, content, metadata.name)
     found_sink = _process_tainted_calls(
-        calls, var, sinks, report_lines, indent, project_root,
-        language, depth, max_depth, visited, content
+        calls, var, report_lines, indent, project_root,
+        metadata, depth, max_depth, visited, content
     )
 
-    return_lines = _find_returns_variable(var, content, language)
+    return_lines = _find_returns_variable(var, content, metadata.name)
     for line_no in return_lines:
         report_lines.append(
             f"{indent}  RETURN Line {line_no}: '{var}' returned — "
@@ -574,7 +559,7 @@ def _trace_recursive(  # noqa: PLR0913
     if not calls and not return_lines:
         report_lines.append(f"{indent}  SAFE: '{var}' has no outgoing flow in this file")
     elif not found_sink and not return_lines and all(
-        c[0] not in sinks for c in calls
+        c[0] not in metadata.sinks for c in calls
     ):
         pass  # child traces already reported
 
@@ -606,7 +591,10 @@ def trace_taint_cross_file(
     if project_root is None:
         project_root = get_config().workspace_root
 
-    sinks = _SINKS.get(language, set())
+    metadata = get_language_metadata(language)
+    if not metadata:
+        return f"Error: Language '{language}' not supported."
+
     report_lines: list[str] = [
         f"Taint trace: variable='{variable}', start='{source_file}', language={language}",
         "=" * 60,
@@ -615,7 +603,7 @@ def trace_taint_cross_file(
 
     _trace_recursive(
         variable, source_file, 0, max_depth, visited,
-        report_lines, project_root, language, sinks
+        report_lines, project_root, metadata
     )
 
     report_lines.append("\n" + "=" * 60)

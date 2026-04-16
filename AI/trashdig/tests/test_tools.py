@@ -4,20 +4,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trashdig.config import Config
-from trashdig.tools import (
-    bash_tool,
-    container_bash_tool,
-    find_references,
-    get_ast_summary,
-    get_scope_info,
-    get_symbol_definition,
-    query_cwe_database,
-    ripgrep_search,
-    semgrep_scan,
-    trace_variable,
-    trace_variable_semantic,
-    web_fetch,
-)
+from trashdig.tools.bash_tool import bash_tool
+from trashdig.tools.container_bash_tool import container_bash_tool
+from trashdig.tools.find_references import find_references
+from trashdig.tools.get_ast_summary import get_ast_summary
+from trashdig.tools.get_scope_info import get_scope_info
+from trashdig.tools.get_symbol_definition import get_symbol_definition
+from trashdig.tools.query_cwe_database import query_cwe_database
+from trashdig.tools.ripgrep_search import ripgrep_search
+from trashdig.tools.semgrep_scan import semgrep_scan
+from trashdig.tools.trace_variable import trace_variable
+from trashdig.tools.trace_variable_semantic import trace_variable_semantic
+from trashdig.tools.web_fetch import web_fetch
 from trashdig.utils import set_binary_stub
 
 
@@ -196,7 +194,9 @@ def test_get_scope_info(mock_parser_class, mock_get_lang):
 
     with patch("builtins.open", MagicMock()):
         result = get_scope_info("test.py", 15, "python")
-        assert "Function: target_func" in result
+        assert "Scope: target_func" in result
+        assert "Parameters: param1" in result
+
         assert "Parameters: param1" in result
 
 @patch("trashdig.tools.base._get_ts_language")

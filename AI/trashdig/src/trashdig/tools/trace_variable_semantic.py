@@ -1,5 +1,7 @@
 from typing import Any
 
+from trashdig.metadata.languages import get_language_metadata
+
 from .base import _get_ts_language, _make_parser, artifact_tool, get_config
 
 
@@ -17,7 +19,8 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
     """
     file_path = get_config().resolve_workspace_path(file_path)
     ts_lang = _get_ts_language(language)
-    if not ts_lang:
+    metadata = get_language_metadata(language)
+    if not ts_lang or not metadata:
         return f"Error: Language '{language}' not supported."
 
     try:
@@ -37,10 +40,11 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
             if node.type == "identifier" and node.text.decode('utf-8') == variable_name:
                 parent = node.parent
                 category = "USAGE"
-                if parent.type in ("assignment", "variable_declaration"):
-                    category = "ASSIGNMENT/DEFINITION"
-                elif parent.type == "argument_list":
-                    category = "SINK ARGUMENT"
+                if parent:
+                    if parent.type in metadata.assignment_types:
+                        category = "ASSIGNMENT/DEFINITION"
+                    elif parent.type == "argument_list":
+                        category = "SINK ARGUMENT"
 
                 usages.append(f"Line {node.start_point[0] + 1}: {category}")
 

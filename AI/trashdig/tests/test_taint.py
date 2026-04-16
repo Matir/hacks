@@ -9,6 +9,7 @@ import pytest
 from trashdig.config import Config
 from trashdig.tools.trace_taint_cross_file import trace_taint_cross_file
 from trashdig.tools.base import _make_parser
+from trashdig.metadata.languages import get_language_metadata, PYTHON_METADATA
 from trashdig.tools.trace_taint_cross_file import (
     _extract_callee_name,
     _find_calls_passing_variable,
@@ -69,7 +70,7 @@ def test_extract_callee_name_attribute():
 
 def test_find_calls_passing_variable_simple():
     src = b"result = fetch(user_id)\n"
-    calls = _find_calls_passing_variable("user_id", src, "python")
+    calls = _find_calls_passing_variable("user_id", src,PYTHON_METADATA)
     assert len(calls) == 1
     callee, idx, line, _node = calls[0]
 
@@ -80,13 +81,13 @@ def test_find_calls_passing_variable_simple():
 
 def test_find_calls_passing_variable_second_arg():
     src = b"run(cmd, user_id, timeout=5)\n"
-    calls = _find_calls_passing_variable("user_id", src, "python")
+    calls = _find_calls_passing_variable("user_id", src,PYTHON_METADATA)
     assert any(c[0] == "run" and c[1] == 1 for c in calls)
 
 
 def test_find_calls_passing_variable_sink():
     src = b"os.system(user_input)\n"
-    calls = _find_calls_passing_variable("user_input", src, "python")
+    calls = _find_calls_passing_variable("user_input", src,PYTHON_METADATA)
     assert len(calls) == 1
     callee, idx, line, _node = calls[0]
 
@@ -96,13 +97,13 @@ def test_find_calls_passing_variable_sink():
 
 def test_find_calls_passing_variable_no_match():
     src = b"print('hello')\n"
-    calls = _find_calls_passing_variable("user_id", src, "python")
+    calls = _find_calls_passing_variable("user_id", src,PYTHON_METADATA)
     assert calls == []
 
 
 def test_find_calls_passing_variable_multiple():
     src = b"a(x)\nb(x)\nc(y)\n"
-    calls = _find_calls_passing_variable("x", src, "python")
+    calls = _find_calls_passing_variable("x", src,PYTHON_METADATA)
     callees = [c[0] for c in calls]
     assert "a" in callees
     assert "b" in callees
@@ -115,13 +116,13 @@ def test_find_calls_passing_variable_multiple():
 
 def test_find_returns_variable_found():
     src = b"def f(x):\n    return x\n"
-    lines = _find_returns_variable("x", src, "python")
+    lines = _find_returns_variable("x", src,PYTHON_METADATA)
     assert 2 in lines
 
 
 def test_find_returns_variable_not_found():
     src = b"def f(x):\n    return 42\n"
-    lines = _find_returns_variable("x", src, "python")
+    lines = _find_returns_variable("x", src,PYTHON_METADATA)
     assert lines == []
 
 
@@ -135,13 +136,13 @@ def test_find_function_files_found():
         with open(target, "w") as f:
             f.write("def fetch_user(user_id):\n    pass\n")
 
-        result = _find_function_files("fetch_user", tmp, "python")
+        result = _find_function_files("fetch_user", tmp,PYTHON_METADATA)
         assert "db.py" in result
 
 
 def test_find_function_files_not_found():
     with tempfile.TemporaryDirectory() as tmp:
-        result = _find_function_files("nonexistent_func", tmp, "python")
+        result = _find_function_files("nonexistent_func", tmp,PYTHON_METADATA)
         assert result == []
 
 
@@ -156,7 +157,7 @@ def test_resolve_param_name():
             f.write(b"def fetch_user(conn, user_id):\n    pass\n")
 
         # user_id is at index 1 (excluding self — but no self here so it's raw index 1)
-        name = _resolve_param_name("fetch_user", 1, src_file, "python")
+        name = _resolve_param_name("fetch_user", 1, src_file,PYTHON_METADATA)
         assert name == "user_id"
 
 
@@ -166,7 +167,7 @@ def test_resolve_param_name_first():
         with open(src_file, "wb") as f:
             f.write(b"def process(data, timeout=30):\n    pass\n")
 
-        name = _resolve_param_name("process", 0, src_file, "python")
+        name = _resolve_param_name("process", 0, src_file,PYTHON_METADATA)
         assert name == "data"
 
 
@@ -176,7 +177,7 @@ def test_resolve_param_name_out_of_range():
         with open(src_file, "wb") as f:
             f.write(b"def f(x):\n    pass\n")
 
-        assert _resolve_param_name("f", 5, src_file, "python") is None
+        assert _resolve_param_name("f", 5, src_file,PYTHON_METADATA) is None
 
 
 def test_resolve_param_name_skips_self():
@@ -185,7 +186,7 @@ def test_resolve_param_name_skips_self():
         with open(src_file, "wb") as f:
             f.write(b"class DB:\n    def execute(self, query):\n        pass\n")
 
-        name = _resolve_param_name("execute", 0, src_file, "python")
+        name = _resolve_param_name("execute", 0, src_file,PYTHON_METADATA)
         assert name == "query"
 
 

@@ -1,5 +1,7 @@
 from typing import Any
 
+from trashdig.metadata.languages import get_language_metadata
+
 from .base import _get_ts_language, _make_parser, artifact_tool, get_config
 
 
@@ -13,11 +15,12 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
         tool_context: ADK context (injected).
 
     Returns:
-        A text representation of the top-level AST nodes (functions, classes, etc.).
+        A text representation of the AST nodes (functions, classes, etc.).
     """
     ts_lang = _get_ts_language(language)
+    metadata = get_language_metadata(language)
 
-    if not ts_lang:
+    if not ts_lang or not metadata:
         return f"Error: Language '{language}' not supported for AST analysis."
 
     file_path = get_config().resolve_workspace_path(file_path)
@@ -36,9 +39,16 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
             name = "anonymous"
             display_type = node.type.replace('_', ' ').capitalize()
 
-            if node.type in ("function_definition", "class_definition", "method_definition", "function_declaration"):
+            if node.type in metadata.definition_types:
                 is_definition = True
                 name_node = node.child_by_field_name("name")
+                if not name_node:
+                    # In some languages/nodes, name might be a different field
+                    # e.g. Go 'declarator', C# 'identifier'
+                    for field in ("declarator", "identifier"):
+                        name_node = node.child_by_field_name(field)
+                        if name_node:
+                            break
                 if name_node:
                     name = name_node.text.decode('utf-8')
             

@@ -1,7 +1,7 @@
 import os
 import tempfile
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,23 +24,26 @@ class AgentConfig:
     max_tokens: int = 4096
 
 
+@dataclass
 class Config:
     """Central configuration for TrashDig."""
+    config_path: str = "trashdig.toml"
+    data: dict[str, Any] = field(default_factory=dict)
 
-    def __init__(self, config_path: str | None = None):
-        """Initialises the Config.
-
-        Args:
-            config_path: Path to the TOML config file.
-        """
-        self.config_path = config_path or "trashdig.toml"
-        self.data: dict[str, Any] = {}
+    def __post_init__(self):
+        if self.config_path is None:
+            self.config_path = "trashdig.toml"
         self._load()
 
     def _load(self) -> None:
         if os.path.exists(self.config_path):
             with open(self.config_path, "rb") as f:
                 self.data = tomllib.load(f)
+
+    @property
+    def require_sandbox(self) -> bool:
+        """Whether to require sandboxing for tool execution."""
+        return self.data.get("require_sandbox", True)
 
     @property
     def workspace_root(self) -> str:
@@ -122,3 +125,7 @@ def get_config(config_path: str | None = None) -> Config:
     if _GLOBAL_CONFIG is None:
         _GLOBAL_CONFIG = Config(config_path)
     return _GLOBAL_CONFIG
+
+
+# Alias for backward compatibility
+load_config = get_config
