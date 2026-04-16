@@ -88,8 +88,8 @@ def test_callback_agent_lifecycle(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
     
-    cb.on_before_agent(ctx, None)
+    cb.on_before_agent(context=ctx, agent=None)
     assert mock_coordinator._state == EngineState.RUNNING
     
-    cb.on_after_agent(ctx, None)
+    cb.on_after_agent(context=ctx, agent=None)
     assert mock_coordinator._state == EngineState.IDLE

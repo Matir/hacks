@@ -161,23 +161,30 @@ def artifact_tool(max_chars: int = 5000):
 # Client Tools
 # ---------------------------------------------------------------------------
 
-def _run_sandboxed(command: List[str], timeout: Optional[int] = None, network: bool = False) -> subprocess.CompletedProcess[str]:
+def _run_sandboxed(
+    command: List[str],
+    timeout: Optional[int] = None,
+    network: bool = False,
+    workspace_dir: Optional[str] = None
+) -> subprocess.CompletedProcess[str]:
     """Internal helper to run a command in the configured sandbox.
 
     Args:
         command: The command to execute.
         timeout: Execution timeout in seconds.
         network: Whether to allow network access. Defaults to False for safety.
+        workspace_dir: Optional override for the sandbox root. Defaults to os.getcwd().
 
     Returns:
         The subprocess result.
     """
     cfg = get_config()
-    workspace_dir = os.getcwd() # Or get from config if implemented
+    actual_workspace = workspace_dir or os.getcwd()
     require_sandbox = cfg.require_sandbox
     
     sandbox = get_sandbox(
-        workspace_dir=workspace_dir,
+        workspace_dir=actual_workspace,
+        env=os.environ.copy(),
         network=network,
         require_sandbox=require_sandbox
     )
@@ -233,7 +240,8 @@ def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]
     if extra_args:
         cmd.extend(extra_args)
     
-    result = _run_sandboxed(cmd, network=False)
+    result = _run_sandboxed(cmd, network=False, workspace_dir=path)
+    
     # The existing tests expect specific error messages if rg is not found
     if result.returncode == 127:
         return result.stderr
@@ -254,7 +262,7 @@ def semgrep_scan(path: str = ".", config: str = "p/security-audit", tool_context
     cmd = ["semgrep", "--json", "--config", config, path]
     
     # Run semgrep with a timeout to avoid hanging
-    result = _run_sandboxed(cmd, timeout=120, network=True)
+    result = _run_sandboxed(cmd, timeout=120, network=True, workspace_dir=path)
     if result.returncode == 124:
         return result.stderr
     return result.stdout if result.stdout else result.stderr

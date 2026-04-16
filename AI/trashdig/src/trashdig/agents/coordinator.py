@@ -121,6 +121,8 @@ class Coordinator(LlmAgent):
         )
 
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
+        if not isinstance(db_path, str):
+            db_path = ".trashdig/trashdig.db"
         
         # Create the HunterOrchestrator and wrap it in a LoopAgent
         hunter_orchestrator = LlmAgent(

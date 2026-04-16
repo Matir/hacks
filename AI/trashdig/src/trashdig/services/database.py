@@ -108,6 +108,8 @@ def get_database(db_path: str = ".trashdig/trashdig.db") -> "ProjectDatabase":
     and settings for the same file, improving efficiency and reducing the
     risk of SQLite locking issues in concurrent environments.
     """
+    if not isinstance(db_path, str):
+        db_path = ".trashdig/trashdig.db"
     abs_path = os.path.abspath(db_path)
     if abs_path not in _db_instances:
         _db_instances[abs_path] = ProjectDatabase(db_path=db_path)

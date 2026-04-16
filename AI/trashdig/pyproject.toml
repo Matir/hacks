@@ -18,6 +18,7 @@ dependencies = [
     "semgrep>=1.159.0",
     "textual>=8.2.3",
     "textual-autocomplete>=4.0.6",
+    "tomli-w>=1.2.0",
     "tree-sitter>=0.25.2",
     "tree-sitter-c-sharp>=0.23.1",
     "tree-sitter-go>=0.25.0",
