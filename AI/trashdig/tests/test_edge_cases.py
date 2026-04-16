@@ -23,19 +23,22 @@ def create_mock_agent(name="dummy"):
 @pytest.mark.anyio
 async def test_get_ast_summary_no_definitions():
     """Test get_ast_summary with a file containing no classes or functions."""
-    with patch("builtins.open", MagicMock()):
-        with patch("trashdig.tools._get_ts_language", return_value=MagicMock()):
-            with patch("tree_sitter.Parser") as mock_parser_class:
-                mock_parser = mock_parser_class.return_value
-                mock_tree = mock_parser.parse.return_value
-                mock_tree.root_node.children = [] # No children
-                
-                result = await maybe_await(get_ast_summary("empty.py", "python"))
-                assert result == "No top-level definitions found."
+    mock_config = MagicMock(spec=Config)
+    mock_config.resolve_workspace_path.side_effect = lambda x: x
+    with patch("trashdig.config.get_config", return_value=mock_config):
+        with patch("builtins.open", MagicMock()):
+            with patch("trashdig.tools.base._get_ts_language", return_value=MagicMock()):
+                with patch("tree_sitter.Parser") as mock_parser_class:
+                    mock_parser = mock_parser_class.return_value
+                    mock_tree = mock_parser.parse.return_value
+                    mock_tree.root_node.children = [] # No children
+                    
+                    result = await maybe_await(get_ast_summary("empty.py", "python"))
+                    assert result == "No top-level definitions found."
 
 @pytest.mark.anyio
 @patch("subprocess.run")
-@patch("trashdig.tools.bash_tool")
+@patch("trashdig.tools.container_bash_tool.bash_tool")
 async def test_container_bash_tool_docker_missing(mock_bash, mock_run):
     """Test container_bash_tool falls back to host bash_tool when Docker is missing."""
     # Mock Docker not found

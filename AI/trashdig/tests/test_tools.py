@@ -6,7 +6,7 @@ from trashdig.config import Config
 
 @pytest.fixture(autouse=True)
 def mock_cfg():
-    with patch("trashdig.tools.get_config") as mock:
+    with patch("trashdig.config.get_config") as mock:
         mock.return_value = Config(require_sandbox=False)
         yield mock
 
@@ -45,7 +45,7 @@ def test_semgrep_scan_timeout(mock_run):
     result = semgrep_scan("path")
     assert "timed out" in result
 
-@patch("trashdig.tools._get_ts_language")
+@patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")
 def test_get_ast_summary(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()
@@ -73,14 +73,14 @@ def test_get_ast_summary_unsupported_lang():
     result = get_ast_summary("test.py", "unsupported")
     assert "not supported" in result
 
-@patch("trashdig.tools.ripgrep_search")
+@patch("trashdig.tools.get_symbol_definition.ripgrep_search")
 def test_get_symbol_definition(mock_rg):
     mock_rg.return_value = "def test_func():\n    pass"
     result = get_symbol_definition("test_func")
     assert "def test_func():" in result
     assert mock_rg.call_count > 0
 
-@patch("trashdig.tools.ripgrep_search")
+@patch("trashdig.tools.find_references.ripgrep_search")
 def test_find_references(mock_rg):
     mock_rg.return_value = "file:10:5:test_func()"
     result = find_references("test_func")
@@ -150,7 +150,7 @@ def test_query_cwe_database_no_results():
             result = query_cwe_database("nonexistent")
             assert "No results found" in result
 
-@patch("trashdig.tools._get_ts_language")
+@patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")
 def test_get_scope_info(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()
@@ -185,7 +185,7 @@ def test_get_scope_info(mock_parser_class, mock_get_lang):
         assert "Function: target_func" in result
         assert "Parameters: param1" in result
 
-@patch("trashdig.tools._get_ts_language")
+@patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")
 def test_trace_variable_semantic(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()
@@ -209,7 +209,7 @@ def test_trace_variable_semantic(mock_parser_class, mock_get_lang):
         result = trace_variable_semantic("my_var", "test.py", "python")
         assert "Line 6: ASSIGNMENT/DEFINITION" in result
 
-@patch("trashdig.tools.ripgrep_search")
+@patch("trashdig.tools.trace_variable.ripgrep_search")
 def test_trace_variable(mock_rg):
     mock_rg.return_value = "line 5: my_var = 1"
     from trashdig.tools import trace_variable

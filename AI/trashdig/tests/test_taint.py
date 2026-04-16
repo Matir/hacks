@@ -7,20 +7,20 @@ from unittest.mock import patch
 import pytest
 
 from trashdig.config import Config
-from trashdig.tools import (
+from trashdig.tools import trace_taint_cross_file
+from trashdig.tools.base import _make_parser
+from trashdig.tools.trace_taint_cross_file import (
     _node_contains_identifier,
     _extract_callee_name,
     _find_calls_passing_variable,
     _find_returns_variable,
     _find_function_file,
     _resolve_param_name,
-    trace_taint_cross_file,
-    _make_parser,
 )
 
 @pytest.fixture(autouse=True)
 def mock_cfg():
-    with patch("trashdig.tools.get_config") as mock:
+    with patch("trashdig.config.get_config") as mock:
         mock.return_value = Config(require_sandbox=False)
         yield mock
 
