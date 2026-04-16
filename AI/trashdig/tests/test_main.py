@@ -7,9 +7,10 @@ from trashdig.main import main
 @patch("trashdig.main.TrashDigApp")
 @patch("trashdig.main.load_config")
 @patch("sys.stdout.isatty", return_value=True)
-def test_main_default_root(mock_isatty, mock_load_config, mock_app_class):
+def test_main_default_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
     mock_config = MagicMock()
     mock_config.workspace_root = os.path.abspath(".")
+    mock_config.data_dir = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
 
@@ -30,6 +31,7 @@ def test_main_default_root(mock_isatty, mock_load_config, mock_app_class):
 def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
     mock_config = MagicMock()
     mock_config.workspace_root = str(tmp_path)
+    mock_config.data_dir = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
 

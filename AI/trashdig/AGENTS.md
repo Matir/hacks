@@ -74,13 +74,14 @@ The Hunter agent uses a multi-stage approach to trace untrusted data:
 
 These rules are foundational. Adhere to them for all modifications:
 
-1.  **Testing**: Always provide unit tests in the `tests/` directory. All code should be written alongside corresponding tests. Whenever features are added, both the test suite and coverage must be checked; coverage metrics should generally trend upwards.
-2.  **Typing**: Strict type hints are mandatory (`pyright`/`mypy` clean).
-3.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.
-4.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
-5.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory.
-6.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for inter-agent communication.
-7.  **Path Handling & Portability**:
+1.  **Verification**: Every task completion MUST be verified by running the project's full validation suite (e.g., `mise run check`). All linting, type checks, and tests MUST pass before a change is considered finished.
+2.  **Testing**: Always provide unit tests in the `tests/` directory. All code should be written alongside corresponding tests. Whenever features are added, both the test suite and coverage must be checked; coverage metrics should generally trend upwards.
+3.  **Typing**: Strict type hints are mandatory. Every function and method MUST have complete type annotations for all parameters and return values. The codebase must remain `pyright`/`mypy` clean, even with strict rules like `disallow-untyped-defs` enabled.
+4.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.
+5.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
+6.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory.
+7.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for inter-agent communication.
+8.  **Path Handling & Portability**:
     *   **Data Directory**: All artifacts and configuration must be relative to the data directory (defined in `Config.data_dir`).
     *   **Workspace**: All project source files must be resolved relative to the workspace root.
     *   **Isolation in Tests**: All tests that require real filesystem access MUST use temporary directories (e.g., `pytest`'s `tmp_path` fixture).

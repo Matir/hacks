@@ -11,7 +11,7 @@ run = "uv run pytest tests"
 
 [tasks.typecheck]
 description = "Run mypy type checking"
-run = "uv run mypy src"
+run = "uv run mypy --disallow-untyped-defs src"
 
 [tasks.lint]
 run = "uv run ruff check ."
