@@ -29,15 +29,44 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
         tree = parser.parse(content)
 
         summary: list[str] = []
-        root_node = tree.root_node
 
-        for node in root_node.children:
-            if node.type in ("function_definition", "class_definition", "method_definition"):
+        def walk(node: Any, depth: int = 0) -> None:
+            indent = "  " * depth
+            is_definition = False
+            name = "anonymous"
+            display_type = node.type.replace('_', ' ').capitalize()
+
+            if node.type in ("function_definition", "class_definition", "method_definition", "function_declaration"):
+                is_definition = True
                 name_node = node.child_by_field_name("name")
-                name = name_node.text.decode('utf-8') if name_node else "anonymous"
-                summary.append(f"{node.type.replace('_', ' ').capitalize()}: {name}")
+                if name_node:
+                    name = name_node.text.decode('utf-8')
+            
+            # JavaScript arrow functions: const foo = () => {}
+            elif language in ("javascript", "typescript", "js", "ts") and node.type == "lexical_declaration":
+                # Look for variable_declarator with arrow_function
+                for child in node.children:
+                    if child.type == "variable_declarator":
+                        name_node = child.child_by_field_name("name")
+                        value_node = child.child_by_field_name("value")
+                        if value_node and value_node.type == "arrow_function":
+                            is_definition = True
+                            display_type = "Arrow function"
+                            if name_node:
+                                name = name_node.text.decode('utf-8')
 
-        return "\n".join(summary) if summary else "No top-level definitions found."
+            if is_definition:
+                summary.append(f"{indent}{display_type}: {name}")
+                # Walk children with increased depth
+                for child in node.children:
+                    walk(child, depth + 1)
+            else:
+                # Just keep walking
+                for child in node.children:
+                    walk(child, depth)
+
+        walk(tree.root_node)
+        return "\n".join(summary) if summary else "No definitions found."
 
     except Exception as e:
         return f"Error analyzing AST: {str(e)}"

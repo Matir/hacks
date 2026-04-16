@@ -2,6 +2,8 @@ import hashlib
 import inspect
 import logging
 import os
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from functools import wraps
@@ -16,8 +18,76 @@ from google.adk.artifacts import BaseArtifactService, FileArtifactService
 from google.adk.tools import ToolContext
 
 from trashdig.config import get_config
+from trashdig.sandbox.minijail import MinijailSandbox
+from trashdig.sandbox.null import NullSandbox
 
 logger = logging.getLogger(__name__)
+
+
+def _run_sandboxed(
+    command: list[str],
+    timeout: int | None = None,
+    network: bool = False,
+    workspace_dir: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Runs a command inside a sandbox and returns its result object.
+
+    Args:
+        command: The command and its arguments.
+        timeout: Execution timeout in seconds.
+        network: Whether to allow network access.
+        workspace_dir: The project root directory. Defaults to Config workspace_root.
+
+    Returns:
+        A subprocess.CompletedProcess object.
+    """
+    config = get_config()
+    if workspace_dir is None:
+        workspace_dir = config.workspace_root
+
+    require_sandbox = config.data.get("require_sandbox", True)
+
+    sandbox = None
+    if sys.platform == "linux":
+        try:
+            sandbox = MinijailSandbox(workspace_dir=workspace_dir, network=network)
+        except Exception as e:
+            if require_sandbox:
+                # Return a failed process object
+                return subprocess.CompletedProcess(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr=f"Error: Sandbox required but failed to initialize: {e}"
+                )
+            logger.warning("Sandbox failed to initialize, falling back to NullSandbox: %s", e)
+
+    if sandbox is None:
+        if require_sandbox and sys.platform != "linux":
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=1,
+                stdout="",
+                stderr="Error: Sandbox required but not implemented for this platform."
+            )
+        sandbox = NullSandbox(workspace_dir=workspace_dir, network=network)
+
+    try:
+        return sandbox.run(command, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=124,  # Standard timeout exit code
+            stdout=e.stdout.decode() if e.stdout else "",
+            stderr=e.stderr.decode() if e.stderr else "Command timed out"
+        )
+    except Exception as e:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=1,
+            stdout="",
+            stderr=f"Error running sandboxed command: {e}"
+        )
 
 
 def _get_ts_language(lang: str) -> Any:
@@ -32,6 +102,15 @@ def _get_ts_language(lang: str) -> Any:
     if lang in ("csharp", "cs"):
         return tree_sitter.Language(tree_sitter_c_sharp.language())
     return None
+
+
+def _make_parser(lang: str) -> tree_sitter.Parser | None:
+    """Creates a tree-sitter parser for the given language."""
+    ts_lang = _get_ts_language(lang)
+    if ts_lang is None:
+        return None
+    parser = tree_sitter.Parser(ts_lang)
+    return parser
 
 
 def get_artifact_service() -> BaseArtifactService:

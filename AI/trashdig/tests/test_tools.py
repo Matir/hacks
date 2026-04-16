@@ -24,7 +24,9 @@ from trashdig.utils import set_binary_stub
 @pytest.fixture(autouse=True)
 def mock_cfg():
     with patch("trashdig.config.get_config") as mock:
-        mock.return_value = Config(require_sandbox=False)
+        c = Config()
+        c.data["require_sandbox"] = False
+        mock.return_value = c
         yield mock
 
 @patch("subprocess.run")

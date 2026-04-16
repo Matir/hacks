@@ -3,6 +3,7 @@
 # Global model defaults
 model = "gemini-2.0-flash"
 provider = "google"
+require_sandbox = false
 
 [ui]
 interface = "textual"

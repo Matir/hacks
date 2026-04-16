@@ -48,7 +48,8 @@ def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_p
 @patch("trashdig.main.load_config")
 @patch("trashdig.main.TrashDigApp")
 def test_main_dump_config(mock_app_class, mock_load_config, capsys):
-    mock_config = Config(rpm_limit=10)
+    mock_config = Config()
+    mock_config.data["rpm_limit"] = 10
     mock_load_config.return_value = mock_config
 
     with patch("sys.argv", ["trashdig", "--dump-config"]):

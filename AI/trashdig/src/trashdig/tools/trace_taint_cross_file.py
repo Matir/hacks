@@ -11,7 +11,7 @@ from .ripgrep_search import ripgrep_search
 _SINKS: dict[str, set[str]] = {
     "python": {
         # SQL
-        "execute", "executemany", "executescript", "raw", "RawSQL",
+        "executemany", "executescript", "raw", "RawSQL",
         # OS / shell
         "system", "popen", "run", "call", "check_call", "check_output", "Popen",
         # Code injection
@@ -30,6 +30,16 @@ _SINKS: dict[str, set[str]] = {
     },
     "go": {"Exec", "Command", "Query", "Execute"},
     "csharp": {"Execute", "ExecuteNonQuery", "ExecuteReader", "ExecuteScalar", "Start"},
+}
+
+# Sinks that are often methods on objects (e.g. conn.execute()).
+# We treat these as sinks if they appear in an attribute call,
+# OR we try to trace them if they are unique.
+_METHOD_SINKS: dict[str, set[str]] = {
+    "python": {"execute", "query", "write"},
+    "javascript": {"query", "execute", "write"},
+    "go": {"Query", "Exec", "Execute"},
+    "csharp": {"Execute", "ExecuteNonQuery", "ExecuteReader", "ExecuteScalar"},
 }
 
 
@@ -69,11 +79,116 @@ def _extract_callee_name(func_node: Any) -> str | None:
     return None
 
 
+def _get_full_callee_path(func_node: Any) -> list[str]:
+    """Extract the full path of a callee (e.g. ['module', 'func'])."""
+    if func_node.type == "identifier":
+        return [func_node.text.decode("utf-8")]
+    if func_node.type == "attribute":
+        # In python: (attribute object: (_) attribute: (identifier))
+        obj = func_node.child_by_field_name("object")
+        attr = func_node.child_by_field_name("attribute")
+        
+        path: list[str] = []
+        if obj:
+            if obj.type == "identifier":
+                path.append(obj.text.decode("utf-8"))
+            elif obj.type == "attribute":
+                path.extend(_get_full_callee_path(obj))
+            elif obj.type == "call":
+                # For call().method, we might want to know the call's callee
+                inner_callee_node = obj.child_by_field_name("function")
+                if inner_callee_node:
+                    path.extend(_get_full_callee_path(inner_callee_node))
+                path.append("()") # Marker for call
+        
+        if attr and attr.type == "identifier":
+            path.append(attr.text.decode("utf-8"))
+        
+        return path
+    return []
+
+
+def _resolve_import(
+    symbol_name: str,
+    file_content: bytes,
+    language: str = "python",
+) -> str | None:
+    """Attempt to resolve which module/file a symbol is imported from.
+
+    Args:
+        symbol_name: The name of the symbol to resolve.
+        file_content: Raw bytes of the file where symbol is used.
+        language: Programming language.
+
+    Returns:
+        The likely module name or file path prefix, or None.
+    """
+    if language != "python":
+        return None  # TODO: Implement for other languages
+
+    parser = _make_parser(language)
+    if parser is None:
+        return None
+    tree = parser.parse(file_content)
+
+    # Search for:
+    # 1. from X import symbol_name
+    # 2. import symbol_name (less likely for functions)
+    # 3. import X as symbol_name
+
+    def walk(node: Any) -> str | None:
+        if node.type == "import_from_statement":
+            # node structure: from module_name import name1, name2
+            module_node = node.child_by_field_name("module_name")
+            if module_node:
+                module_name = module_node.text.decode("utf-8")
+                # Check if symbol_name is in the imported names
+                for child in node.children:
+                    if child.type == "dotted_name" and child.text.decode("utf-8") == symbol_name:
+                        return module_name
+                    if child.type == "aliased_import":
+                        name = child.child_by_field_name("name")
+                        alias = child.child_by_field_name("alias")
+                        if alias and alias.text.decode("utf-8") == symbol_name:
+                            return module_name
+                        if not alias and name and name.text.decode("utf-8") == symbol_name:
+                            return module_name
+
+        if node.type == "import_statement":
+            for child in node.children:
+                if child.type == "dotted_name" and child.text.decode("utf-8") == symbol_name:
+                    return symbol_name
+                if child.type == "aliased_import":
+                    alias = child.child_by_field_name("alias")
+                    if alias and alias.text.decode("utf-8") == symbol_name:
+                        name = child.child_by_field_name("name")
+                        return name.text.decode("utf-8") if name else None
+
+        for child in node.children:
+            res = walk(child)
+            if res:
+                return res
+        return None
+
+    return walk(tree.root_node)
+
+
+def _module_to_file_path(module_name: str, project_root: str) -> str | None:
+    """Converts a python module name (a.b.c) to a likely file path."""
+    rel_path = module_name.replace(".", os.sep)
+    # Try .py and /__init__.py
+    options = [rel_path + ".py", os.path.join(rel_path, "__init__.py")]
+    for opt in options:
+        if os.path.exists(os.path.join(project_root, opt)):
+            return opt
+    return None
+
+
 def _find_calls_passing_variable(
     variable_name: str,
     content: bytes,
     language: str = "python",
-) -> list[tuple[str, int, int]]:
+) -> list[tuple[str, int, int, Any]]:
     """Find all calls in *content* where *variable_name* appears as an argument.
 
     Args:
@@ -82,19 +197,20 @@ def _find_calls_passing_variable(
         language: Programming language.
 
     Returns:
-        A list of ``(callee_name, arg_index, line_number)`` tuples.
+        A list of ``(callee_name, arg_index, line_number, callee_node)`` tuples.
     """
     parser = _make_parser(language)
     if parser is None:
         return []
     tree = parser.parse(content)
 
-    results: list[tuple[str, int, int]] = []
+    results: list[tuple[str, int, int, Any]] = []
 
     def walk(node: Any) -> None:
         if node.type == "call":
             callee_node = node.children[0] if node.children else None
             callee = _extract_callee_name(callee_node) if callee_node else None
+
             arg_list = next(
                 (c for c in node.children if c.type == "argument_list"), None
             )
@@ -104,7 +220,7 @@ def _find_calls_passing_variable(
                 ]
                 for idx, arg in enumerate(actual_args):
                     if _node_contains_identifier(arg, variable_name):
-                        results.append((callee, idx, node.start_point[0] + 1))
+                        results.append((callee, idx, node.start_point[0] + 1, callee_node))
         for child in node.children:
             walk(child)
 
@@ -260,8 +376,42 @@ def _resolve_param_name(
         return params[arg_index]
     return None
 
+def _find_assignment(
+    variable_name: str,
+    file_content: bytes,
+    language: str = "python",
+) -> str | None:
+    """Find the value assigned to a variable in the current file."""
+    if language != "python":
+        return None
+
+    parser = _make_parser(language)
+    if parser is None:
+        return None
+    tree = parser.parse(file_content)
+
+    # Search for: variable_name = Value(...)
+    def walk(node: Any) -> str | None:
+        if node.type == "assignment":
+            left = node.child_by_field_name("left")
+            right = node.child_by_field_name("right")
+            if left and left.text.decode("utf-8") == variable_name and right:
+                if right.type == "call":
+                    # Extract callee of the assignment (e.g. 'Database' in 'db = Database()')
+                    callee = right.child_by_field_name("function")
+                    if callee:
+                        return callee.text.decode("utf-8")
+        for child in node.children:
+            res = walk(child)
+            if res:
+                return res
+        return None
+
+    return walk(tree.root_node)
+
+
 def _process_tainted_calls(  # noqa: PLR0913
-    calls: list[tuple[str, int, int]],
+    calls: list[tuple[str, int, int, Any]],
     var: str,
     sinks: set[str],
     report_lines: list[str],
@@ -271,46 +421,108 @@ def _process_tainted_calls(  # noqa: PLR0913
     depth: int,
     max_depth: int,
     visited: set[tuple[str, str]],
+    file_content: bytes,
 ) -> bool:
     """Process calls where a tainted variable is passed as an argument."""
     found_sink = False
-    for callee, arg_idx, line_no in calls:
+    method_sinks = _METHOD_SINKS.get(language, set())
+
+    for callee, arg_idx, line_no, callee_node in calls:
+        # Check if it's a known direct sink
         if callee in sinks:
             report_lines.append(
                 f"{indent}  *** SINK *** Line {line_no}: '{var}' passed to '{callee}()' "
                 f"(arg {arg_idx}) — potential vulnerability"
             )
             found_sink = True
+            continue
+
+        # Check for method sinks (e.g. conn.execute)
+        is_method_sink_candidate = callee in method_sinks
+        
+        report_lines.append(
+            f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
+        )
+
+        # --- ENHANCED RESOLUTION ---
+        callee_files: list[str] = []
+
+        # 1. Check if it's an attribute call (obj.method)
+        path = _get_full_callee_path(callee_node)
+        obj_name = None
+        if len(path) > 1:
+            obj_name = path[0]
+            # Try to see where obj_name comes from
+            # a) Is it an imported module name?
+            imported_module = _resolve_import(obj_name, file_content, language)
+            if not imported_module:
+                # b) Is it a local variable assigned from an imported class?
+                assigned_from = _find_assignment(obj_name, file_content, language)
+                if assigned_from:
+                    imported_module = _resolve_import(assigned_from, file_content, language)
+
+            if imported_module:
+                m_path = _module_to_file_path(imported_module, project_root)
+                if m_path:
+                    callee_files = [m_path]
+                else:
+                    # It's an imported module but not in project (e.g. stdlib)
+                    # If it's a known method sink, treat as sink
+                    if is_method_sink_candidate:
+                        report_lines.append(
+                            f"{indent}  *** SINK (Library) *** Line {line_no}: '{var}' passed to '{callee}()' "
+                            f"on library object '{obj_name}' (module '{imported_module}')"
+                        )
+                        found_sink = True
+                        continue
+
+        # 2. Check if the function itself is imported
+        if not callee_files:
+            imported_module = _resolve_import(callee, file_content, language)
+            if imported_module:
+                m_path = _module_to_file_path(imported_module, project_root)
+                if m_path:
+                    callee_files = [m_path]
+
+        # 3. Fallback to global search
+        if not callee_files:
+            callee_files = _find_function_files(callee, project_root, language)
+
+        # 4. Final heuristic for method sinks:
+        # If it's a method sink (like .execute) and we still have NO files OR multiple files 
+        # but none were resolved via imports, it might be a library sink (sqlite3.execute).
+        if is_method_sink_candidate and not callee_files:
+             report_lines.append(
+                f"{indent}  *** SINK (Method) *** Line {line_no}: '{var}' passed to '{callee}()' "
+                f"on object '{obj_name}' — potential library sink"
+            )
+             found_sink = True
+             continue
+
+        if not callee_files:
+            report_lines.append(
+                f"{indent}    [definition of '{callee}' not found in project — "
+                f"may be an external library call]"
+            )
+            continue
+
+        if len(callee_files) > 1:
+            report_lines.append(
+                f"{indent}    [Warning: multiple definitions for '{callee}' found. Following first match in {callee_files[0]}]"
+            )
+
+        callee_file = callee_files[0]
+        abs_callee_file = os.path.join(project_root, callee_file)
+        param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, language)
+        if param_name:
+            _trace_recursive(
+                param_name, callee_file, depth + 1, max_depth,
+                visited, report_lines, project_root, language, sinks
+            )
         else:
             report_lines.append(
-                f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
+                f"{indent}    [could not resolve param at index {arg_idx} in {callee}]"
             )
-            # Resolve callee files and param name
-            callee_files = _find_function_files(callee, project_root, language)
-            if not callee_files:
-                report_lines.append(
-                    f"{indent}    [definition of '{callee}' not found in project — "
-                    f"may be an external library call]"
-                )
-                continue
-
-            if len(callee_files) > 1:
-                report_lines.append(
-                    f"{indent}    [Warning: multiple definitions for '{callee}' found. Following first match in {callee_files[0]}]"
-                )
-
-            callee_file = callee_files[0]
-            abs_callee_file = os.path.join(project_root, callee_file)
-            param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, language)
-            if param_name:
-                _trace_recursive(
-                    param_name, callee_file, depth + 1, max_depth,
-                    visited, report_lines, project_root, language, sinks
-                )
-            else:
-                report_lines.append(
-                    f"{indent}    [could not resolve param at index {arg_idx} in {callee}]"
-                )
     return found_sink
 
 
@@ -349,7 +561,7 @@ def _trace_recursive(  # noqa: PLR0913
     calls = _find_calls_passing_variable(var, content, language)
     found_sink = _process_tainted_calls(
         calls, var, sinks, report_lines, indent, project_root,
-        language, depth, max_depth, visited
+        language, depth, max_depth, visited, content
     )
 
     return_lines = _find_returns_variable(var, content, language)
@@ -407,7 +619,7 @@ def trace_taint_cross_file(
     )
 
     report_lines.append("\n" + "=" * 60)
-    has_sink = any("*** SINK ***" in line for line in report_lines)
+    has_sink = any("*** SINK" in line for line in report_lines)
     report_lines.append(
         "RESULT: POTENTIAL VULNERABILITY FOUND" if has_sink else "RESULT: No sinks reached within depth limit"
     )

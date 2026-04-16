@@ -154,8 +154,8 @@
 ## 🛠️ Post-Review Refinements (from April 2026 Review)
 
 ### Semantic Intelligence & Taint Tracing
-- [ ] **[HIGH]** Fix `trace_taint_cross_file` limitations: handle namespaces, imports, and complex callee expressions (e.g., `obj.method()`).
-- [ ] **[MEDIUM]** Improve `get_ast_summary` and `get_scope_info`: support nested definitions, JS arrow functions, and local variable assignments.
+- [x] **[HIGH]** Fix `trace_taint_cross_file` limitations: handle namespaces, imports, and complex callee expressions (e.g., `obj.method()`).
+- [x] **[MEDIUM]** Improve `get_ast_summary` and `get_scope_info`: support nested definitions, JS arrow functions, and local variable assignments.
 - [ ] **[MEDIUM]** Decouple language-specific logic: move hardcoded node types and skips (like `self`/`cls`) from tools to a configuration or metadata structure.
 - [x] **[MEDIUM]** Advanced Taint Analysis: Add support for variable aliasing (data flow through assignments).
 - [ ] **[MEDIUM]** Broaden AST Support: Expand `tree-sitter` node coverage (e.g., arrow functions, expressions) and language support.
@@ -171,7 +171,7 @@
 - [x] **[HIGH]** Robust JSON Parsing: Implement centralized `parse_json_response` and `extract_json_list` utilities for all agent responses.
 - [x] **[HIGH]** Fix `PermissionManager` metadata loss: Ensure `wrap_tool` preserves original tool name and description.
 - [x] **[MEDIUM]** Capture LLM Prompts: Update `TrashDigCallback` to record the actual prompt sent to the model in the database.
-- [ ] **[MEDIUM]** Configurable Cost Tracking: Refactor `CostTracker` to use configurable or dynamically fetched rates instead of hardcoded ones.
+- [x] **[MEDIUM]** Configurable Cost Tracking: Refactor `CostTracker` to use configurable or dynamically fetched rates (via LiteLLM JSON).
 - [x] **[MEDIUM]** Recursive Agent Search: Update `Coordinator._agent_by_name` to find nested agents for callback accounting.
 - [ ] **[LOW]** Configurable `noisy_dirs`: Move the hardcoded list in `get_project_structure` to `trashdig.toml`.
 - [ ] **[LOW]** Consolidate `Coordinator` logic: Reduce redundancy between `run_full_scan` and TUI-specific methods (`run_recon`, `run_hunter`).

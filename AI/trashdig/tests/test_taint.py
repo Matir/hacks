@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from trashdig.config import Config
-from trashdig.tools import trace_taint_cross_file
+from trashdig.tools.trace_taint_cross_file import trace_taint_cross_file
 from trashdig.tools.base import _make_parser
 from trashdig.tools.trace_taint_cross_file import (
     _extract_callee_name,
@@ -22,7 +22,9 @@ from trashdig.tools.trace_taint_cross_file import (
 @pytest.fixture(autouse=True)
 def mock_cfg():
     with patch("trashdig.config.get_config") as mock:
-        mock.return_value = Config(require_sandbox=False)
+        c = Config()
+        c.data["require_sandbox"] = False
+        mock.return_value = c
         yield mock
 
 
@@ -69,7 +71,8 @@ def test_find_calls_passing_variable_simple():
     src = b"result = fetch(user_id)\n"
     calls = _find_calls_passing_variable("user_id", src, "python")
     assert len(calls) == 1
-    callee, idx, line = calls[0]
+    callee, idx, line, _node = calls[0]
+
     assert callee == "fetch"
     assert idx == 0
     assert line == 1
@@ -85,7 +88,8 @@ def test_find_calls_passing_variable_sink():
     src = b"os.system(user_input)\n"
     calls = _find_calls_passing_variable("user_input", src, "python")
     assert len(calls) == 1
-    callee, idx, line = calls[0]
+    callee, idx, line, _node = calls[0]
+
     assert callee == "system"
     assert idx == 0
 
