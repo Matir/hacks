@@ -1,6 +1,8 @@
-import pytest
 import json
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from trashdig.agents.hunter import HunterAgent, create_hunter_agent
 from trashdig.config import AgentConfig
 

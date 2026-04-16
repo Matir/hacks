@@ -1,5 +1,7 @@
 from typing import List
-from .base import artifact_tool, _run_sandboxed
+
+from .base import _run_sandboxed, artifact_tool
+
 
 @artifact_tool(max_chars=5000)
 def bash_tool(command: str, timeout: int = 30) -> str:

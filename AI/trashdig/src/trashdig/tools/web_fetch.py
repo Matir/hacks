@@ -1,4 +1,8 @@
+import aiohttp
+from bs4 import BeautifulSoup
+
 from .base import artifact_tool
+
 
 @artifact_tool(max_chars=8000)
 async def web_fetch(url: str) -> str:
@@ -11,9 +15,6 @@ async def web_fetch(url: str) -> str:
     Returns:
         The text content of the page (cleaned of HTML tags).
     """
-    import aiohttp
-    from bs4 import BeautifulSoup
-    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:

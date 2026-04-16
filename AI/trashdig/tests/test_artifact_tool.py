@@ -1,9 +1,13 @@
-import os
-import shutil
-import pytest
 import asyncio
+import os
+import re
+import shutil
 from unittest.mock import AsyncMock
-from trashdig.tools import artifact_tool, init_artifact_manager
+
+import pytest
+
+from trashdig.tools import artifact_tool, get_artifact_service, init_artifact_manager
+
 
 @pytest.fixture
 def temp_artifact_dir(tmp_path):
@@ -48,7 +52,6 @@ async def test_artifact_tool_truncation(temp_artifact_dir):
     assert "Total Size: 200 characters." in result
     
     # Extract path from result
-    import re
     match = re.search(r"Full output saved as legacy artifact: (.*\.txt)", result)
     assert match is not None
     artifact_path = match.group(1)
@@ -96,7 +99,6 @@ def test_init_artifact_manager(tmp_path):
     data_dir = tmp_path / "custom_data"
     service = init_artifact_manager(str(data_dir))
     
-    from trashdig.tools import get_artifact_service
     assert get_artifact_service() == service
     assert os.path.isdir(os.path.join(str(data_dir), "artifacts"))
 
@@ -112,7 +114,6 @@ async def test_artifact_tool_stable_filename(temp_artifact_dir):
     result_a = await maybe_await(my_tool())
     result_b = await maybe_await(my_tool())
     
-    import re
     path_a = re.search(r"artifact: (.*\.txt)", result_a).group(1)
     path_b = re.search(r"artifact: (.*\.txt)", result_b).group(1)
     
@@ -132,7 +133,6 @@ async def test_artifact_tool_async(temp_artifact_dir):
     assert "[TRUNCATED: Showing first 50 characters]" in result
     assert "Full output saved as legacy artifact:" in result
     
-    import re
     match = re.search(r"Full output saved as legacy artifact: (.*\.txt)", result)
     artifact_path = match.group(1)
     

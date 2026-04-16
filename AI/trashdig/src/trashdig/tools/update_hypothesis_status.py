@@ -1,6 +1,9 @@
+import sqlite3
 from datetime import datetime
 from typing import Optional
+
 from .base import get_config
+
 
 def update_hypothesis_status(task_id: str, status: str, db_path: Optional[str] = None) -> str:
     """Updates the status of a hypothesis (e.g., to 'completed' or 'failed').
@@ -15,7 +18,6 @@ def update_hypothesis_status(task_id: str, status: str, db_path: Optional[str] =
     """
     if db_path is None:
         db_path = get_config().db_path
-    import sqlite3
     try:
         conn = sqlite3.connect(db_path)
         conn.execute(

@@ -1,6 +1,8 @@
-from typing import Optional, Any
+from typing import Any, Optional
+
 from .base import artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
+
 
 @artifact_tool(max_chars=5000)
 def find_references(symbol_name: str, path: Optional[str] = None, tool_context: Any = None) -> str:

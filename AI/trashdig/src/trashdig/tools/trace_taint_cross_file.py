@@ -1,7 +1,8 @@
 import os
 import re
-from typing import List, Optional, Any, Dict, Set, Tuple
-from .base import artifact_tool, get_config, _make_parser
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+from .base import _make_parser, artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
 
 # Known dangerous sinks per language. A call to any of these functions is

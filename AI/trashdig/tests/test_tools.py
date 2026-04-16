@@ -1,8 +1,25 @@
 import subprocess
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from trashdig.tools import ripgrep_search, semgrep_scan, get_ast_summary, get_symbol_definition, find_references, bash_tool, query_cwe_database, get_scope_info
+
 from trashdig.config import Config
+from trashdig.tools import (
+    bash_tool,
+    container_bash_tool,
+    find_references,
+    get_ast_summary,
+    get_scope_info,
+    get_symbol_definition,
+    query_cwe_database,
+    ripgrep_search,
+    semgrep_scan,
+    trace_variable,
+    trace_variable_semantic,
+    web_fetch,
+)
+from trashdig.utils import set_binary_stub
+
 
 @pytest.fixture(autouse=True)
 def mock_cfg():
@@ -98,34 +115,30 @@ def test_bash_tool(mock_run):
 
 @patch("subprocess.run")
 def test_container_bash_tool_docker_available(mock_run):
-    # Mock first call for docker --version
-    mock_run.side_effect = [
-        MagicMock(returncode=0), # docker --version
-        MagicMock(stdout="container output", stderr="", returncode=0) # docker run ...
-    ]
-    from trashdig.tools import container_bash_tool
+    set_binary_stub("docker", True)
+    # Mock docker run ...
+    mock_run.return_value = MagicMock(stdout="container output", stderr="", returncode=0)
+    
     result = container_bash_tool("ls")
     assert "STDOUT:\ncontainer output" in result
     assert "Exit Code: 0" in result
-    assert mock_run.call_count == 2
+    assert mock_run.call_count == 1
     # Check that docker run was called
-    args = mock_run.call_args_list[1][0][0]
+    args = mock_run.call_args[0][0]
     assert "docker" in args
     assert "run" in args
     assert "--rm" in args
 
 @patch("subprocess.run")
 def test_container_bash_tool_no_docker(mock_run):
-    # Mock first call for docker --version failing
-    mock_run.side_effect = [
-        FileNotFoundError, # docker not found
-        MagicMock(stdout="host output", stderr="", returncode=0) # fallback to bash_tool
-    ]
-    from trashdig.tools import container_bash_tool
+    set_binary_stub("docker", False)
+    # Mock fallback to bash_tool
+    mock_run.return_value = MagicMock(stdout="host output", stderr="", returncode=0)
+    
     result = container_bash_tool("ls")
     assert "Warning: Docker not found" in result
     assert "STDOUT:\nhost output" in result
-    assert mock_run.call_count == 2
+    assert mock_run.call_count == 1
 
 @patch("json.load")
 @patch("builtins.open")
@@ -205,14 +218,12 @@ def test_trace_variable_semantic(mock_parser_class, mock_get_lang):
     mock_tree.root_node.children = [mock_node]
     
     with patch("builtins.open", MagicMock()):
-        from trashdig.tools import trace_variable_semantic
         result = trace_variable_semantic("my_var", "test.py", "python")
         assert "Line 6: ASSIGNMENT/DEFINITION" in result
 
 @patch("trashdig.tools.trace_variable.ripgrep_search")
 def test_trace_variable(mock_rg):
     mock_rg.return_value = "line 5: my_var = 1"
-    from trashdig.tools import trace_variable
     result = trace_variable("my_var", "test.py")
     assert "line 5: my_var = 1" in result
 
@@ -226,6 +237,5 @@ async def test_web_fetch(mock_get):
     # aiohttp uses async context managers
     mock_get.return_value.__aenter__.return_value = mock_response
     
-    from trashdig.tools import web_fetch
     result = await web_fetch("http://example.com")
     assert "Hello" in result

@@ -1,11 +1,14 @@
-import pytest
 import json
 from unittest.mock import MagicMock, patch
-from trashdig.agents.coordinator import Coordinator
-from trashdig.config import Config, AgentConfig
-from trashdig.findings import Finding
+
+import pytest
 from google.adk.agents import LlmAgent
+
+from trashdig.agents.coordinator import Coordinator
+from trashdig.config import AgentConfig, Config
+from trashdig.findings import Finding
 from trashdig.services.database import get_database
+
 
 @pytest.fixture
 def mock_config(tmp_path):

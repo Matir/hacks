@@ -1,30 +1,37 @@
-import os
 import functools
-import json
-from typing import Any, Dict, List, Optional, Callable
+import os
+from typing import Any, Callable, Dict, List, Optional
 
-from pydantic import PrivateAttr
 from google.adk.agents import LlmAgent, LoopAgent
-from google.adk.sessions.sqlite_session_service import SqliteSessionService
-from google.adk.sessions import BaseSessionService
-from google.adk.tools import FunctionTool
 from google.adk.artifacts import BaseArtifactService
+from google.adk.sessions import BaseSessionService
+from google.adk.sessions.sqlite_session_service import SqliteSessionService
+from google.adk.tools import FunctionTool
+from pydantic import PrivateAttr
 
 from trashdig.agents.callbacks import TrashDigCallback
-from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.hunter import create_hunter_agent
-from trashdig.agents.validator import create_validator_agent
+from trashdig.agents.json_utils import parse_json_response
+from trashdig.agents.recon import (
+    create_stack_scout_agent,
+    create_web_route_mapper_agent,
+)
 from trashdig.agents.skeptic import create_skeptic_agent
-from trashdig.agents.types import Hypothesis, TaskType, EngineState
-from trashdig.agents.json_utils import parse_json_response, extract_json_list
-from trashdig.agents.utils import run_agent
+from trashdig.agents.types import EngineState, Hypothesis, TaskType
+from trashdig.agents.utils import read_file_content, run_agent
+from trashdig.agents.validator import create_validator_agent
 from trashdig.config import Config
-from trashdig.services.database import ProjectDatabase, get_database
-from trashdig.services.cost import CostTracker
-from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
-from trashdig.tools import get_next_hypothesis, update_hypothesis_status, exit_loop, save_findings, save_hypotheses
-
+from trashdig.services.cost import CostTracker
+from trashdig.services.database import ProjectDatabase, get_database
+from trashdig.services.permissions import PermissionManager
+from trashdig.tools import (
+    exit_loop,
+    get_next_hypothesis,
+    save_findings,
+    save_hypotheses,
+    update_hypothesis_status,
+)
 
 _COORDINATOR_INSTRUCTION = """
 You are TrashDig's Coordinator — an AI orchestrator for a multi-phase vulnerability scanner.
@@ -523,7 +530,6 @@ class Coordinator(LlmAgent):
         return self._scan_results
 
     async def run_hunter(self, targets: List[str], path: str = ".") -> List[Finding]:
-        from trashdig.agents.utils import read_file_content
         new_findings: List[Finding] = []
         for i, target in enumerate(targets, 1):
             self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")
@@ -590,8 +596,6 @@ class Coordinator(LlmAgent):
         return new_findings
 
     async def verify_finding(self, finding: Finding) -> Dict[str, Any]:
-        from trashdig.agents.utils import read_file_content
-        
         # 1. Run Skeptic
         self.log(f"[bold]Skeptic:[/bold] reviewing [bold yellow]{finding.title}[/bold yellow]")
         file_content = read_file_content(finding.file_path)

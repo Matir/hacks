@@ -176,4 +176,5 @@
 - [ ] **[LOW]** Configurable `noisy_dirs`: Move the hardcoded list in `get_project_structure` to `trashdig.toml`.
 - [ ] **[LOW]** Consolidate `Coordinator` logic: Reduce redundancy between `run_full_scan` and TUI-specific methods (`run_recon`, `run_hunter`).
 - [x] **[MEDIUM]** Standardize Task/Hypothesis IDs: Resolve naming inconsistency between `id` and `task_id` across database schema, types, and tools.
+- [x] **[LOW]** Enforce Python import standards: Consistent grouping (stdlib, 3rd party, trashdig), alphabetical sorting, and top-level placement via Ruff/isort.
 - [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.

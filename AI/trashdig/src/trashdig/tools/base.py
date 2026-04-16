@@ -1,16 +1,20 @@
-import re
-import subprocess
-import os
-import json
 import hashlib
 import inspect
-from datetime import datetime
-from typing import List, Optional, Any, Dict, Set, Tuple, Callable
+import os
+import subprocess
 from functools import wraps
+from typing import Any, Callable, List, Optional
+
+import tree_sitter
+import tree_sitter_c_sharp
+import tree_sitter_go
+import tree_sitter_javascript
+import tree_sitter_python
 from google.adk.artifacts import BaseArtifactService, FileArtifactService
 from google.genai import types
-from ..sandbox import get_sandbox
+
 from ..config import get_config
+from ..sandbox import get_sandbox
 
 # ---------------------------------------------------------------------------
 # Artifact System
@@ -214,12 +218,6 @@ def _get_ts_language(language: str) -> Any:
     Returns:
         A ``tree_sitter.Language`` instance or ``None`` if not supported.
     """
-    import tree_sitter
-    import tree_sitter_python
-    import tree_sitter_javascript
-    import tree_sitter_go
-    import tree_sitter_c_sharp
-
     capsules = {
         "python": tree_sitter_python.language(),
         "javascript": tree_sitter_javascript.language(),
@@ -239,7 +237,6 @@ def _make_parser(language: str) -> Any:
     Returns:
         A configured ``tree_sitter.Parser`` or ``None`` if unsupported.
     """
-    import tree_sitter
     lang = _get_ts_language(language)
     if lang is None:
         return None

@@ -86,6 +86,16 @@ These rules are foundational. Adhere to them for all modifications:
     *   **Workspace**: All project source files must be resolved relative to the workspace root.
     *   **Isolation in Tests**: All tests that require real filesystem access MUST use temporary directories (e.g., `pytest`'s `tmp_path` fixture).
     *   **Configuration-Driven**: Paths should be obtained from the `Config` object; only relative path templates should be hardcoded.
+9.  **Imports:**
+    *   All imports should be at the top of the file unless there is an explicit
+        reason to import later.  When this reason exits, add a comment
+        explaining why the import is there.
+    *   Imports should be grouped in the following order:
+        *   standard python library imports
+        *   3rd party external library imports
+        *   imports from within the trashdig project
+    *   Each group should be separated by a newline, and imports should be
+        sorted alphabetically within the group.
 
 ## 📂 Contextual References
 

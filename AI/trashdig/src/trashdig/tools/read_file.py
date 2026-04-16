@@ -1,5 +1,7 @@
 from typing import Any
+
 from .base import artifact_tool
+
 
 @artifact_tool(max_chars=4000)
 def read_file(file_path: str, tool_context: Any = None) -> str:

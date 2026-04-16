@@ -1,6 +1,8 @@
 import os
 import tempfile
+
 from trashdig.findings import Finding
+
 
 def test_finding_to_markdown():
     finding = Finding(

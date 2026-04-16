@@ -10,12 +10,12 @@ import hashlib
 import json
 import os
 import sqlite3
+import uuid as _uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, List, Optional
 
 from trashdig.config import get_config
-
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS project_profiles (
@@ -619,7 +619,6 @@ class ProjectDatabase:
             # Handle cases where a Mock might have been passed in tests
             project_path = str(project_path)
             
-        import uuid as _uuid
         with self._connect() as conn:
             row = conn.execute(
                 """

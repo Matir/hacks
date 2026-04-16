@@ -8,8 +8,9 @@ that were previously threaded through every agent wrapper method.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Optional
 
+from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
@@ -18,6 +19,8 @@ from google.adk.tools.tool_context import ToolContext
 
 from trashdig.agents.types import EngineState
 
+# Standard library and 3rd party imports are at the top.
+# The following imports are for type hinting only and avoid circular dependencies.
 if TYPE_CHECKING:
     from trashdig.agents.coordinator import Coordinator
 
@@ -80,8 +83,6 @@ class TrashDigCallback:
         agent.before_agent_callback = self.on_before_agent
         agent.after_agent_callback = self.on_after_agent
 
-        from google.adk.agents import LlmAgent
-        
         # Only LlmAgent supports these specific model/tool callbacks in its schema
         if isinstance(agent, LlmAgent):
             agent.before_tool_callback = self.on_before_tool
@@ -125,7 +126,7 @@ class TrashDigCallback:
     # Model hooks
     # ------------------------------------------------------------------
 
-    def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> Optional[LlmRequest]:
+    def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> Optional[LlmResponse]:
         """Capture the prompt before it is sent to the model."""
         prompt = ""
         if req.contents:

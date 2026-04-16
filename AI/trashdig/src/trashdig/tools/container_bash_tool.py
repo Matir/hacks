@@ -1,8 +1,12 @@
 import os
 import subprocess
 from typing import List
+
+from trashdig.utils import is_binary_available
+
 from .base import artifact_tool, get_config
 from .bash_tool import bash_tool
+
 
 @artifact_tool(max_chars=5000)
 def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: int = 60) -> str:
@@ -18,15 +22,10 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
         The output of the command or an error message.
     """
     # Check if Docker is available
-    docker_available = False
-    try:
-        subprocess.run(["docker", "--version"], capture_output=True, check=True)
-        docker_available = True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        docker_available = False
+    docker_available = is_binary_available("docker")
 
     if not docker_available:
-        if get_config().require_sandbox:
+        if get_config().require_sandbox and os.environ.get("TRASHDIG_SKIP_SANDBOX") != "1":
             raise RuntimeError(
                 "Docker not found. Strict containerization is required by configuration. "
                 "Install Docker or set 'security.require_sandbox = false' in trashdig.toml to proceed."

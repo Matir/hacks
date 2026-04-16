@@ -1,22 +1,25 @@
-from typing import Optional, List, Any
+from typing import Any, List, Optional
+
 from google.adk.agents import LlmAgent
-from google.adk.tools import FunctionTool, load_artifacts as load_artifacts_tool
-from trashdig.config import AgentConfig
+from google.adk.tools import FunctionTool
+from google.adk.tools import load_artifacts as load_artifacts_tool
+
 from trashdig.agents.utils import google_provider_extras, load_prompt
+from trashdig.config import AgentConfig
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
+    find_references,
+    get_ast_summary,
+    get_scope_info,
+    get_symbol_definition,
+    query_cwe_database,
+    read_file,
     ripgrep_search,
     semgrep_scan,
-    get_ast_summary,
-    query_cwe_database,
-    get_symbol_definition,
-    trace_variable,
-    find_references,
-    get_scope_info,
-    trace_variable_semantic,
     trace_taint_cross_file,
+    trace_variable,
+    trace_variable_semantic,
     web_fetch,
-    read_file,
 )
 
 

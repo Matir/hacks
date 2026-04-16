@@ -1,6 +1,8 @@
 from typing import List, Optional
+
 from .base import artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
+
 
 @artifact_tool(max_chars=5000)
 def get_symbol_definition(symbol_name: str, path: Optional[str] = None) -> str:

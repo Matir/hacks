@@ -1,19 +1,22 @@
 from __future__ import annotations
-import os
+
 import logging
+import os
 import traceback
-from typing import List, Dict, Any, Optional, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Tree, Static, Label, Input, RichLog
-from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
 from textual.events import Key
+from textual.widgets import Footer, Header, Input, Label, RichLog, Static, Tree
 from textual_autocomplete import AutoComplete, DropdownItem
 
 from trashdig.agents.coordinator import Coordinator
 from trashdig.agents.utils import get_project_structure, log_auth_info
 from trashdig.config import Config
 from trashdig.findings import Finding
+from trashdig.tools import get_artifact_service
 
 
 def _setup_file_logger(log_path: str) -> logging.Logger:
@@ -293,7 +296,6 @@ class TrashDigApp(App):
         self._file_log.info("Session started — workspace: %s", workspace_root)
         log_auth_info(self.config, self._file_log)
         
-        from trashdig.tools import get_artifact_service
         art_service = get_artifact_service()
         
         self.coordinator = Coordinator(self.config, project_path=workspace_root, artifact_service=art_service)

@@ -1,7 +1,8 @@
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, Any, Optional
-import uuid
+from typing import Any, Dict, Optional
+
 
 class TaskType(Enum):
     SCAN = auto()           # Archaeologist mapping

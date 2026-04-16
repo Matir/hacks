@@ -1,8 +1,11 @@
 import inspect
-from typing import Any, Callable, Dict, List, Optional
 from functools import wraps
+from typing import Any, Callable, Dict, List, Optional
+
 from google.adk.tools import FunctionTool
+
 from trashdig.config import Config, get_config
+
 
 class PermissionManager:
     """Manages tool call permissions based on configuration and user confirmation.

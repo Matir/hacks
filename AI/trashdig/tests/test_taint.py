@@ -10,13 +10,14 @@ from trashdig.config import Config
 from trashdig.tools import trace_taint_cross_file
 from trashdig.tools.base import _make_parser
 from trashdig.tools.trace_taint_cross_file import (
-    _node_contains_identifier,
     _extract_callee_name,
     _find_calls_passing_variable,
-    _find_returns_variable,
     _find_function_files,
+    _find_returns_variable,
+    _node_contains_identifier,
     _resolve_param_name,
 )
+
 
 @pytest.fixture(autouse=True)
 def mock_cfg():

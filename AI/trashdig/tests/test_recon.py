@@ -1,8 +1,16 @@
-import pytest
 import json
-from unittest.mock import MagicMock, patch, AsyncMock
-from trashdig.agents.recon import StackScoutAgent, WebRouteMapperAgent, create_stack_scout_agent, create_web_route_mapper_agent
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from trashdig.agents.recon import (
+    StackScoutAgent,
+    WebRouteMapperAgent,
+    create_stack_scout_agent,
+    create_web_route_mapper_agent,
+)
 from trashdig.config import Config
+
 
 @pytest.fixture
 def mock_config():

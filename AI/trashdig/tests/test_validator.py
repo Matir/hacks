@@ -1,7 +1,10 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+
 from trashdig.agents.validator import ValidatorAgent, create_validator_agent
 from trashdig.config import AgentConfig
+
 
 @pytest.mark.anyio
 @patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)

@@ -1,6 +1,7 @@
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
 
 def parse_json_response(text: str) -> Dict[str, Any]:
     """Cleans and parses a JSON response from an LLM.

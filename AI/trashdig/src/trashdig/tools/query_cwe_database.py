@@ -1,7 +1,9 @@
-import os
 import json
-from typing import List, Dict, Any
+import os
+from typing import Any, Dict, List
+
 from .base import artifact_tool
+
 
 @artifact_tool(max_chars=5000)
 def query_cwe_database(query: str) -> str:

@@ -1,5 +1,6 @@
 from typing import Any
 
+
 def exit_loop(tool_context: Any) -> str:
     """Exits the current autonomous loop. Call this when no more targets remain.
 

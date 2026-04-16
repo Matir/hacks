@@ -1,4 +1,5 @@
-from trashdig.agents.types import Task, TaskType, TaskStatus, Hypothesis
+from trashdig.agents.types import Hypothesis, Task, TaskStatus, TaskType
+
 
 def test_task_creation():
     task = Task(type=TaskType.SCAN, target="src/main.py")

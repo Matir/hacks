@@ -1,8 +1,13 @@
-import pytest
+import os
 import sys
 from unittest.mock import MagicMock, patch
-from trashdig.sandbox import get_sandbox, NullSandbox
+
+import pytest
+
+from trashdig.sandbox import NullSandbox, get_sandbox
 from trashdig.sandbox.minijail import MinijailSandbox
+from trashdig.utils import set_binary_stub
+
 
 def test_null_sandbox():
     sandbox = NullSandbox(workspace_dir="/tmp/test")
@@ -21,18 +26,16 @@ def test_null_sandbox():
         )
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Minijail only on Linux")
-@patch("shutil.which")
-def test_minijail_sandbox_init(mock_which):
-    mock_which.return_value = "/usr/bin/minijail0"
+def test_minijail_sandbox_init():
+    set_binary_stub("minijail0", True)
     sandbox = MinijailSandbox(workspace_dir="/tmp/test")
-    assert sandbox.minijail_path == "/usr/bin/minijail0"
+    assert sandbox.minijail_path == "/stub/bin/minijail0"
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Minijail only on Linux")
-@patch("shutil.which")
 @patch("subprocess.run")
 @patch("os.path.exists")
-def test_minijail_sandbox_run(mock_exists, mock_run, mock_which):
-    mock_which.return_value = "/usr/bin/minijail0"
+def test_minijail_sandbox_run(mock_exists, mock_run):
+    set_binary_stub("minijail0", True)
     mock_exists.return_value = True
     mock_run.return_value = MagicMock(stdout="sandboxed", returncode=0)
     
@@ -43,7 +46,7 @@ def test_minijail_sandbox_run(mock_exists, mock_run, mock_which):
     mock_run.assert_called_once()
     args = mock_run.call_args[0][0]
     
-    assert "/usr/bin/minijail0" in args
+    assert "/stub/bin/minijail0" in args
     assert "-v" in args
     assert "-d" in args
     assert "-p" in args
@@ -62,8 +65,9 @@ def test_minijail_sandbox_run(mock_exists, mock_run, mock_which):
 @patch("sys.platform", "darwin")
 def test_get_sandbox_macos_strict_require(caplog):
     # On MacOS, it should raise RuntimeError if sandbox is required
-    with pytest.raises(RuntimeError) as excinfo:
-        get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
+    with patch.dict(os.environ, {"TRASHDIG_SKIP_SANDBOX": "0"}):
+        with pytest.raises(RuntimeError) as excinfo:
+            get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
     assert "No native sandbox implementation available" in str(excinfo.value)
 
 @patch("sys.platform", "darwin")
@@ -74,15 +78,13 @@ def test_get_sandbox_macos_graceful_fallback(caplog):
     assert "No native sandbox implementation available" in caplog.text
 
 @patch("sys.platform", "linux")
-@patch("shutil.which")
-def test_get_sandbox_linux_minijail(mock_which):
-    mock_which.return_value = "/usr/bin/minijail0"
+def test_get_sandbox_linux_minijail():
+    set_binary_stub("minijail0", True)
     sandbox = get_sandbox(workspace_dir="/tmp/test")
     assert isinstance(sandbox, MinijailSandbox)
 
 @patch("sys.platform", "linux")
-@patch("shutil.which")
-def test_get_sandbox_linux_no_minijail_fallback(mock_which):
-    mock_which.return_value = None
+def test_get_sandbox_linux_no_minijail_fallback():
+    set_binary_stub("minijail0", False)
     sandbox = get_sandbox(workspace_dir="/tmp/test", require_sandbox=False)
     assert isinstance(sandbox, NullSandbox)

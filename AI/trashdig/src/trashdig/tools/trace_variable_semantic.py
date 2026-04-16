@@ -1,5 +1,7 @@
-from typing import List, Any
-from .base import artifact_tool, _get_ts_language, _make_parser, get_config
+from typing import Any, List
+
+from .base import _get_ts_language, _make_parser, artifact_tool, get_config
+
 
 @artifact_tool(max_chars=5000)
 def trace_variable_semantic(variable_name: str, file_path: str, language: str = "python") -> str:

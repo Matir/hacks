@@ -1,16 +1,20 @@
 import argparse
+import asyncio
+import dataclasses
 import os
 import sys
-import asyncio
+import traceback
 import warnings
 from typing import Any
+
+import tomli_w
 from rich.console import Console
 
-from trashdig.tui.app import TrashDigApp
+from trashdig.agents.coordinator import Coordinator
 from trashdig.config import load_config
 from trashdig.services.rate_limiter import init_rate_limiter
 from trashdig.tools import init_artifact_manager
-from trashdig.agents.coordinator import Coordinator
+from trashdig.tui.app import TrashDigApp
 
 # Suppress experimental ADK feature warnings
 warnings.filterwarnings("ignore", message=".*FeatureName.PLUGGABLE_AUTH.*")
@@ -59,9 +63,6 @@ def main() -> None:
     )
 
     if args.dump_config:
-        import tomli_w
-        import dataclasses
-
         def filter_none(d: Any) -> Any:
             if isinstance(d, dict):
                 return {k: filter_none(v) for k, v in d.items() if v is not None}
@@ -101,7 +102,6 @@ def main() -> None:
             console.print(f"Total Cost: ${coordinator.total_cost:.4f}")
         except Exception as e:
             console.print(f"[bold red]Error during scan:[/bold red] {e}")
-            import traceback
             traceback.print_exc()
             sys.exit(1)
     else:

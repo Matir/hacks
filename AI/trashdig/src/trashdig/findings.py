@@ -3,6 +3,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+from trashdig.config import get_config
+
+
 @dataclass
 class Finding:
     """Represents a vulnerability finding discovered by the Hunter agent.
@@ -81,7 +84,6 @@ class Finding:
         Returns:
             The absolute path to the saved file.
         """
-        from trashdig.config import get_config
         if output_dir is None:
             output_dir = get_config().resolve_data_path("findings")
             

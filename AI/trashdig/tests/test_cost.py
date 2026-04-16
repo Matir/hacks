@@ -1,5 +1,7 @@
 import pytest
+
 from trashdig.services.cost import CostTracker
+
 
 def test_cost_tracker_initial_cost():
     tracker = CostTracker()

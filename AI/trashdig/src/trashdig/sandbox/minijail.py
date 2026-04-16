@@ -1,8 +1,10 @@
-import subprocess
-import os
-import shutil
 import logging
-from typing import List, Optional, Any
+import os
+import subprocess
+from typing import Any, List, Optional
+
+from trashdig.utils import get_binary_path
+
 from .base import Sandbox
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ class MinijailSandbox(Sandbox):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.minijail_path = shutil.which("minijail0")
+        self.minijail_path = get_binary_path("minijail0")
         if not self.minijail_path:
             raise RuntimeError("minijail0 not found in PATH.")
 

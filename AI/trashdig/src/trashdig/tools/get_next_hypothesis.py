@@ -1,6 +1,9 @@
 import json
+import sqlite3
 from typing import Optional
+
 from .base import get_config
+
 
 def get_next_hypothesis(project_path: str, db_path: Optional[str] = None) -> str:
     """Retrieves the next pending hypothesis from the database.
@@ -14,7 +17,6 @@ def get_next_hypothesis(project_path: str, db_path: Optional[str] = None) -> str
     """
     if db_path is None:
         db_path = get_config().db_path
-    import sqlite3
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row

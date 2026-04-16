@@ -1,6 +1,10 @@
 import json
 from typing import Optional
 
+from ..agents.types import Hypothesis, TaskType
+from ..services.database import get_database
+
+
 def save_hypotheses(hypotheses_json: str, project_path: str, db_path: Optional[str] = None) -> str:
     """Saves a list of follow-up hypotheses to the database.
 
@@ -12,13 +16,11 @@ def save_hypotheses(hypotheses_json: str, project_path: str, db_path: Optional[s
     Returns:
         A confirmation message.
     """
-    from ..agents.types import Hypothesis, TaskType
     try:
         data = json.loads(hypotheses_json)
         if not isinstance(data, list):
             data = [data]
         
-        from ..services.database import get_database
         db = get_database(db_path)
         count = 0
         for h in data:

@@ -1,11 +1,14 @@
-import pytest
 from unittest.mock import MagicMock
-from trashdig.agents.callbacks import TrashDigCallback
+
+import google.genai.types as genai_types
+import pytest
+from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
-import google.genai.types as genai_types
-from google.adk.agents import LlmAgent
+
+from trashdig.agents.callbacks import TrashDigCallback
 from trashdig.agents.types import EngineState
+
 
 @pytest.fixture(autouse=True)
 def reset_callback_singleton():

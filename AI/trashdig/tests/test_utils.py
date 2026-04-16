@@ -1,6 +1,12 @@
 import os
 import tempfile
-from trashdig.agents.utils import get_project_structure, read_file_content, detect_frameworks
+
+from trashdig.agents.utils import (
+    detect_frameworks,
+    get_project_structure,
+    read_file_content,
+)
+
 
 def test_get_project_structure():
     with tempfile.TemporaryDirectory() as tmpdir:

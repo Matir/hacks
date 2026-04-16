@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import MagicMock
-from trashdig.services.permissions import PermissionManager
+
+import pytest
 from google.adk.tools import FunctionTool
+
+from trashdig.services.permissions import PermissionManager
+
 
 def test_permission_manager_allowed_by_default():
     pm = PermissionManager()

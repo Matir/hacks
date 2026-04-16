@@ -1,22 +1,27 @@
-import os
 import logging
-from typing import List, Dict, Optional, TYPE_CHECKING, Any
-from pathspec import PathSpec
-import google.genai.types as genai_types
+import os
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+import google.genai.types as genai_types
+from google.adk.runners import Runner
+from google.adk.tools import google_search
+from pathspec import PathSpec
+
+from trashdig.config import get_config
+
+# The following imports are for type hinting only and avoid circular dependencies.
 if TYPE_CHECKING:
-    from trashdig.config import Config, ProviderConfig
     from google.adk.agents import BaseAgent
-    from google.adk.sessions import BaseSessionService
     from google.adk.artifacts import BaseArtifactService
+    from google.adk.sessions import BaseSessionService
+
+    from trashdig.config import Config, ProviderConfig
 
 
 def google_provider_extras(provider: str) -> dict[str, Any]:
     """Return agent kwargs that are only valid when the provider is Google."""
     if provider != "google":
         return {"google_search_tool": None, "generate_content_config": None}
-
-    from google.adk.tools import google_search
 
     return {
         "google_search_tool": google_search,
@@ -118,7 +123,6 @@ def get_project_structure(root_path: Optional[str] = None) -> List[str]:
     Args:
         root_path: The directory to walk. Defaults to Config workspace_root.
     """
-    from trashdig.config import get_config
     if root_path is None:
         root_path = get_config().workspace_root
         
@@ -151,7 +155,6 @@ def read_file_content(file_path: str, max_chars: int = 2000) -> str:
 
 def detect_frameworks(file_list: List[str], project_root: Optional[str] = None) -> Dict[str, List[str]]:
     """Analyzes dependency files to identify known frameworks and libraries."""
-    from trashdig.config import get_config
     if project_root is None:
         project_root = get_config().workspace_root
         
@@ -208,9 +211,6 @@ async def run_agent(
     Returns:
         The final text response from the agent.
     """
-    from google.adk.runners import Runner
-    import google.genai.types as genai_types
-
     runner = Runner(
         agent=agent,
         app_name=agent.name,

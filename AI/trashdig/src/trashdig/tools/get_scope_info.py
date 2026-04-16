@@ -1,5 +1,7 @@
-from typing import List, Optional, Any
+from typing import Any, List, Optional
+
 from .base import _get_ts_language, _make_parser, get_config
+
 
 def get_scope_info(file_path: str, line_number: int, language: str = "python") -> str:
     """Identifies the variables and parameters available at a specific line.

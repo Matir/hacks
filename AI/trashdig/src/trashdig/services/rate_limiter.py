@@ -2,6 +2,7 @@ import asyncio
 import time
 from typing import Optional
 
+
 class RateLimiter:
     """A global rate limiter for LLM requests (RPM and TPM).
     

@@ -1,6 +1,9 @@
 import json
 from typing import Optional
-from .base import get_config
+
+from ..findings import Finding
+from ..services.database import get_database
+
 
 def save_findings(findings_json: str, project_path: str, db_path: Optional[str] = None) -> str:
     """Saves a list of findings to the database.
@@ -13,14 +16,12 @@ def save_findings(findings_json: str, project_path: str, db_path: Optional[str] 
     Returns:
         A confirmation message.
     """
-    from ..findings import Finding
     try:
         data = json.loads(findings_json)
         if not isinstance(data, list):
             data = [data]
         
         count = 0
-        from ..services.database import get_database
         db = get_database(db_path)
         for raw in data:
             finding = Finding(

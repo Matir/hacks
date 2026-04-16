@@ -1,5 +1,7 @@
-from typing import List, Optional, Any
-from .base import artifact_tool, _run_sandboxed, get_config
+from typing import Any, Optional
+
+from .base import _run_sandboxed, artifact_tool, get_config
+
 
 @artifact_tool(max_chars=8000)
 def semgrep_scan(path: Optional[str] = None, config: str = "p/security-audit", tool_context: Any = None) -> str:

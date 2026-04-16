@@ -1,10 +1,15 @@
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
-from trashdig.tools import get_ast_summary
-from trashdig.agents.recon import StackScoutAgent
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from google.adk.agents import LlmAgent
+
 from trashdig.agents.coordinator import Coordinator
+from trashdig.agents.recon import StackScoutAgent
 from trashdig.config import Config
+from trashdig.tools import container_bash_tool, get_ast_summary
+from trashdig.utils import set_binary_stub
+
 
 async def maybe_await(coro_or_val):
     if asyncio.iscoroutine(coro_or_val):
@@ -12,7 +17,6 @@ async def maybe_await(coro_or_val):
     return coro_or_val
 
 def create_mock_agent(name="dummy"):
-    from google.adk.agents import LlmAgent
     return LlmAgent(
         name=name,
         model="gemini-2.0-flash",
@@ -37,15 +41,12 @@ async def test_get_ast_summary_no_definitions():
                     assert result == "No top-level definitions found."
 
 @pytest.mark.anyio
-@patch("subprocess.run")
 @patch("trashdig.tools.container_bash_tool.bash_tool")
-async def test_container_bash_tool_docker_missing(mock_bash, mock_run):
+async def test_container_bash_tool_docker_missing(mock_bash):
     """Test container_bash_tool falls back to host bash_tool when Docker is missing."""
-    # Mock Docker not found
-    mock_run.side_effect = FileNotFoundError
+    set_binary_stub("docker", False)
     mock_bash.return_value = "host_output"
     
-    from trashdig.tools import container_bash_tool
     result = await maybe_await(container_bash_tool("ls"))
     assert "[Warning: Docker not found. Falling back to host bash_tool]" in result
     assert "host_output" in result

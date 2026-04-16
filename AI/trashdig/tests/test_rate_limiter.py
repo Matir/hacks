@@ -1,7 +1,10 @@
 import asyncio
 import time
+
 import pytest
+
 from trashdig.services.rate_limiter import RateLimiter
+
 
 @pytest.mark.anyio
 async def test_rpm_limit():
