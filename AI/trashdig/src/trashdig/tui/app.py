@@ -1,7 +1,8 @@
+from __future__ import annotations
 import os
 import logging
 import traceback
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, TYPE_CHECKING, cast
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Tree, Static, Label, Input, RichLog
 from textual.containers import Vertical, Horizontal
@@ -35,7 +36,7 @@ class FileTree(Tree):
         super().__init__(label)
         self.data = data
 
-    def update_tree(self, root_path: str = ".", data: Dict[str, Dict[str, Any]] = None):
+    def update_tree(self, root_path: str = ".", data: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
         """Updates the tree with file structure and optional metadata."""
         self.clear()
         self.data = data or {}
@@ -142,8 +143,10 @@ class StatusPane(Vertical):
 
 class REPLPane(Vertical):
     """A REPL-style interface with command history and autocompletion."""
+    if TYPE_CHECKING:
+        app: TrashDigApp
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.history: List[str] = []
         self.history_index: int = -1
@@ -200,56 +203,58 @@ class REPLPane(Vertical):
     async def process_command(self, command: str, log: RichLog) -> None:
         cmd_parts = command.split()
         base_cmd = cmd_parts[0].lower() if cmd_parts else ""
+        app = cast("TrashDigApp", self.app)
 
         if base_cmd == "help":
             log.write(
                 "Available commands: [green]" + ", ".join(self.commands) + "[/green]"
             )
         elif base_cmd == "scan":
-            path = cmd_parts[1] if len(cmd_parts) > 1 else self.app.workspace_root
-            self.app.run_worker(self.app.run_recon_scan(path))
+            path = cmd_parts[1] if len(cmd_parts) > 1 else app.workspace_root
+            app.run_worker(app.run_recon_scan(path))
         elif base_cmd == "hunt":
-            if not self.app.prioritized_targets:
+            if not app.prioritized_targets:
                 log.write("[red]No targets prioritized. Star some files first![/red]")
             else:
-                self.app.run_worker(
-                    self.app.run_hunter_analysis(self.app.prioritized_targets)
+                app.run_worker(
+                    app.run_hunter_analysis(app.prioritized_targets)
                 )
         elif base_cmd == "verify":
-            if not self.app.coordinator.findings:
+            if not app.coordinator.findings:
                 log.write("[red]No findings to verify. Run 'hunt' first![/red]")
             else:
                 if len(cmd_parts) < 2:
                     log.write("[yellow]Verifying all findings...[/yellow]")
-                    for finding in self.app.coordinator.findings:
-                        self.app.run_worker(self.app.run_verification(finding))
+                    for finding in app.coordinator.findings:
+                        app.run_worker(app.run_verification(finding))
                 else:
                     try:
                         idx = int(cmd_parts[1]) - 1
-                        finding = self.app.coordinator.findings[idx]
-                        self.app.run_worker(self.app.run_verification(finding))
-                    except ValueError, IndexError:
+                        finding = app.coordinator.findings[idx]
+                        app.run_worker(app.run_verification(finding))
+                    except (ValueError, IndexError):
                         log.write(f"[red]Invalid finding index: {cmd_parts[1]}[/red]")
         elif base_cmd == "star":
             if len(cmd_parts) < 2:
                 log.write("[red]Usage: star <path>[/red]")
             else:
                 path = os.path.normpath(cmd_parts[1])
-                if path not in self.app.prioritized_targets:
-                    self.app.prioritized_targets.append(path)
-                    self.app._file_log.info("Starred: %s", path)
+                if path not in app.prioritized_targets:
+                    app.prioritized_targets.append(path)
+                    app._file_log.info("Starred: %s", path)
                     log.write(f"[green]Starred {path} for hunting.[/green]")
-                    self.app.refresh_status()
+                    app.refresh_status()
                 else:
                     log.write(f"[yellow]{path} is already starred.[/yellow]")
         elif base_cmd == "status":
             log.write(
-                f"Prioritized targets: [cyan]{', '.join(self.app.prioritized_targets) or 'None'}[/cyan]"
+                f"Prioritized targets: [cyan]{', '.join(app.prioritized_targets) or 'None'}[/cyan]"
             )
+            app.refresh_status()
         elif base_cmd == "exit":
-            self.app.exit()
+            await app.action_quit()
         else:
-            log.write(f"[red]Unknown command: {command}[/red]")
+            log.write(f"[red]Unknown command: {base_cmd}[/red]")
 
 
 class TrashDigApp(App):
@@ -278,12 +283,12 @@ class TrashDigApp(App):
     }
     """
 
-    def __init__(self, config: Config = None, workspace_root: str = "."):
+    def __init__(self, config: Optional[Config] = None, workspace_root: Optional[str] = None):
         super().__init__()
         self.config = config or Config()
-        self.workspace_root = workspace_root
+        self.workspace_root = workspace_root or self.config.workspace_root
         self._phase = "Idle"
-        log_path = os.path.join(self.config.data_dir, "trashdig.log")
+        log_path = self.config.resolve_data_path("trashdig.log")
         self._file_log = _setup_file_logger(log_path)
         self._file_log.info("Session started — workspace: %s", workspace_root)
         log_auth_info(self.config, self._file_log)
@@ -296,7 +301,7 @@ class TrashDigApp(App):
         self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)
         self.prioritized_targets: List[str] = []
 
-    def _log(self, level: str, message: str) -> None:
+    def log_message(self, level: str, message: str) -> None:
         """Write to both the TUI console and the log file."""
         plain = message  # Rich markup stripped automatically by logger
         getattr(self._file_log, level)(plain)
@@ -307,9 +312,9 @@ class TrashDigApp(App):
             pass
 
     def _on_coordinator_log(self, message: str) -> None:
-        self._log("info", message)
+        self.log_message("info", message)
 
-    def on_worker_state_changed(self, event) -> None:
+    def on_worker_state_changed(self, event: Any) -> None:
         """Catch worker failures and surface them in the console and log."""
         if isinstance(event.worker.error, Exception):
             err = event.worker.error
@@ -379,13 +384,15 @@ class TrashDigApp(App):
         try:
             results = await self.coordinator.run_recon(path)
             if "error" in results:
-                self._log("error", f"[red]Scan error:[/red] {results['error']}")
+                self.log_message(
+"error", f"[red]Scan error:[/red] {results['error']}")
             else:
                 self._file_log.info("Scan complete: %d files mapped", len(results))
                 self.query_one(FileTree).update_tree(path, results)
         except Exception as e:
             self._file_log.error("Scan exception: %s\n%s", e, traceback.format_exc())
-            self._log("error", f"[bold red]Scan failed:[/bold red] {e}")
+            self.log_message(
+"error", f"[bold red]Scan failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
             self.refresh_status()
@@ -401,7 +408,8 @@ class TrashDigApp(App):
             )
         except Exception as e:
             self._file_log.error("Hunt exception: %s\n%s", e, traceback.format_exc())
-            self._log("error", f"[bold red]Hunt failed:[/bold red] {e}")
+            self.log_message(
+"error", f"[bold red]Hunt failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
             self.refresh_status()
@@ -421,7 +429,8 @@ class TrashDigApp(App):
             self._file_log.error(
                 "Verification exception: %s\n%s", e, traceback.format_exc()
             )
-            self._log("error", f"[bold red]Verification failed:[/bold red] {e}")
+            self.log_message(
+"error", f"[bold red]Verification failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
             self.refresh_status()
@@ -441,15 +450,15 @@ class TrashDigApp(App):
         self._file_log.info(
             "Auto-prioritized %d targets: %s", len(high_value), high_value
         )
-        self._log(
+        self.log_message(
             "info",
             f"[green]Auto-prioritized {len(high_value)} high-value targets.[/green]",
         )
         self.refresh_status()
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         if hasattr(self, "coordinator") and self.coordinator is not None:
-            self.coordinator.db.close_scan_session(self.coordinator.scan_session_id)
+            self.coordinator.db.close_scan_session(self.coordinator.session_id)
         self.exit()
 
     def action_clear_log(self) -> None:

@@ -2,7 +2,7 @@ import subprocess
 import os
 import shutil
 import logging
-from typing import List, Optional
+from typing import List, Optional, Any
 from .base import Sandbox
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class MinijailSandbox(Sandbox):
         "/usr/share/terminfo", "/usr/lib/locale",
     ]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.minijail_path = shutil.which("minijail0")
         if not self.minijail_path:
@@ -49,7 +49,8 @@ class MinijailSandbox(Sandbox):
         # -t: Mount a private tmpfs on /tmp.
         # -u, -g: Run as current user/group (requires unprivileged namespaces).
         # -U: Enter a new user namespace (allows -v, -p as non-root).
-        args = [
+        assert self.minijail_path is not None
+        args: List[str] = [
             self.minijail_path,
             "-v", "-d", "-p", "-r", "-t", "-U"
         ]

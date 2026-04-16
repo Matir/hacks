@@ -10,7 +10,6 @@ from google.adk.sessions import BaseSessionService
 from google.adk.tools import FunctionTool
 from google.adk.artifacts import BaseArtifactService
 
-from google.adk.runners import Runner
 from trashdig.agents.callbacks import TrashDigCallback
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.hunter import create_hunter_agent
@@ -19,7 +18,7 @@ from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.types import Hypothesis, TaskType, EngineState
 from trashdig.agents.utils import run_agent
 from trashdig.config import Config
-from trashdig.services.database import get_database
+from trashdig.services.database import ProjectDatabase, get_database
 from trashdig.services.cost import CostTracker
 from trashdig.services.permissions import PermissionManager
 from trashdig.findings import Finding
@@ -92,11 +91,17 @@ class Coordinator(LlmAgent):
     def __init__(
         self,
         config: Config,
-        project_path: str = ".",
+        project_path: Optional[str] = None,
         on_confirm: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
         artifact_service: Optional[BaseArtifactService] = None,
     ):
         """Initialises the Coordinator with the given configuration."""
+        if project_path is None:
+            project_path = config.workspace_root
+        
+        # Ensure it's a string even if mocked in tests
+        project_path_str = str(project_path)
+        
         perm = PermissionManager(config, on_confirm=on_confirm)
 
         stack_scout = create_stack_scout_agent(
@@ -156,24 +161,24 @@ class Coordinator(LlmAgent):
 
         # --- PrivateAttr initialisation ---
         db = get_database(db_path)
-        scan_session_id = db.get_or_create_scan_session(project_path if project_path else ".")
+        scan_session_id = db.get_or_create_scan_session(project_path_str)
         session_service = SqliteSessionService(db_path=db_path)
         
         cost_tracker = CostTracker()
 
-        self._db = db
-        self._session_service = session_service
-        self._artifact_service = artifact_service
-        self._cost_tracker = cost_tracker
-        self._scan_session_id = scan_session_id
-        self._project_path = project_path or "."
-        self._permission_manager = perm
-        self._findings = []
-        self._scan_results = {}
-        self._attack_surface = []
-        self._tech_stack = ""
-        self._llm_errors = 0
-        self._state = EngineState.IDLE
+        object.__setattr__(self, "_db", db)
+        object.__setattr__(self, "_session_service", session_service)
+        object.__setattr__(self, "_artifact_service", artifact_service)
+        object.__setattr__(self, "_cost_tracker", cost_tracker)
+        object.__setattr__(self, "_scan_session_id", scan_session_id)
+        object.__setattr__(self, "_project_path", project_path_str)
+        object.__setattr__(self, "_permission_manager", perm)
+        object.__setattr__(self, "_findings", [])
+        object.__setattr__(self, "_scan_results", {})
+        object.__setattr__(self, "_attack_surface", [])
+        object.__setattr__(self, "_tech_stack", "")
+        object.__setattr__(self, "_llm_errors", 0)
+        object.__setattr__(self, "_state", EngineState.IDLE)
 
         # Wire ADK-native callbacks using the singleton manager
         cb = TrashDigCallback.get_instance(self)
@@ -186,47 +191,47 @@ class Coordinator(LlmAgent):
 
     @property
     def project_path(self) -> str:
-        return self._project_path
+        return getattr(self, "_project_path")
 
     @property
     def db(self) -> ProjectDatabase:
-        return self._db
+        return getattr(self, "_db")
 
     @property
     def session_id(self) -> str:
-        return self._scan_session_id
+        return getattr(self, "_scan_session_id")
 
     @session_id.setter
-    def session_id(self, val: str):
-        self._scan_session_id = val
+    def session_id(self, val: str) -> None:
+        object.__setattr__(self, "_scan_session_id", val)
 
     @property
     def findings(self) -> List[Finding]:
-        return self._findings
+        return getattr(self, "_findings")
 
     @findings.setter
-    def findings(self, val: List[Finding]):
-        self._findings = val
+    def findings(self, val: List[Finding]) -> None:
+        object.__setattr__(self, "_findings", val)
 
     @property
     def scan_results(self) -> Dict[str, Any]:
-        return self._scan_results
+        return getattr(self, "_scan_results")
 
     @scan_results.setter
-    def scan_results(self, val: Dict[str, Any]):
-        self._scan_results = val
+    def scan_results(self, val: Dict[str, Any]) -> None:
+        object.__setattr__(self, "_scan_results", val)
 
     @property
     def attack_surface(self) -> List[Dict[str, Any]]:
-        return self._attack_surface
+        return getattr(self, "_attack_surface")
 
     @attack_surface.setter
-    def attack_surface(self, val: List[Dict[str, Any]]):
-        self._attack_surface = val
+    def attack_surface(self, val: List[Dict[str, Any]]) -> None:
+        object.__setattr__(self, "_attack_surface", val)
 
     @property
     def tech_stack(self) -> str:
-        return self._tech_stack
+        return getattr(self, "_tech_stack")
 
     @property
     def task_queue(self) -> list:
@@ -242,15 +247,15 @@ class Coordinator(LlmAgent):
 
     @property
     def input_tokens(self) -> int:
-        return self._cost_tracker.total_input_tokens
+        return getattr(self, "_cost_tracker").total_input_tokens
 
     @property
     def output_tokens(self) -> int:
-        return self._cost_tracker.total_output_tokens
+        return getattr(self, "_cost_tracker").total_output_tokens
 
     @property
     def total_cost(self) -> float:
-        return self._cost_tracker.total_cost
+        return getattr(self, "_cost_tracker").total_cost
 
     @property
     def llm_errors(self) -> int:
@@ -258,19 +263,19 @@ class Coordinator(LlmAgent):
 
     # Convenience accessors for individual sub-agents
     @property
-    def stack_scout(self):
+    def stack_scout(self) -> Any:
         return self._agent_by_name("stack_scout")
 
     @property
-    def web_route_mapper(self):
+    def web_route_mapper(self) -> Any:
         return self._agent_by_name("web_route_mapper")
 
     @property
-    def hunter_loop(self):
+    def hunter_loop(self) -> Any:
         return self._agent_by_name("hunter_loop")
 
     @property
-    def hunter(self):
+    def hunter(self) -> Any:
         # The actual hunter is now nested inside hunter_loop -> hunter_orchestrator
         orchestrator = next((a for a in self.hunter_loop.sub_agents if a.name == "hunter_orchestrator"), None)
         if orchestrator:
@@ -278,11 +283,11 @@ class Coordinator(LlmAgent):
         return None
 
     @property
-    def skeptic(self):
+    def skeptic(self) -> Any:
         return self._agent_by_name("skeptic")
 
     @property
-    def validator(self):
+    def validator(self) -> Any:
         return self._agent_by_name("validator")
 
     # ------------------------------------------------------------------
@@ -327,9 +332,9 @@ class Coordinator(LlmAgent):
 
     def _save_project_profile(self, tech_stack: str, profile: Dict[str, Any]) -> str:
         """Internal helper to save the project profile and update local state."""
-        self._tech_stack = tech_stack
-        self._scan_results = profile.get("mapping", {})
-        self._attack_surface = profile.get("attack_surface", [])
+        object.__setattr__(self, "_tech_stack", tech_stack)
+        object.__setattr__(self, "_scan_results", profile.get("mapping", {}))
+        object.__setattr__(self, "_attack_surface", profile.get("attack_surface", []))
         self._db.save_project_profile(self._project_path, tech_stack, profile)
         return f"Project profile for {tech_stack} saved successfully."
 
@@ -346,7 +351,7 @@ class Coordinator(LlmAgent):
             remediation=raw.get("remediation", "N/A"),
             cwe_id=raw.get("cwe_id"),
         )
-        finding.save(os.path.join(self._project_path, "findings"))
+        finding.save()
         self._findings.append(finding)
         self._db.save_finding(self._project_path, finding)
         return f"Finding '{finding.title}' saved successfully."
@@ -417,7 +422,15 @@ class Coordinator(LlmAgent):
                 for raw in raw_findings:
                     finding = Finding(
                         title=raw.get("title", "Untitled"),
+                        description=raw.get("description", "No description provided"),
+                        severity=raw.get("severity", "Medium"),
+                        vulnerable_code=raw.get("vulnerable_code", ""),
                         file_path=target,
+                        impact=raw.get("impact", "Unknown impact"),
+                        exploitation_path=raw.get("exploitation_path", "Not documented"),
+                        remediation=raw.get("remediation", "No remediation provided"),
+                        cwe_id=raw.get("cwe_id"),
+                        poc=raw.get("poc")
                     )
                     self._findings.append(finding)
                     new_findings.append(finding)
@@ -552,7 +565,7 @@ class Coordinator(LlmAgent):
                         remediation=raw.get("remediation", "N/A"),
                         cwe_id=raw.get("cwe_id"),
                     )
-                    finding.save(os.path.join(path, "findings"))
+                    finding.save()
                     self._findings.append(finding)
                     new_findings.append(finding)
                     self._db.save_finding(self._project_path, finding)
@@ -614,7 +627,7 @@ class Coordinator(LlmAgent):
 
         if not is_valid:
             finding.verification_status = "Debunked"
-            finding.save(os.path.join(self._project_path, "findings"))
+            finding.save()
             self._db.update_finding_status(
                 self._project_path,
                 finding.title,
@@ -655,7 +668,7 @@ class Coordinator(LlmAgent):
 
         finding.verification_status = status
         finding.poc = poc_code
-        finding.save(os.path.join(self._project_path, "findings"))
+        finding.save()
         self._db.update_finding_status(
             self._project_path,
             finding.title,

@@ -18,16 +18,19 @@ from .config import get_config
 
 _ARTIFACT_SERVICE: Optional[BaseArtifactService] = None
 
-def init_artifact_manager(data_dir: str) -> BaseArtifactService:
+def init_artifact_manager(data_dir: Optional[str] = None) -> BaseArtifactService:
     """Initializes the artifact service based on the global data directory.
 
     Args:
-        data_dir: The global data directory (e.g., '.trashdig').
+        data_dir: The global data directory. Defaults to config value.
     
     Returns:
         The initialized BaseArtifactService.
     """
     global _ARTIFACT_SERVICE
+    if data_dir is None:
+        data_dir = get_config().data_dir
+        
     artifact_dir = os.path.join(data_dir, "artifacts")
     os.makedirs(artifact_dir, exist_ok=True)
     _ARTIFACT_SERVICE = FileArtifactService(root_dir=artifact_dir)
@@ -43,7 +46,7 @@ def _process_tool_result_sync(func_name: str, result: Any, max_chars: int) -> st
         return result
 
     global _ARTIFACT_SERVICE
-    artifact_dir = ".trashdig/artifacts"
+    artifact_dir = get_config().resolve_data_path("artifacts")
     if isinstance(_ARTIFACT_SERVICE, FileArtifactService):
         artifact_dir = str(_ARTIFACT_SERVICE.root_dir)
 
@@ -109,7 +112,7 @@ async def _process_tool_result(func_name: str, result: Any, max_chars: int, tool
     # Fallback to legacy sync save
     return _process_tool_result_sync(func_name, result, max_chars)
 
-def artifact_tool(max_chars: int = 5000):
+def artifact_tool(max_chars: int = 5000) -> Callable:
     """A decorator that automatically saves large tool outputs as artifacts.
 
     Supports both synchronous and asynchronous functions. It automatically
@@ -121,13 +124,13 @@ def artifact_tool(max_chars: int = 5000):
     Returns:
         The decorated tool function.
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable) -> Callable:
         sig = inspect.signature(func)
         has_context = "tool_context" in sig.parameters
 
         if inspect.iscoroutinefunction(func):
             @wraps(func)
-            async def async_wrapper(*args, **kwargs) -> str:
+            async def async_wrapper(*args: Any, **kwargs: Any) -> str:
                 result = await func(*args, **kwargs)
                 ctx = kwargs.get("tool_context")
                 if ctx is None and has_context:
@@ -139,7 +142,7 @@ def artifact_tool(max_chars: int = 5000):
             return async_wrapper
         else:
             @wraps(func)
-            def hybrid_wrapper(*args, **kwargs) -> Any:
+            def hybrid_wrapper(*args: Any, **kwargs: Any) -> Any:
                 # If the tool is sync, we run it first.
                 result = func(*args, **kwargs)
                 ctx = kwargs.get("tool_context")
@@ -224,18 +227,21 @@ def read_file(file_path: str, tool_context: Any = None) -> str:
         return f"Error reading file {file_path}: {str(e)}"
 
 @artifact_tool(max_chars=4000)
-def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]] = None, tool_context: Any = None) -> str:
+def ripgrep_search(pattern: str, path: Optional[str] = None, extra_args: Optional[List[str]] = None, tool_context: Any = None) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
 
     Args:
         pattern: The regex pattern to search for.
-        path: The directory or file to search in.
+        path: The directory or file to search in. Defaults to Config workspace_root.
         extra_args: Additional arguments to pass to rg (e.g., ["-i", "-A", "2"]).
         tool_context: ADK context (injected).
 
     Returns:
         The standard output of the ripgrep command.
     """
+    if path is None:
+        path = get_config().workspace_root
+        
     cmd = ["rg", "--column", "--line-number", "--no-heading", "--color", "never", pattern, path]
     if extra_args:
         cmd.extend(extra_args)
@@ -248,17 +254,20 @@ def ripgrep_search(pattern: str, path: str = ".", extra_args: Optional[List[str]
     return result.stdout if result.stdout else result.stderr
 
 @artifact_tool(max_chars=8000)
-def semgrep_scan(path: str = ".", config: str = "p/security-audit", tool_context: Any = None) -> str:
+def semgrep_scan(path: Optional[str] = None, config: str = "p/security-audit", tool_context: Any = None) -> str:
     """Scans the codebase for security patterns using semgrep.
 
     Args:
-        path: The directory or file to scan.
+        path: The directory or file to scan. Defaults to Config workspace_root.
         config: The semgrep configuration/rules to use (e.g., "p/security-audit", "p/python").
         tool_context: ADK context (injected).
 
     Returns:
         The JSON output of the semgrep scan as a string.
     """
+    if path is None:
+        path = get_config().workspace_root
+        
     cmd = ["semgrep", "--json", "--config", config, path]
     
     # Run semgrep with a timeout to avoid hanging
@@ -324,6 +333,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
     if not ts_lang:
         return f"Error: Language '{language}' not supported for AST analysis."
 
+    file_path = get_config().resolve_workspace_path(file_path)
     try:
         with open(file_path, "rb") as f:
             content = f.read()
@@ -373,16 +383,19 @@ def detect_frameworks(path: str = ".") -> str:
     frameworks = _detect(files, path)
     return json.dumps(frameworks)
 @artifact_tool(max_chars=5000)
-def get_symbol_definition(symbol_name: str, path: str = ".") -> str:
+def get_symbol_definition(symbol_name: str, path: Optional[str] = None) -> str:
     """Finds the definition of a function or class across the project.
 
     Args:
         symbol_name: The name of the function or class to find.
-        path: The directory to search in.
+        path: The directory to search in. Defaults to Config workspace_root.
 
     Returns:
         The file path and a snippet of the definition if found.
     """
+    if path is None:
+        path = get_config().workspace_root
+        
     patterns = [f"def {symbol_name}", f"class {symbol_name}", f"async def {symbol_name}"]
     results: List[str] = []
     
@@ -394,16 +407,19 @@ def get_symbol_definition(symbol_name: str, path: str = ".") -> str:
     return "\n---\n".join(results) if results else f"Definition for '{symbol_name}' not found."
 
 @artifact_tool(max_chars=5000)
-def find_references(symbol_name: str, path: str = ".") -> str:
+def find_references(symbol_name: str, path: Optional[str] = None) -> str:
     """Finds all references (call sites, usages) of a symbol in the project.
 
     Args:
         symbol_name: The name of the symbol to find.
-        path: The directory to search in.
+        path: The directory to search in. Defaults to Config workspace_root.
 
     Returns:
         A list of occurrences.
     """
+    if path is None:
+        path = get_config().workspace_root
+        
     # Use ripgrep to find all usages, but exclude definitions
     extra_args = ["--line-number", "--column", "-v", f"def {symbol_name}|class {symbol_name}"]
     return ripgrep_search(f"\\b{symbol_name}\\b", path, extra_args=extra_args)
@@ -423,6 +439,7 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
     if not ts_lang:
         return f"Error: Language '{language}' not supported."
 
+    file_path = get_config().resolve_workspace_path(file_path)
     try:
         with open(file_path, "rb") as f:
             content = f.read()
@@ -483,10 +500,12 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
         language: Programming language.
 
     Returns:
-        A list of categorized usages.
+        A list of usages and their categories.
     """
+    file_path = get_config().resolve_workspace_path(file_path)
     ts_lang = _get_ts_language(language)
     if not ts_lang:
+
         return f"Error: Language '{language}' not supported."
 
     try:
@@ -773,7 +792,7 @@ def _resolve_param_name(
 def trace_taint_cross_file(
     variable: str,
     source_file: str,
-    project_root: str = ".",
+    project_root: Optional[str] = None,
     language: str = "python",
     max_depth: int = 5,
 ) -> str:
@@ -789,7 +808,7 @@ def trace_taint_cross_file(
     Args:
         variable: The tainted variable name to trace (e.g. ``"user_id"``).
         source_file: The file where the taint originates (relative to *project_root*).
-        project_root: Root directory of the project being analysed.
+        project_root: Root directory of the project being analysed. Defaults to Config workspace_root.
         language: Programming language (python, javascript, go, csharp).
         max_depth: Maximum number of file hops to follow before stopping.
 
@@ -798,6 +817,9 @@ def trace_taint_cross_file(
         SINK (vulnerability), CALL (data flows into a callee), RETURN, or SAFE
         (no dangerous usage found within the depth limit).
     """
+    if project_root is None:
+        project_root = get_config().workspace_root
+        
     sinks = _SINKS.get(language, set())
     report_lines: List[str] = [
         f"Taint trace: variable='{variable}', start='{source_file}', language={language}",
@@ -994,7 +1016,7 @@ async def web_fetch(url: str) -> str:
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as response:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status != 200:
                     return f"Error: Failed to fetch page, status code {response.status}"
                 
@@ -1060,16 +1082,18 @@ def exit_loop(tool_context: Any) -> str:
         tool_context.actions.escalate = True
     return "Loop exit requested."
 
-def get_next_hypothesis(project_path: str, db_path: str = ".trashdig/trashdig.db") -> str:
+def get_next_hypothesis(project_path: str, db_path: Optional[str] = None) -> str:
     """Retrieves the next pending hypothesis from the database.
 
     Args:
         project_path: The root directory of the project.
-        db_path: Path to the SQLite database.
+        db_path: Path to the SQLite database. Defaults to config value.
 
     Returns:
         A JSON string containing the hypothesis details, or 'None' if no pending tasks.
     """
+    if db_path is None:
+        db_path = get_config().db_path
     import sqlite3
     try:
         conn = sqlite3.connect(db_path)
@@ -1086,17 +1110,19 @@ def get_next_hypothesis(project_path: str, db_path: str = ".trashdig/trashdig.db
     except Exception as e:
         return f"Error accessing database: {str(e)}"
 
-def update_hypothesis_status(task_id: str, status: str, db_path: str = ".trashdig/trashdig.db") -> str:
+def update_hypothesis_status(task_id: str, status: str, db_path: Optional[str] = None) -> str:
     """Updates the status of a hypothesis (e.g., to 'completed' or 'failed').
 
     Args:
         task_id: The unique ID of the hypothesis task.
         status: The new status (e.g., 'completed', 'failed').
-        db_path: Path to the SQLite database.
+        db_path: Path to the SQLite database. Defaults to config value.
 
     Returns:
         A confirmation message.
     """
+    if db_path is None:
+        db_path = get_config().db_path
     import sqlite3
     try:
         conn = sqlite3.connect(db_path)
@@ -1110,13 +1136,13 @@ def update_hypothesis_status(task_id: str, status: str, db_path: str = ".trashdi
     except Exception as e:
         return f"Error updating database: {str(e)}"
 
-def save_findings(findings_json: str, project_path: str, db_path: str = ".trashdig/trashdig.db") -> str:
+def save_findings(findings_json: str, project_path: str, db_path: Optional[str] = None) -> str:
     """Saves a list of findings to the database.
 
     Args:
         findings_json: A JSON string containing a list of finding objects.
         project_path: The project root directory.
-        db_path: Path to the SQLite database.
+        db_path: Path to the SQLite database. Defaults to config value.
 
     Returns:
         A confirmation message.
@@ -1150,13 +1176,13 @@ def save_findings(findings_json: str, project_path: str, db_path: str = ".trashd
     except Exception as e:
         return f"Error saving findings: {str(e)}"
 
-def save_hypotheses(hypotheses_json: str, project_path: str, db_path: str = ".trashdig/trashdig.db") -> str:
+def save_hypotheses(hypotheses_json: str, project_path: str, db_path: Optional[str] = None) -> str:
     """Saves a list of follow-up hypotheses to the database.
 
     Args:
         hypotheses_json: A JSON string containing a list of hypothesis objects.
         project_path: The project root directory.
-        db_path: Path to the SQLite database.
+        db_path: Path to the SQLite database. Defaults to config value.
 
     Returns:
         A confirmation message.

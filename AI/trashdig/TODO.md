@@ -71,7 +71,16 @@
     - [x] Move `RateLimiter`, `Database`, `CostTracker`, and `PermissionManager` into a `services` package to decouple infrastructure from agent logic.
 
 
-## Semantic Intelligence (Phase 3)
+### Path Handling Standards Compliance
+- [x] **[HIGH]** Remove hardcoded `.trashdig/trashdig.db` defaults from `src/trashdig/services/database.py` and `src/trashdig/tools.py`.
+- [x] **[MEDIUM]** Refactor `init_artifact_manager` to rely on `Config` rather than hardcoded path segments.
+- [x] **[MEDIUM]** Audit and fix any `src/` modules that use `os.getcwd()` or hardcoded relative paths instead of resolving them through the `Config` workspace root.
+- [x] **[LOW]** Audit `tests/` to ensure all tests requiring a filesystem use `tmp_path` fixtures rather than local `./.trashdig` or other project-root directories.
+- [x] **[LOW]** Centralize path resolution in `Config` to handle workspace vs. data directory mappings consistently.
+
+
+### Semantic Intelligence (Phase 3)
+
 - [x] Implement `FindReferences(symbol)` tool.
 - [x] Implement `GetScope(file, line)` tool.
 - [x] **[MEDIUM]** Dynamic Tool Configuration: Configure `semgrep` rules based on detected tech stack and `config.toml`.

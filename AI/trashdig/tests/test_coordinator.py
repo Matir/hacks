@@ -1,8 +1,6 @@
 import pytest
-import asyncio
-import uuid
 import json
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 from trashdig.agents.coordinator import Coordinator
 from trashdig.config import Config, AgentConfig
 from trashdig.findings import Finding

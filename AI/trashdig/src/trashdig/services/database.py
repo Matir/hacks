@@ -14,6 +14,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, List, Optional
 
+from trashdig.config import get_config
+
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS project_profiles (
@@ -101,15 +103,20 @@ CREATE TABLE IF NOT EXISTS scan_sessions (
 _db_instances: Dict[str, "ProjectDatabase"] = {}
 
 
-def get_database(db_path: str = ".trashdig/trashdig.db") -> "ProjectDatabase":
+def get_database(db_path: Optional[str] = None) -> "ProjectDatabase":
     """Singleton-like factory to return a ProjectDatabase for the given path.
 
     This ensures we don't frequently re-initialise the database connection
     and settings for the same file, improving efficiency and reducing the
     risk of SQLite locking issues in concurrent environments.
     """
+    if db_path is None:
+        db_path = get_config().db_path
+    
     if not isinstance(db_path, str):
-        db_path = ".trashdig/trashdig.db"
+        # Handle cases where a Mock might have been passed in tests
+        db_path = get_config().db_path
+        
     abs_path = os.path.abspath(db_path)
     if abs_path not in _db_instances:
         _db_instances[abs_path] = ProjectDatabase(db_path=db_path)
@@ -133,7 +140,9 @@ class ProjectDatabase:
     directly to benefit from instance caching.
     """
 
-    def __init__(self, db_path: str = ".trashdig/trashdig.db") -> None:
+    def __init__(self, db_path: Optional[str] = None) -> None:
+        if db_path is None:
+            db_path = get_config().db_path
         self.db_path = db_path
         self._memory_conn: Optional[sqlite3.Connection] = None
         if db_path != ":memory:":
@@ -179,7 +188,7 @@ class ProjectDatabase:
         finally:
             conn.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self._memory_conn:
             self._memory_conn.close()
 
@@ -606,6 +615,10 @@ class ProjectDatabase:
         Returns:
             A UUID string suitable for use as an ADK ``session_id``.
         """
+        if not isinstance(project_path, str):
+            # Handle cases where a Mock might have been passed in tests
+            project_path = str(project_path)
+            
         import uuid as _uuid
         with self._connect() as conn:
             row = conn.execute(

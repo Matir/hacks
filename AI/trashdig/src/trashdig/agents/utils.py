@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List, Dict, Optional, TYPE_CHECKING, Any
 from pathspec import PathSpec
 import google.genai.types as genai_types
@@ -20,7 +21,7 @@ def google_provider_extras(provider: str) -> dict[str, Any]:
     return {
         "google_search_tool": google_search,
         "generate_content_config": genai_types.GenerateContentConfig(
-            tool_config=genai_types.ToolConfig(includeServerSideToolInvocations=True)
+            tool_config=genai_types.ToolConfig(include_server_side_tool_invocations=True)
         ),
     }
 
@@ -70,7 +71,7 @@ def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig 
     return lines
 
 
-def log_auth_info(config: "Config", logger) -> None:
+def log_auth_info(config: "Config", logger: logging.Logger) -> None:
     """Log authentication information for every provider referenced by agents."""
     referenced: Dict[str, Any] = {}
     for agent_cfg in config.agents.values():
@@ -95,17 +96,32 @@ def load_prompt(file_name: str) -> str:
     Returns:
         The content of the prompt file.
     """
-    prompt_path = os.path.join(os.getcwd(), "prompts", file_name)
+    # Prompts are located in the 'prompts' directory at the project root.
+    # We find it relative to this file: src/trashdig/agents/utils.py -> project_root/prompts
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    prompt_path = os.path.join(base_dir, "prompts", file_name)
+    
     if not os.path.exists(prompt_path):
-        # Fallback for full paths if filename isn't found in prompts/
-        prompt_path = file_name
+        # Fallback for full paths or if the prompts directory isn't where we expect
+        if os.path.exists(file_name):
+            prompt_path = file_name
+        else:
+            raise FileNotFoundError(f"Prompt file not found: {file_name} (checked {prompt_path})")
 
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read()
 
 
-def get_project_structure(root_path: str = ".") -> List[str]:
-    """Walks the project directory and returns a list of files."""
+def get_project_structure(root_path: Optional[str] = None) -> List[str]:
+    """Walks the project directory and returns a list of files.
+
+    Args:
+        root_path: The directory to walk. Defaults to Config workspace_root.
+    """
+    from trashdig.config import get_config
+    if root_path is None:
+        root_path = get_config().workspace_root
+        
     files: List[str] = []
     gitignore_path = os.path.join(root_path, ".gitignore")
     spec: Optional[PathSpec] = None
@@ -133,8 +149,12 @@ def read_file_content(file_path: str, max_chars: int = 2000) -> str:
     except (UnicodeDecodeError, PermissionError, FileNotFoundError):
         return "[Error: Could not read file content]"
 
-def detect_frameworks(file_list: List[str], project_root: str = ".") -> Dict[str, List[str]]:
+def detect_frameworks(file_list: List[str], project_root: Optional[str] = None) -> Dict[str, List[str]]:
     """Analyzes dependency files to identify known frameworks and libraries."""
+    from trashdig.config import get_config
+    if project_root is None:
+        project_root = get_config().workspace_root
+        
     stack: Dict[str, List[str]] = {
         "web_frameworks": [],
         "databases": [],

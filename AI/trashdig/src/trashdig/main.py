@@ -3,6 +3,7 @@ import os
 import sys
 import asyncio
 import warnings
+from typing import Any
 from rich.console import Console
 
 from trashdig.tui.app import TrashDigApp
@@ -14,7 +15,7 @@ from trashdig.agents.coordinator import Coordinator
 # Suppress experimental ADK feature warnings
 warnings.filterwarnings("ignore", message=".*FeatureName.PLUGGABLE_AUTH.*")
 
-def main():
+def main() -> None:
     """Main entry point for TrashDig."""
     parser = argparse.ArgumentParser(
         prog="trashdig",
@@ -61,7 +62,7 @@ def main():
         import tomli_w
         import dataclasses
 
-        def filter_none(d):
+        def filter_none(d: Any) -> Any:
             if isinstance(d, dict):
                 return {k: filter_none(v) for k, v in d.items() if v is not None}
             elif isinstance(d, list):
@@ -85,7 +86,7 @@ def main():
         
         coordinator = Coordinator(
             config, 
-            project_path=workspace_root, 
+            project_path=config.workspace_root, 
             artifact_service=art_service
         )
         
@@ -94,7 +95,7 @@ def main():
         coordinator.on_stats_event = lambda: None
         
         try:
-            asyncio.run(coordinator.run_full_scan(workspace_root))
+            asyncio.run(coordinator.run_full_scan(config.workspace_root))
             console.print("\n[bold green]Scan Complete.[/bold green]")
             console.print(f"Total Findings: {len(coordinator.findings)}")
             console.print(f"Total Cost: ${coordinator.total_cost:.4f}")
@@ -104,7 +105,7 @@ def main():
             traceback.print_exc()
             sys.exit(1)
     else:
-        app = TrashDigApp(config=config, workspace_root=workspace_root)
+        app = TrashDigApp(config=config, workspace_root=config.workspace_root)
         app.run()
 
 if __name__ == "__main__":

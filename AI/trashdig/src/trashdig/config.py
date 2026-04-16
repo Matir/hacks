@@ -27,6 +27,7 @@ class Config:
     providers: Dict[str, ProviderConfig] = field(default_factory=dict)
     data_dir: str = ".trashdig"
     db_path: str = ".trashdig/trashdig.db"
+    workspace_root: str = "."
     rpm_limit: int | None = None
     tpm_limit: int | None = None
     require_sandbox: bool = True
@@ -44,6 +45,32 @@ class Config:
         if name in self.agents:
             return self.agents[name]
         return AgentConfig(model=self.default_model, provider=self.default_provider)
+
+    def resolve_workspace_path(self, path: str) -> str:
+        """Resolves a path relative to the workspace root.
+
+        Args:
+            path: The relative path within the workspace.
+
+        Returns:
+            The absolute path.
+        """
+        if os.path.isabs(path):
+            return path
+        return os.path.abspath(os.path.join(self.workspace_root, path))
+
+    def resolve_data_path(self, path: str) -> str:
+        """Resolves a path relative to the data directory.
+
+        Args:
+            path: The relative path within the data directory.
+
+        Returns:
+            The absolute path.
+        """
+        if os.path.isabs(path):
+            return path
+        return os.path.abspath(os.path.join(self.data_dir, path))
 
 def _resolve_path(path: str, workspace_root: str) -> str:
     """Resolves tokens in a path string.
@@ -216,6 +243,7 @@ def load_config(
         providers=providers,
         data_dir=resolved_data_dir,
         db_path=resolved_db_path,
+        workspace_root=workspace_root,
         rpm_limit=rpm_limit,
         tpm_limit=tpm_limit,
         require_sandbox=require_sandbox,

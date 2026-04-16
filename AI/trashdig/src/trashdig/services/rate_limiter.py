@@ -20,13 +20,13 @@ class RateLimiter:
         self.rpm_limit = rpm_limit
         self.tpm_limit = tpm_limit
 
-        self._rpm_tokens = float(rpm_limit) if rpm_limit else None
-        self._tpm_tokens = float(tpm_limit) if tpm_limit else None
+        self._rpm_tokens = float(rpm_limit) if rpm_limit else 0.0
+        self._tpm_tokens = float(tpm_limit) if tpm_limit else 0.0
         
         self._last_update = time.monotonic()
         self._lock = asyncio.Lock()
 
-    def _refill(self):
+    def _refill(self) -> None:
         """Refills the token buckets based on elapsed time."""
         now = time.monotonic()
         elapsed = now - self._last_update
@@ -46,7 +46,7 @@ class RateLimiter:
                 self._tpm_tokens + elapsed * (self.tpm_limit / 60.0)
             )
 
-    async def wait_for_request(self):
+    async def wait_for_request(self) -> None:
         """Waits until a request can be made according to the RPM and TPM limits."""
         if not self.rpm_limit and not self.tpm_limit:
             return
@@ -79,7 +79,7 @@ class RateLimiter:
             # Wait at least a bit to avoid tight loops, but try to be precise
             await asyncio.sleep(max(0.005, wait_time))
 
-    async def update_usage(self, tokens: int):
+    async def update_usage(self, tokens: int) -> None:
         """Updates the TPM bucket after a request is completed.
 
         Args:
@@ -99,7 +99,7 @@ def get_rate_limiter() -> Optional[RateLimiter]:
     """Returns the global RateLimiter instance."""
     return _global_rate_limiter
 
-def init_rate_limiter(rpm_limit: Optional[int] = None, tpm_limit: Optional[int] = None):
+def init_rate_limiter(rpm_limit: Optional[int] = None, tpm_limit: Optional[int] = None) -> None:
     """Initializes the global RateLimiter instance.
 
     Args:

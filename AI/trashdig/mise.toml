@@ -9,12 +9,16 @@ _.python.venv = ".venv"
 [tasks.test]
 run = "uv run pytest tests"
 
+[tasks.typecheck]
+description = "Run mypy type checking"
+run = "uv run mypy src"
+
 [tasks.lint]
 run = "uv run ruff check ."
 
 [tasks.check]
 description = "Run all lints and tests"
-depends = ["lint", "test"]
+depends = ["lint", "typecheck", "test"]
 
 [tasks.format]
 run = "uv run ruff format ."

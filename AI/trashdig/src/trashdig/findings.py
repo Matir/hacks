@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Optional
 
 @dataclass
 class Finding:
@@ -70,17 +71,22 @@ class Finding:
         
         return md
 
-    def save(self, output_dir: str = "findings") -> str:
+    def save(self, output_dir: Optional[str] = None) -> str:
         """Saves the finding as a Markdown file in the specified directory.
 
         Args:
             output_dir: The directory where the finding should be saved.
+                       Defaults to Config.data_dir/findings.
 
         Returns:
             The absolute path to the saved file.
         """
+        from trashdig.config import get_config
+        if output_dir is None:
+            output_dir = get_config().resolve_data_path("findings")
+            
         if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+            os.makedirs(output_dir, exist_ok=True)
             
         # Create a safe filename from the title
         safe_title = "".join(c for c in self.title if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")

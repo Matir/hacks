@@ -1,17 +1,10 @@
-import os
-from typing import Optional
+from typing import Optional, List, Any
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from trashdig.config import AgentConfig
-from trashdig.agents.utils import read_file_content, google_provider_extras
+from trashdig.agents.utils import read_file_content, google_provider_extras, load_prompt
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import ripgrep_search, bash_tool, container_bash_tool, web_fetch
-
-
-def load_prompt(file_path: str) -> str:
-    """Loads a prompt from a markdown file."""
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
 
 
 class ValidatorAgent(LlmAgent):
@@ -20,17 +13,16 @@ class ValidatorAgent(LlmAgent):
 
 
 def create_validator_agent(
-    config: AgentConfig = None, permission_manager: Optional[PermissionManager] = None
+    config: Optional[AgentConfig] = None, permission_manager: Optional[PermissionManager] = None
 ) -> ValidatorAgent:
     """Creates a Validator agent."""
     if config is None:
         config = AgentConfig()
 
-    prompt_path = os.path.join(os.getcwd(), "prompts", "validator.md")
-    instruction = load_prompt(prompt_path)
+    instruction = load_prompt("validator.md")
 
     extras = google_provider_extras(config.provider)
-    tools = [
+    tools: List[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(container_bash_tool),
         FunctionTool(bash_tool),

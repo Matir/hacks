@@ -1,9 +1,8 @@
-import os
-from typing import Optional
+from typing import Optional, List, Any
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool, load_artifacts as load_artifacts_tool
 from trashdig.config import AgentConfig
-from trashdig.agents.utils import google_provider_extras
+from trashdig.agents.utils import google_provider_extras, load_prompt
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
     ripgrep_search,
@@ -21,26 +20,13 @@ from trashdig.tools import (
 )
 
 
-def load_prompt(file_path: str) -> str:
-    """Loads a prompt from a markdown file.
-
-    Args:
-        file_path: Path to the prompt file.
-
-    Returns:
-        The content of the prompt file.
-    """
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
-
-
 class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
     pass
 
 
 def create_hunter_agent(
-    config: AgentConfig = None, permission_manager: Optional[PermissionManager] = None
+    config: Optional[AgentConfig] = None, permission_manager: Optional[PermissionManager] = None
 ) -> HunterAgent:
     """Creates a Hunter agent.
 
@@ -54,11 +40,10 @@ def create_hunter_agent(
     if config is None:
         config = AgentConfig()
 
-    prompt_path = os.path.join(os.getcwd(), "prompts", "hunter.md")
-    instruction = load_prompt(prompt_path)
+    instruction = load_prompt("hunter.md")
 
     extras = google_provider_extras(config.provider)
-    tools = [
+    tools: List[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(semgrep_scan),
         FunctionTool(get_ast_summary),

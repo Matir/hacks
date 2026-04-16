@@ -1,10 +1,10 @@
-import os
-from typing import Optional
+from typing import Optional, List, Any
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool, load_artifacts as load_artifacts_tool
 from trashdig.config import AgentConfig
 from trashdig.agents.utils import (
     google_provider_extras,
+    load_prompt,
 )
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
@@ -17,20 +17,6 @@ from trashdig.tools import (
     get_project_structure,
     detect_frameworks,
 )
-
-
-def load_prompt(file_name: str) -> str:
-    """Loads a prompt from a markdown file in the prompts directory.
-
-    Args:
-        file_name: Name of the prompt file (e.g., 'stack_scout.md').
-
-    Returns:
-        The content of the prompt file.
-    """
-    prompt_path = os.path.join(os.getcwd(), "prompts", file_name)
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read()
 
 
 class StackScoutAgent(LlmAgent):
@@ -59,7 +45,7 @@ def create_stack_scout_agent(
 
     instruction = load_prompt("stack_scout.md")
     extras = google_provider_extras(config.provider)
-    tools = [
+    tools: List[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
         FunctionTool(query_cwe_database),
@@ -97,7 +83,7 @@ def create_web_route_mapper_agent(
 
     instruction = load_prompt("web_route_mapper.md")
     extras = google_provider_extras(config.provider)
-    tools = [
+    tools: List[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
         FunctionTool(get_project_structure),

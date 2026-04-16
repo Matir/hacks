@@ -65,8 +65,9 @@ class PermissionManager:
 
         if inspect.iscoroutinefunction(original_func):
             @wraps(original_func)
-            async def wrapped(*args, **kwargs):
+            async def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(original_func)
+                tool_args: Any
                 try:
                     bound = sig.bind(*args, **kwargs)
                     bound.apply_defaults()
@@ -79,8 +80,9 @@ class PermissionManager:
                 return await original_func(*args, **kwargs)
         else:
             @wraps(original_func)
-            def wrapped(*args, **kwargs):
+            def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(original_func)
+                tool_args: Any
                 try:
                     bound = sig.bind(*args, **kwargs)
                     bound.apply_defaults()
@@ -120,8 +122,9 @@ class PermissionManager:
 
         if inspect.iscoroutinefunction(func):
             @wraps(func)
-            async def wrapped(*args, **kwargs):
+            async def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(func)
+                tool_args: Any
                 try:
                     bound = sig.bind(*args, **kwargs)
                     bound.apply_defaults()
@@ -134,8 +137,9 @@ class PermissionManager:
                 return await func(*args, **kwargs)
         else:
             @wraps(func)
-            def wrapped(*args, **kwargs):
+            def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(func)
+                tool_args: Any
                 try:
                     bound = sig.bind(*args, **kwargs)
                     bound.apply_defaults()

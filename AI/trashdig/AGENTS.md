@@ -80,6 +80,11 @@ These rules are foundational. Adhere to them for all modifications:
 4.  **Documentation**: Add descriptive docstrings (Google style) to all classes and functions.
 5.  **Prompt Management**: Keep agent prompts in separate `.md` files within the `prompts/` directory.
 6.  **Data Structuring**: Prefer structured data (Dicts, TypedDicts, or JSON-serializable objects) over raw strings for inter-agent communication.
+7.  **Path Handling & Portability**:
+    *   **Data Directory**: All artifacts and configuration must be relative to the data directory (defined in `Config.data_dir`).
+    *   **Workspace**: All project source files must be resolved relative to the workspace root.
+    *   **Isolation in Tests**: All tests that require real filesystem access MUST use temporary directories (e.g., `pytest`'s `tmp_path` fixture).
+    *   **Configuration-Driven**: Paths should be obtained from the `Config` object; only relative path templates should be hardcoded.
 
 ## 📂 Contextual References
 

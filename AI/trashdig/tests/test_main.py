@@ -9,6 +9,7 @@ from trashdig.main import main
 @patch("sys.stdout.isatty", return_value=True)
 def test_main_default_root(mock_isatty, mock_load_config, mock_app_class):
     mock_config = MagicMock()
+    mock_config.workspace_root = os.path.abspath(".")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
 
@@ -18,7 +19,7 @@ def test_main_default_root(mock_isatty, mock_load_config, mock_app_class):
     mock_load_config.assert_called_once()
     mock_app_class.assert_called_once_with(
         config=mock_config,
-        workspace_root=os.path.abspath("."),
+        workspace_root=mock_config.workspace_root,
     )
     mock_app_class.return_value.run.assert_called_once()
 
@@ -28,6 +29,7 @@ def test_main_default_root(mock_isatty, mock_load_config, mock_app_class):
 @patch("sys.stdout.isatty", return_value=True)
 def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
     mock_config = MagicMock()
+    mock_config.workspace_root = str(tmp_path)
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
 
@@ -36,7 +38,7 @@ def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_p
 
     mock_app_class.assert_called_once_with(
         config=mock_config,
-        workspace_root=str(tmp_path),
+        workspace_root=mock_config.workspace_root,
     )
 
 
