@@ -4,6 +4,7 @@ import re
 import shutil
 from unittest.mock import AsyncMock
 
+from google.adk.agents.callback_context import CallbackContext
 import pytest
 
 from trashdig.tools import artifact_tool, get_artifact_service, init_artifact_manager
@@ -65,7 +66,7 @@ async def test_artifact_tool_truncation(temp_artifact_dir):
 async def test_artifact_tool_adk_api(temp_artifact_dir):
     """Test that artifact_tool uses ADK API when tool_context is provided."""
     large_content = "C" * 300
-    mock_ctx = AsyncMock()
+    mock_ctx = AsyncMock(spec=CallbackContext)
     mock_ctx.save_artifact.return_value = 1
 
     @artifact_tool(max_chars=100)

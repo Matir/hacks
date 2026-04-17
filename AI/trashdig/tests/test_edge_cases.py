@@ -29,10 +29,10 @@ async def test_get_ast_summary_no_definitions():
     """Test get_ast_summary with a file containing no classes or functions."""
     mock_config = MagicMock(spec=Config)
     mock_config.resolve_workspace_path.side_effect = lambda x: x
-    with patch("trashdig.config.get_config", return_value=mock_config):
-        with patch("builtins.open", MagicMock()):
-            with patch("trashdig.tools.base._get_ts_language", return_value=MagicMock()):
-                with patch("tree_sitter.Parser") as mock_parser_class:
+    with patch("trashdig.config.get_config", autospec=True, return_value=mock_config):
+        with patch("builtins.open", autospec=True):
+            with patch("trashdig.tools.base._get_ts_language", autospec=True, return_value=MagicMock()):
+                with patch("tree_sitter.Parser", autospec=True) as mock_parser_class:
                     mock_parser = mock_parser_class.return_value
                     mock_tree = mock_parser.parse.return_value
                     mock_tree.root_node.children = [] # No children
@@ -41,7 +41,7 @@ async def test_get_ast_summary_no_definitions():
                     assert result == "No top-level definitions found."
 
 @pytest.mark.anyio
-@patch("trashdig.tools.container_bash_tool.bash_tool")
+@patch("trashdig.tools.container_bash_tool.bash_tool", autospec=True)
 async def test_container_bash_tool_docker_missing(mock_bash):
     """Test container_bash_tool falls back to host bash_tool when Docker is missing."""
     set_binary_stub("docker", False)
@@ -55,11 +55,11 @@ async def test_container_bash_tool_docker_missing(mock_bash):
 @pytest.mark.anyio
 async def test_stack_scout_malformed_json():
     """Test StackScoutAgent handles malformed JSON response from LLM."""
-    with patch("trashdig.agents.recon.load_prompt", return_value="instruction"):
+    with patch("trashdig.agents.recon.load_prompt", autospec=True, return_value="instruction"):
         agent = StackScoutAgent(name="test", model="test-model", instruction="test")
 
         # Mock run_agent directly
-        with patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("trashdig.agents.coordinator.run_agent", autospec=True) as mock_run:
             mock_run.return_value = "This is not JSON"
             # In actual usage in Coordinator, it handles the text
             assert await mock_run(agent, "Analyze", "session", MagicMock()) == "This is not JSON"
@@ -74,11 +74,11 @@ async def test_coordinator_init_validation(tmp_path):
     db_file = tmp_path / "test.db"
     mock_config.db_path = str(db_file)
 
-    with patch("trashdig.agents.coordinator.create_stack_scout_agent", return_value=create_mock_agent("stack_scout")), \
-         patch("trashdig.agents.coordinator.create_web_route_mapper_agent", return_value=create_mock_agent("web_route_mapper")), \
-         patch("trashdig.agents.coordinator.create_hunter_agent", return_value=create_mock_agent("hunter")), \
-         patch("trashdig.agents.coordinator.create_skeptic_agent", return_value=create_mock_agent("skeptic")), \
-         patch("trashdig.agents.coordinator.create_validator_agent", return_value=create_mock_agent("validator")):
+    with patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True, return_value=create_mock_agent("stack_scout")), \
+         patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True, return_value=create_mock_agent("web_route_mapper")), \
+         patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True, return_value=create_mock_agent("hunter")), \
+         patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True, return_value=create_mock_agent("skeptic")), \
+         patch("trashdig.agents.coordinator.create_validator_agent", autospec=True, return_value=create_mock_agent("validator")):
 
         coord = Coordinator(mock_config)
         assert coord.hunter is not None

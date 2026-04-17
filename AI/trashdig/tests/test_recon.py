@@ -19,7 +19,7 @@ def mock_config():
     return config
 
 @pytest.mark.anyio
-@patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_stack_scout_run(mock_run, mock_config):
     agent = StackScoutAgent(name="stack_scout", model="test-model")
 
@@ -41,7 +41,7 @@ async def test_stack_scout_run(mock_run, mock_config):
     assert "src/main.py" in data["mapping"]
 
 @pytest.mark.anyio
-@patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_web_route_mapper_run(mock_run, mock_config):
     agent = WebRouteMapperAgent(name="web_route_mapper", model="test-model")
 
@@ -57,16 +57,16 @@ async def test_web_route_mapper_run(mock_run, mock_config):
     assert len(data["attack_surface"]) == 1
     assert data["attack_surface"][0]["route"] == "/api"
 
-@patch("trashdig.agents.recon.load_prompt")
-@patch("google.adk.agents.LlmAgent.__init__")
+@patch("trashdig.agents.recon.load_prompt", autospec=True)
+@patch("google.adk.agents.LlmAgent.__init__", autospec=True)
 def test_create_stack_scout_agent(mock_init, mock_load, mock_config):
     mock_load.return_value = "instruction"
     mock_init.return_value = None
     agent = create_stack_scout_agent(config=mock_config.get_agent_config("stack_scout"))
     assert agent is not None
 
-@patch("trashdig.agents.recon.load_prompt")
-@patch("google.adk.agents.LlmAgent.__init__")
+@patch("trashdig.agents.recon.load_prompt", autospec=True)
+@patch("google.adk.agents.LlmAgent.__init__", autospec=True)
 def test_create_web_route_mapper_agent(mock_init, mock_load, mock_config):
     mock_load.return_value = "instruction"
     mock_init.return_value = None

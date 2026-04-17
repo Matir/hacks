@@ -8,7 +8,7 @@ from trashdig.config import AgentConfig
 
 
 @pytest.mark.anyio
-@patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_hunter_run(mock_run):
     text_response = json.dumps({
         "findings": [{
@@ -38,8 +38,8 @@ async def test_hunter_run(mock_run):
     mock_run.assert_called_once()
 
 
-@patch("trashdig.agents.hunter.load_prompt")
-@patch("google.adk.agents.LlmAgent.__init__")
+@patch("trashdig.agents.hunter.load_prompt", autospec=True)
+@patch("google.adk.agents.LlmAgent.__init__", autospec=True)
 def test_create_hunter_agent(mock_init, mock_load):
     mock_load.return_value = "instruction"
     mock_init.return_value = None

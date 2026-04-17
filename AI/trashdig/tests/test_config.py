@@ -3,7 +3,7 @@ from unittest.mock import patch
 from trashdig.config import load_config
 
 
-@patch("trashdig.config._find_user_config", return_value=None)
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_defaults(mock_user_config, tmp_path, monkeypatch):
     """Tests loading config when the file doesn't exist."""
     monkeypatch.chdir(tmp_path)
@@ -11,7 +11,7 @@ def test_load_config_defaults(mock_user_config, tmp_path, monkeypatch):
     assert config.interface == "textual"
     assert len(config.agents) == 0
 
-@patch("trashdig.config._find_user_config", return_value=None)
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_from_file(mock_user_config, tmp_path):
     """Tests loading config from a valid TOML file."""
     config_content = """
@@ -35,7 +35,7 @@ def test_load_config_from_file(mock_user_config, tmp_path):
     assert config.agents["hunter"].model == "gemini-2.0-flash"
     assert config.agents["hunter"].provider == "google" # Default
 
-@patch("trashdig.config._find_user_config", return_value=None)
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_global_defaults(mock_user_config, tmp_path):
     """Tests loading config with global model and provider defaults."""
     config_content = """
@@ -69,7 +69,7 @@ def test_load_config_global_defaults(mock_user_config, tmp_path):
     assert validator_cfg.model == "global-model"
     assert validator_cfg.provider == "global-provider"
 
-@patch("trashdig.config._find_user_config", return_value=None)
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_priority(mock_user_config, tmp_path, monkeypatch):
     """Tests that .trashdig.toml is preferred over trashdig.toml."""
     monkeypatch.chdir(tmp_path)

@@ -5,8 +5,10 @@ import pytest
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
+from google.adk.tools.base_tool import BaseTool
 
 from trashdig.agents.callbacks import TrashDigCallback
+from trashdig.agents.coordinator import Coordinator
 from trashdig.agents.types import EngineState
 
 
@@ -18,13 +20,15 @@ def reset_callback_singleton():
 
 @pytest.fixture
 def mock_coordinator():
-    coord = MagicMock()
+    coord = MagicMock(spec=Coordinator)
+    coord.on_stats_event = MagicMock()
+    coord.on_task_event = MagicMock()
     coord.project_path = "test_project"
     coord._db = MagicMock()
     coord._cost_tracker = MagicMock()
     coord._state = EngineState.IDLE
     # Mock _agent_by_name to return a mock agent with a model
-    agent = MagicMock()
+    agent = MagicMock(spec=LlmAgent)
     agent.model = "gemini-2.0-flash"
     coord._agent_by_name.return_value = agent
     return coord
@@ -62,7 +66,7 @@ def test_callback_on_after_model(mock_coordinator):
 
 def test_callback_on_before_tool(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
-    tool = MagicMock()
+    tool = MagicMock(spec=BaseTool)
     tool.name = "test_tool"
 
     cb.on_before_tool(tool, {"arg1": "val1"}, MagicMock())

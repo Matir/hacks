@@ -99,6 +99,7 @@ These rules are foundational. Adhere to them for all modifications:
         *   imports from within the trashdig project
     *   Each group should be separated by a newline, and imports should be
         sorted alphabetically within the group.
+10. **Mocking**: When using `unittest.mock`, always use `autospec=True` (or `spec=...`) for `patch` and `Mock`/`MagicMock` whenever possible. This ensures that mocks have the same interface as the objects they are replacing, preventing tests from passing with incorrect method calls.
 
 ## 📂 Contextual References
 

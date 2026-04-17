@@ -27,12 +27,12 @@ def mock_config(tmp_path):
 def create_mock_agent(name):
     return LlmAgent(name=name, model="gemini-2.0-flash", instruction="test")
 
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-@patch("trashdig.agents.utils.load_prompt", return_value="test prompt")
+@patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
+@patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
 def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -49,13 +49,13 @@ def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_cre
     assert isinstance(coord.session_id, str)
 
 @pytest.mark.anyio
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-@patch("trashdig.agents.utils.load_prompt", return_value="test prompt")
-@patch("trashdig.agents.coordinator.run_agent")
+@patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
+@patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -78,13 +78,13 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
     assert mock_run_agent.called
 
 @pytest.mark.anyio
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-@patch("trashdig.agents.utils.load_prompt", return_value="test prompt")
-@patch("trashdig.agents.coordinator.run_agent")
+@patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
+@patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -110,13 +110,13 @@ async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val
     assert findings[0].title == "SQLi"
 
 @pytest.mark.anyio
-@patch("trashdig.agents.coordinator.create_stack_scout_agent")
-@patch("trashdig.agents.coordinator.create_web_route_mapper_agent")
-@patch("trashdig.agents.coordinator.create_hunter_agent")
-@patch("trashdig.agents.coordinator.create_skeptic_agent")
-@patch("trashdig.agents.coordinator.create_validator_agent")
-@patch("trashdig.agents.utils.load_prompt", return_value="test prompt")
-@patch("trashdig.agents.coordinator.run_agent")
+@patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
+@patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_coordinator_verify_finding(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -147,13 +147,13 @@ async def test_coordinator_verify_finding(mock_run_agent, mock_load, mock_create
 def test_coordinator_state_tools(mock_config, tmp_path):
     db_path = str(tmp_path / "test_trashdig.db")
     db = get_database(db_path)
-    with patch("trashdig.agents.coordinator.create_stack_scout_agent", return_value=create_mock_agent("s")), \
-         patch("trashdig.agents.coordinator.create_web_route_mapper_agent", return_value=create_mock_agent("w")), \
-         patch("trashdig.agents.coordinator.create_hunter_agent", return_value=create_mock_agent("h")), \
-         patch("trashdig.agents.coordinator.create_skeptic_agent", return_value=create_mock_agent("sk")), \
-         patch("trashdig.agents.coordinator.create_validator_agent", return_value=create_mock_agent("v")), \
-         patch("trashdig.agents.utils.load_prompt", return_value="test prompt"), \
-         patch("trashdig.agents.coordinator.get_database", return_value=db):
+    with patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True, return_value=create_mock_agent("s")), \
+         patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True, return_value=create_mock_agent("w")), \
+         patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True, return_value=create_mock_agent("h")), \
+         patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True, return_value=create_mock_agent("sk")), \
+         patch("trashdig.agents.coordinator.create_validator_agent", autospec=True, return_value=create_mock_agent("v")), \
+         patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt"), \
+         patch("trashdig.agents.coordinator.get_database", autospec=True, return_value=db):
 
         mock_config.db_path = db_path
         coord = Coordinator(mock_config)

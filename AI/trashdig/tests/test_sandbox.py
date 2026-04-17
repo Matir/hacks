@@ -12,7 +12,7 @@ from trashdig.utils import clear_binary_stubs, set_binary_stub
 
 def test_null_sandbox():
     sandbox = NullSandbox(workspace_dir="/tmp/test")
-    with patch("subprocess.run") as mock_run:
+    with patch("subprocess.run", autospec=True) as mock_run:
         mock_run.return_value = MagicMock(stdout="ok", stderr="", returncode=0)
         result = sandbox.run(["ls"])
         assert result.stdout == "ok"
@@ -33,8 +33,8 @@ def test_minijail_sandbox_init():
     assert sandbox.minijail_path == "/stub/bin/minijail0"
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Minijail only on Linux")
-@patch("subprocess.run")
-@patch("os.path.exists")
+@patch("subprocess.run", autospec=True)
+@patch("os.path.exists", autospec=True)
 def test_minijail_sandbox_run(mock_exists, mock_run):
     set_binary_stub("minijail0", True)
     mock_exists.return_value = True

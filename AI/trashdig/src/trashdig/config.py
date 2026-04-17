@@ -171,16 +171,27 @@ def get_config(config_path: str | None = None) -> Config:
     return _GLOBAL_CONFIG
 
 
-def load_config(config_path: str | None = None) -> Config:
+def load_config(
+    config_path: str | None = None,
+    config_flag: str | None = None,
+    data_dir_flag: str | None = None,
+    workspace_root: str | None = None,
+) -> Config:
     """Creates and returns a fresh Config instance (not cached)."""
     # Check for user config first
     user_cfg = _find_user_config()
 
     if config_path is None:
-        config_path = _find_project_config()
+        config_path = config_flag or _find_project_config()
 
     # Load base config (project or specified path)
     cfg = Config(config_path=config_path or "")
+
+    # Apply overrides from flags
+    if data_dir_flag:
+        cfg.data["data_dir"] = data_dir_flag
+    if workspace_root:
+        cfg.data["workspace_root"] = workspace_root
 
     # Merge user config if it exists (project config takes priority)
     if user_cfg and config_path != user_cfg:

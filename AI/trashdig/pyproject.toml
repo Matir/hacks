@@ -29,7 +29,14 @@ dependencies = [
 [project.scripts]
 trashdig = "trashdig.main:main"
 
-[tool.pytest.ini_options]
+[tool.pytest]
+minversion = "9.0"
+filterwarnings = [
+  "error",
+  "ignore::DeprecationWarning:google.genai.types",
+  'ignore:\[EXPERIMENTAL\] feature:UserWarning',
+  'ignore:unclosed database:ResourceWarning',
+]
 pythonpath = ["src"]
 
 [dependency-groups]
