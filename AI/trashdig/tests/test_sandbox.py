@@ -1,12 +1,13 @@
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
 from trashdig.sandbox import NullSandbox, get_sandbox
+from trashdig.sandbox.bx import BxSandbox
 from trashdig.sandbox.minijail import MinijailSandbox
-from trashdig.utils import set_binary_stub
+from trashdig.utils import clear_binary_stubs, set_binary_stub
 
 
 def test_null_sandbox():
@@ -21,7 +22,7 @@ def test_null_sandbox():
             text=True,
             timeout=None,
             cwd="/tmp/test",
-            env={},
+            env=ANY,
             check=False
         )
 
@@ -63,19 +64,32 @@ def test_minijail_sandbox_run(mock_exists, mock_run):
     assert "-la" in args
 
 @patch("sys.platform", "darwin")
-def test_get_sandbox_macos_strict_require(caplog):
-    # On MacOS, it should raise RuntimeError if sandbox is required
-    with patch.dict(os.environ, {"TRASHDIG_SKIP_SANDBOX": "0"}):
-        with pytest.raises(RuntimeError) as excinfo:
-            get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
-    assert "No native sandbox implementation available" in str(excinfo.value)
+def test_get_sandbox_macos_bx_available():
+    set_binary_stub("bx", True)
+    try:
+        sandbox = get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
+        assert isinstance(sandbox, BxSandbox)
+    finally:
+        clear_binary_stubs()
 
 @patch("sys.platform", "darwin")
-def test_get_sandbox_macos_graceful_fallback(caplog):
-    # On MacOS, it should return NullSandbox if NOT required, with a warning
-    sandbox = get_sandbox(workspace_dir="/tmp/test", require_sandbox=False)
-    assert isinstance(sandbox, NullSandbox)
-    assert "No native sandbox implementation available" in caplog.text
+def test_get_sandbox_macos_bx_missing_strict_require():
+    set_binary_stub("bx", False)
+    try:
+        with pytest.raises(RuntimeError, match="BxSandbox"):
+            get_sandbox(workspace_dir="/tmp/test", require_sandbox=True)
+    finally:
+        clear_binary_stubs()
+
+@patch("sys.platform", "darwin")
+def test_get_sandbox_macos_bx_missing_graceful_fallback(caplog):
+    set_binary_stub("bx", False)
+    try:
+        sandbox = get_sandbox(workspace_dir="/tmp/test", require_sandbox=False)
+        assert isinstance(sandbox, NullSandbox)
+        assert "BxSandbox not available" in caplog.text
+    finally:
+        clear_binary_stubs()
 
 @patch("sys.platform", "linux")
 def test_get_sandbox_linux_minijail():

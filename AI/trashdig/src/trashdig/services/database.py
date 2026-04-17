@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS project_profiles (
     project_path TEXT PRIMARY KEY,
     tech_stack TEXT,
     profile_json TEXT,
+    created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 
@@ -47,7 +48,8 @@ CREATE TABLE IF NOT EXISTS findings (
     cwe_id TEXT,
     verification_status TEXT DEFAULT 'Unverified',
     poc TEXT,
-    timestamp TEXT NOT NULL
+    timestamp TEXT NOT NULL,
+    UNIQUE(project_path, title, file_path)
 );
 
 CREATE TABLE IF NOT EXISTS hypotheses (
@@ -57,8 +59,9 @@ CREATE TABLE IF NOT EXISTS hypotheses (
     target TEXT NOT NULL,
     description TEXT,
     confidence REAL,
-    status TEXT DEFAULT 'PENDING',
+    status TEXT DEFAULT 'pending',
     context_json TEXT,
+    result_json TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -69,7 +72,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     agent_name TEXT NOT NULL,
     prompt TEXT,
     response TEXT,
-    tool_calls_json TEXT,
+    tool_calls TEXT,
     input_tokens INTEGER,
     output_tokens INTEGER,
     timestamp TEXT NOT NULL
@@ -81,6 +84,16 @@ CREATE TABLE IF NOT EXISTS tool_cache (
     args_json TEXT NOT NULL,
     result_text TEXT,
     timestamp TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS symbols (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    line_number INTEGER NOT NULL,
+    symbol_type TEXT,
+    UNIQUE(project_path, name, file_path, line_number)
 );
 """
 
@@ -166,14 +179,20 @@ class ProjectDatabase:
         self, project_path: str, tech_stack: str, profile: dict[str, Any]
     ) -> None:
         """Saves or updates the project profile."""
+        now = _now()
         with self._connect() as conn:
+            # Preserve created_at on update
             conn.execute(
                 """
-                INSERT OR REPLACE INTO project_profiles
-                (project_path, tech_stack, profile_json, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO project_profiles
+                (project_path, tech_stack, profile_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(project_path) DO UPDATE SET
+                    tech_stack = excluded.tech_stack,
+                    profile_json = excluded.profile_json,
+                    updated_at = excluded.updated_at
                 """,
-                (project_path, tech_stack, json.dumps(profile), _now()),
+                (project_path, tech_stack, json.dumps(profile), now, now),
             )
 
     def get_project_profile(self, project_path: str) -> dict[str, Any] | None:
@@ -192,13 +211,13 @@ class ProjectDatabase:
     # Findings
     # ------------------------------------------------------------------
 
-    def save_finding(self, project_path: str, finding: Any) -> str:
-        """Saves a security finding to the database."""
+    def save_finding(self, project_path: str, finding: Any) -> int:
+        """Saves a security finding to the database. Returns the row id."""
         finding_id = str(_uuid.uuid4())
         with self._connect() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
-                INSERT INTO findings
+                INSERT OR IGNORE INTO findings
                 (finding_id, project_path, title, file_path, severity, description,
                  vulnerable_code, impact, exploitation_path, remediation, cwe_id, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -218,7 +237,7 @@ class ProjectDatabase:
                     finding.timestamp,
                 ),
             )
-        return finding_id
+        return cursor.lastrowid or 0
 
     def update_finding_status(
         self,
@@ -251,12 +270,12 @@ class ProjectDatabase:
     # Hypotheses
     # ------------------------------------------------------------------
 
-    def save_hypothesis(self, project_path: str, hypothesis: Any) -> None:
-        """Saves a security hypothesis."""
+    def save_hypothesis(self, project_path: str, hypothesis: Any) -> int:
+        """Saves a security hypothesis. Returns the row id (0 if duplicate)."""
         with self._connect() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
-                INSERT INTO hypotheses
+                INSERT OR IGNORE INTO hypotheses
                 (task_id, project_path, type, target, description, confidence, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -271,14 +290,39 @@ class ProjectDatabase:
                     _now(),
                 ),
             )
+        return cursor.lastrowid or 0
 
-    def update_hypothesis_status(self, task_id: str, status: str) -> None:
+    def update_hypothesis_status(
+        self, task_id: str, status: str, result: dict[str, Any] | None = None
+    ) -> None:
         """Updates the status of a hypothesis."""
+        result_json = json.dumps(result) if result is not None else None
         with self._connect() as conn:
             conn.execute(
-                "UPDATE hypotheses SET status = ?, updated_at = ? WHERE task_id = ?",
-                (status, _now(), task_id),
+                "UPDATE hypotheses SET status = ?, updated_at = ?, result_json = ? WHERE task_id = ?",
+                (status, _now(), result_json, task_id),
             )
+
+    def get_hypotheses(self, project_path: str) -> list[dict[str, Any]]:
+        """Returns ALL hypotheses for a project, sorted by confidence."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM hypotheses
+                WHERE project_path = ?
+                ORDER BY confidence DESC
+                """,
+                (project_path,),
+            ).fetchall()
+            result = []
+            for r in rows:
+                d = dict(r)
+                if d.get("result_json"):
+                    d["result"] = json.loads(d["result_json"])
+                else:
+                    d["result"] = None
+                result.append(d)
+            return result
 
     def get_pending_hypotheses(self, project_path: str) -> list[dict[str, Any]]:
         """Returns all pending hypotheses for a project, sorted by confidence."""
@@ -286,12 +330,84 @@ class ProjectDatabase:
             rows = conn.execute(
                 """
                 SELECT * FROM hypotheses
-                WHERE project_path = ? AND status = 'PENDING'
+                WHERE project_path = ? AND status = 'pending'
                 ORDER BY confidence DESC
                 """,
                 (project_path,),
             ).fetchall()
             return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Symbol map
+    # ------------------------------------------------------------------
+
+    def save_symbol(
+        self,
+        project_path: str,
+        name: str,
+        file_path: str,
+        line_number: int,
+        symbol_type: str | None = None,
+    ) -> None:
+        """Saves a symbol location to the database (idempotent)."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO symbols
+                (project_path, name, file_path, line_number, symbol_type)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (project_path, name, file_path, line_number, symbol_type),
+            )
+
+    def get_symbol(self, project_path: str, name: str) -> list[dict[str, Any]]:
+        """Returns all locations where a symbol is defined in a project."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM symbols WHERE project_path = ? AND name = ?",
+                (project_path, name),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Tool output cache
+    # ------------------------------------------------------------------
+
+    def cache_tool_output(
+        self,
+        project_path: str,
+        func_name: str,
+        args: dict[str, Any],
+        result_text: str,
+    ) -> None:
+        """Caches the output of a tool call."""
+        cache_key = f"{project_path}:{func_name}:{_args_hash(args)}"
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO tool_cache
+                (cache_key, func_name, args_json, result_text, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (cache_key, func_name, json.dumps(args, sort_keys=True, default=str), result_text, _now()),
+            )
+
+    def get_cached_tool_output(
+        self,
+        project_path: str,
+        func_name: str,
+        args: dict[str, Any],
+    ) -> str | None:
+        """Returns cached tool output, or None if not cached."""
+        cache_key = f"{project_path}:{func_name}:{_args_hash(args)}"
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT result_text FROM tool_cache WHERE cache_key = ?",
+                (cache_key,),
+            ).fetchone()
+            if row:
+                return row["result_text"]
+        return None
 
     # ------------------------------------------------------------------
     # Logging & Stats
@@ -312,7 +428,7 @@ class ProjectDatabase:
             conn.execute(
                 """
                 INSERT INTO conversations
-                (project_path, agent_name, prompt, response, tool_calls_json,
+                (project_path, agent_name, prompt, response, tool_calls,
                  input_tokens, output_tokens, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,

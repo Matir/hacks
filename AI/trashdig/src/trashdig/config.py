@@ -6,6 +6,20 @@ from datetime import UTC, datetime
 from typing import Any
 
 
+def _find_user_config() -> str | None:
+    """Searches for a user-level config file in ~/.config/trashdig/."""
+    user_config = os.path.expanduser("~/.config/trashdig/trashdig.toml")
+    return user_config if os.path.exists(user_config) else None
+
+
+def _find_project_config() -> str | None:
+    """Searches for a project config file, preferring .trashdig.toml."""
+    for name in (".trashdig.toml", "trashdig.toml"):
+        if os.path.exists(name):
+            return name
+    return None
+
+
 @dataclass
 class ProviderConfig:
     """Configuration for an LLM provider."""
@@ -100,15 +114,45 @@ class Config:
         }
         return tokens
 
+    @property
+    def interface(self) -> str:
+        """Returns the UI interface type."""
+        return self.data.get("ui", {}).get("interface", "textual")
+
+    @property
+    def default_model(self) -> str:
+        """Returns the default model name."""
+        return self.data.get("model", "gemini-2.0-flash")
+
+    @property
+    def default_provider(self) -> str:
+        """Returns the default provider name."""
+        return self.data.get("provider", "google")
+
+    @property
+    def agents(self) -> dict[str, AgentConfig]:
+        """Returns all agent configurations."""
+        result = {}
+        for name, cfg in self.data.get("agents", {}).items():
+            result[name] = AgentConfig(
+                name=name,
+                model=cfg.get("model", self.default_model),
+                provider=cfg.get("provider", self.default_provider),
+            )
+        return result
+
     def get_agent_config(self, agent_name: str) -> AgentConfig:
         """Returns the configuration for a specific agent.
 
         Args:
             agent_name: Name of the agent (e.g., 'hunter').
         """
-        # (Implementation omitted for brevity, assumes standard logic)
         cfg_data = self.data.get("agents", {}).get(agent_name, {})
-        return AgentConfig(name=agent_name, **cfg_data)
+        return AgentConfig(
+            name=agent_name,
+            model=cfg_data.get("model", self.default_model),
+            provider=cfg_data.get("provider", self.default_provider),
+        )
 
     def get_provider_config(self, provider_name: str) -> ProviderConfig:
         """Returns the configuration for an LLM provider."""
@@ -127,5 +171,25 @@ def get_config(config_path: str | None = None) -> Config:
     return _GLOBAL_CONFIG
 
 
-# Alias for backward compatibility
-load_config = get_config
+def load_config(config_path: str | None = None) -> Config:
+    """Creates and returns a fresh Config instance (not cached)."""
+    # Check for user config first
+    user_cfg = _find_user_config()
+
+    if config_path is None:
+        config_path = _find_project_config()
+
+    # Load base config (project or specified path)
+    cfg = Config(config_path=config_path or "")
+
+    # Merge user config if it exists (project config takes priority)
+    if user_cfg and config_path != user_cfg:
+        user_data: dict[str, Any] = {}
+        if os.path.exists(user_cfg):
+            with open(user_cfg, "rb") as f:
+                user_data = tomllib.load(f)
+        # User config provides defaults; project config overrides
+        merged = {**user_data, **cfg.data}
+        cfg.data = merged
+
+    return cfg

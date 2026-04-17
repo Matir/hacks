@@ -32,7 +32,7 @@ class Finding:
         md += f"**CWE:** {self.cwe_id or 'N/A'}\n"
         md += f"**Status:** {self.verification_status}\n\n"
         md += f"## Description\n{self.description}\n\n"
-        md += f"## Vulnerable Code\n```\n{self.vulnerable_code}\n```\n\n"
+        md += f"## Vulnerable Code\n```py\n{self.vulnerable_code}\n```\n\n"
         md += f"## Impact\n{self.impact}\n\n"
         md += f"## Exploitation Path\n{self.exploitation_path}\n\n"
         md += f"## Remediation\n{self.remediation}\n"
@@ -60,4 +60,6 @@ class Finding:
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(self.to_markdown())
+
+        return file_path
 

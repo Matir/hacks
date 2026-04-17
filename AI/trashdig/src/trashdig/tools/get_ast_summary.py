@@ -1,8 +1,9 @@
 from typing import Any
 
+import trashdig.config as _config_module
 from trashdig.metadata.languages import get_language_metadata
 
-from .base import _get_ts_language, _make_parser, artifact_tool, get_config
+from .base import _get_ts_language, _make_parser, artifact_tool
 
 
 @artifact_tool(max_chars=5000)
@@ -23,7 +24,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
     if not ts_lang or not metadata:
         return f"Error: Language '{language}' not supported for AST analysis."
 
-    file_path = get_config().resolve_workspace_path(file_path)
+    file_path = _config_module.get_config().resolve_workspace_path(file_path)
     try:
         with open(file_path, "rb") as f:
             content = f.read()
@@ -76,7 +77,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
                     walk(child, depth)
 
         walk(tree.root_node)
-        return "\n".join(summary) if summary else "No definitions found."
+        return "\n".join(summary) if summary else "No top-level definitions found."
 
     except Exception as e:
         return f"Error analyzing AST: {str(e)}"

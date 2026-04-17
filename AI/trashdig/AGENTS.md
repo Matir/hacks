@@ -41,7 +41,8 @@ TrashDig is designed to be "ADK-Native," leveraging the framework's high-level a
 *   **State & Memory**: Uses ADK `SessionService` and `MemoryService` to maintain shared context across all agents. This ensures that the Hunter agent understands the project structure discovered by StackScout without redundant re-analysis.
 *   **Observability (Plugins)**: Employs a unified `TrashDigPlugin` (implementing ADK's agent and model hooks) to handle real-time TUI updates, state tracking (RUNNING, WAITING_FOR_TOOLS), cost accounting, and database logging.
 *   **Artifacts**: Uses the native **ADK Artifact API** to manage large tool outputs (ASTs, call graphs, scan results), ensuring context efficiency by referencing files instead of inlining massive text blocks.
-*   **Static Analysis**: `tree-sitter` (AST parsing), `semgrep` (pattern matching), `ripgrep` (fast search).
+*   **Static Analysis**: `tree-sitter` (AST parsing for Python, JavaScript/TypeScript, Go, C#), `semgrep` (pattern matching), `ripgrep` (fast search).
+*   **TUI**: Built with [Textual](https://textual.textualize.io/) (`textual` + `textual-autocomplete`).
 *   **Services Layer**:
     *   **ProjectDatabase**: ADK-compatible storage for findings, symbols, and session history.
     *   **CostTracker**: The single source of truth for LLM-related accounting. Tracks total input/output tokens and USD costs across all agents, updated per-turn by the callback system.
@@ -59,9 +60,11 @@ To ensure the safety of the host system during automated research and PoC execut
 *   **Linux Implementation**: Uses `minijail` to provide a restricted execution environment.
     *   **Filesystem Isolation**: The sandbox only sees the project workspace. The rest of the user's home directory is hidden.
     *   **Permissions**: Tools run as the current user to maintain file ownership but are restricted from writing outside the workspace.
-    *   **Network**: Network access is enabled by default but can be toggled per-tool.
+    *   **Network**: Network access is **disabled by default** for `bash_tool` and can be toggled per-tool.
     *   **Allowlisting**: The sandbox includes read-only mounts for standard system binaries and libraries (e.g., `/bin`, `/usr`, `/lib`, `/etc/ssl/certs`) to ensure tool functionality while preventing host compromise.
-*   **Logic-Level Gatekeeping**: Controlled by the `PermissionManager` service and the `require_sandbox` setting in `trashdig.toml` (default: `True`).
+*   **macOS**: Uses `BxSandbox` (`src/trashdig/sandbox/bx.py`), which wraps [bx-mac](https://github.com/holtwick/bx-mac). Allow-first model: blocks `~/.ssh`, `~/.gnupg`, sibling projects, and other sensitive home-directory paths. Requires `bx` in PATH (`brew install holtwick/tap/bx`). Network isolation is **not available** via bx — `network=False` logs a warning but is not enforced. Use `container_bash_tool` (Docker) when network isolation is required.
+*   **Other non-Linux**: No native sandbox implementation. `require_sandbox` **must** be set to `false` in `trashdig.toml`; TrashDig will fail fast if it is `true`.
+*   **Logic-Level Gatekeeping**: Controlled by the `PermissionManager` service and the `require_sandbox` setting in `trashdig.toml` (default: `true`).
 
 ## 🛡️ Enhanced Taint Analysis (Phase 3)
 

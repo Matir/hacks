@@ -161,9 +161,86 @@
 - [ ] **[MEDIUM]** Broaden AST Support: Expand `tree-sitter` node coverage (e.g., arrow functions, expressions) and language support.
 - [ ] **[LOW]** Optimize `tree-sitter` initialization: Move library imports out of hot paths and validate binary dependencies at startup.
 
+### Language Expansion (tree-sitter)
+
+Each item requires: (1) adding the grammar package to `pyproject.toml`, (2) adding a `LanguageMetadata` entry in `src/trashdig/metadata/languages.py`.
+
+- [ ] **[MEDIUM]** Add C support (`tree-sitter-c`).
+  - `extensions`: `.c`, `.h`
+  - `definition_types`: `function_definition`
+  - `scope_types`: `function_definition`, `compound_statement`
+  - `assignment_types`: `assignment_expression`, `init_declarator`
+  - `parameter_types`: `parameter_declaration`
+  - `sinks`: `system`, `popen`, `exec`, `execv`, `execve`, `execvp`, `gets`, `scanf`, `sprintf`, `strcpy`, `strcat`, `memcpy`
+  - `method_sinks`: (none — C has no methods)
+  - `attr_separators`: `.`, `->`
+  - `definition_patterns`: `r"\b{name}\s*\("`
+
+- [ ] **[MEDIUM]** Add C++ support (`tree-sitter-cpp`).
+  - `extensions`: `.cpp`, `.cc`, `.cxx`, `.hpp`, `.h`
+  - `definition_types`: `function_definition`, `class_specifier`, `struct_specifier`, `template_declaration`
+  - `scope_types`: `function_definition`, `class_specifier`, `namespace_definition`
+  - `assignment_types`: `assignment_expression`, `init_declarator`, `declaration`
+  - `parameter_types`: `parameter_declaration`
+  - `sinks`: all C sinks + `new`, `delete`
+  - `method_sinks`: `execute`, `query`
+  - `skip_symbols`: `this`
+  - `attr_separators`: `.`, `->`, `::`
+  - `definition_patterns`: `r"\b{name}\s*\("`, `r"\b\w+::{name}\s*\("`
+
+- [ ] **[MEDIUM]** Add Java support (`tree-sitter-java`).
+  - `extensions`: `.java`
+  - `definition_types`: `method_declaration`, `constructor_declaration`, `class_declaration`, `interface_declaration`
+  - `scope_types`: `method_declaration`, `constructor_declaration`, `class_declaration`
+  - `assignment_types`: `assignment_expression`, `local_variable_declaration`, `variable_declarator`
+  - `parameter_types`: `formal_parameter`, `spread_parameter`
+  - `sinks`: `exec`, `loadClass`, `eval`, `forName`
+  - `method_sinks`: `execute`, `executeQuery`, `executeUpdate`, `prepareStatement`, `write`
+  - `skip_symbols`: `this`, `super`
+  - `attr_separators`: `.`
+  - `definition_patterns`: `r"\b{name}\s*\("`
+
+- [ ] **[LOW]** Add Ruby support (`tree-sitter-ruby`).
+  - `extensions`: `.rb`
+  - `definition_types`: `method`, `singleton_method`, `class`, `module`
+  - `scope_types`: `method`, `singleton_method`, `class`, `module`, `block`
+  - `assignment_types`: `assignment`, `multiple_assignment`, `operator_assignment`
+  - `parameter_types`: `identifier`, `splat_parameter`, `hash_splat_parameter`, `optional_parameter`, `block_parameter`
+  - `sinks`: `system`, `exec`, `eval`, `send`, `public_send`, `constantize`
+  - `method_sinks`: `execute`, `query`, `where`, `html_safe`, `raw`
+  - `skip_symbols`: `self`
+  - `attr_separators`: `.`, `::`
+  - `definition_patterns`: `r"\bdef\s+{name}\b"`, `r"\bdef\s+self\.{name}\b"`
+
+- [ ] **[LOW]** Add Rust support (`tree-sitter-rust`).
+  - `extensions`: `.rs`
+  - `definition_types`: `function_item`, `impl_item`, `struct_item`, `enum_item`, `trait_item`
+  - `scope_types`: `function_item`, `impl_item`, `closure_expression`
+  - `assignment_types`: `let_declaration`, `assignment_expression`
+  - `parameter_types`: `parameter`, `self_parameter`
+  - `sinks`: `Command`, `from_utf8_unchecked`, `transmute`, `write`
+  - `method_sinks`: `execute`, `query`, `exec`
+  - `skip_symbols`: `self`
+  - `attr_separators`: `.`, `::`
+  - `definition_patterns`: `r"\bfn\s+{name}\b"`
+
+- [ ] **[LOW]** Add PHP support (`tree-sitter-php`).
+  - `extensions`: `.php`
+  - `definition_types`: `function_definition`, `method_declaration`, `class_declaration`
+  - `scope_types`: `function_definition`, `method_declaration`, `class_declaration`
+  - `assignment_types`: `assignment_expression`
+  - `parameter_types`: `simple_parameter`, `variadic_parameter`
+  - `sinks`: `system`, `exec`, `passthru`, `shell_exec`, `popen`, `proc_open`, `eval`, `assert`, `include`, `require`, `include_once`, `require_once`
+  - `method_sinks`: `query`, `execute`, `prepare`
+  - `skip_symbols`: `$this`
+  - `attr_separators`: `.`, `->`, `::`
+  - `definition_patterns`: `r"\bfunction\s+{name}\b"`
+
 ### Sandbox & Safety
 - [x] **[HIGH]** Fix Sandbox platform compatibility: Strictly enforce `require_sandbox` and fail on non-Linux platforms if required.
-- [ ] **[MEDIUM]** Implement native sandboxing for non-Linux platforms (e.g., `sandbox-exec` for macOS) to fulfill the `require_sandbox` mandate natively.
+- [x] **[MEDIUM]** Implement native sandboxing for non-Linux platforms (e.g., `sandbox-exec` for macOS) to fulfill the `require_sandbox` mandate natively.
+    - [x] Implemented `BxSandbox` (`src/trashdig/sandbox/bx.py`) using [bx-mac](https://github.com/holtwick/bx-mac). Allow-first model: blocks `~/.ssh`, `~/.gnupg`, sibling projects, etc. Install: `brew install holtwick/tap/bx`.
+    - Note: Network isolation (`network=False`) is not enforceable via bx. Use `container_bash_tool` (Docker) when network isolation is required on macOS.
 - [x] **[MEDIUM]** Harden `bash_tool`: Default `network=False` and verify User Namespace (`-U`) behavior in `MinijailSandbox`.
 - [x] **[MEDIUM]** Secure `container_bash_tool`: Enforce containerization when `require_sandbox` is True.
 

@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 
 from .base import Sandbox
@@ -34,6 +35,6 @@ class NullSandbox(Sandbox):
             text=True,
             timeout=timeout,
             cwd=cwd or self.workspace_dir,
-            env=self.env,
+            env={**os.environ, **self.env},
             check=False
         )

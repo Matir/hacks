@@ -3,7 +3,6 @@ import inspect
 import logging
 import os
 import subprocess
-import sys
 import time
 from collections.abc import Callable
 from functools import wraps
@@ -18,8 +17,8 @@ from google.adk.artifacts import BaseArtifactService, FileArtifactService
 from google.adk.tools import ToolContext
 
 from trashdig.config import get_config
-from trashdig.sandbox.minijail import MinijailSandbox
-from trashdig.sandbox.null import NullSandbox
+from trashdig.sandbox import get_sandbox
+from trashdig.sandbox.base import Sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -47,30 +46,16 @@ def _run_sandboxed(
 
     require_sandbox = config.data.get("require_sandbox", True)
 
-    sandbox = None
-    if sys.platform == "linux":
-        try:
-            sandbox = MinijailSandbox(workspace_dir=workspace_dir, network=network)
-        except Exception as e:
-            if require_sandbox:
-                # Return a failed process object
-                return subprocess.CompletedProcess(
-                    args=command,
-                    returncode=1,
-                    stdout="",
-                    stderr=f"Error: Sandbox required but failed to initialize: {e}"
-                )
-            logger.warning("Sandbox failed to initialize, falling back to NullSandbox: %s", e)
-
-    if sandbox is None:
-        if require_sandbox and sys.platform != "linux":
-            return subprocess.CompletedProcess(
-                args=command,
-                returncode=1,
-                stdout="",
-                stderr="Error: Sandbox required but not implemented for this platform."
-            )
-        sandbox = NullSandbox(workspace_dir=workspace_dir, network=network)
+    try:
+        sandbox: Sandbox = get_sandbox(
+            workspace_dir=workspace_dir,
+            network=network,
+            require_sandbox=require_sandbox,
+        )
+    except RuntimeError as e:
+        return subprocess.CompletedProcess(
+            args=command, returncode=1, stdout="", stderr=str(e)
+        )
 
     try:
         return sandbox.run(command, timeout=timeout)
@@ -99,10 +84,7 @@ def _run_sandboxed(
 
 def _get_ts_language(lang: Any) -> Any:
     """Gets the tree-sitter language object for the given language string or metadata."""
-    if hasattr(lang, "name"):
-        lang_name = lang.name
-    else:
-        lang_name = str(lang).lower()
+    lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
 
     if lang_name == "python":
         return tree_sitter.Language(tree_sitter_python.language())
@@ -124,16 +106,25 @@ def _make_parser(lang: Any) -> tree_sitter.Parser | None:
     return parser
 
 
-def get_artifact_service() -> BaseArtifactService:
-    """Returns the artifact service instance configured for the project."""
-    config = get_config()
-    return FileArtifactService(config.data_dir)
+_artifact_service: BaseArtifactService | None = None
 
 
 def init_artifact_manager(data_dir: str) -> BaseArtifactService:
-    """Initializes and returns an artifact service."""
-    os.makedirs(data_dir, exist_ok=True)
-    return FileArtifactService(data_dir)
+    """Initializes and returns an artifact service, storing it as the singleton."""
+    global _artifact_service
+    artifacts_dir = os.path.join(data_dir, "artifacts")
+    os.makedirs(artifacts_dir, exist_ok=True)
+    _artifact_service = FileArtifactService(artifacts_dir)
+    return _artifact_service
+
+
+def get_artifact_service() -> BaseArtifactService:
+    """Returns the artifact service instance configured for the project."""
+    global _artifact_service
+    if _artifact_service is not None:
+        return _artifact_service
+    config = get_config()
+    return FileArtifactService(config.data_dir)
 
 
 def _process_tool_result_sync(func_name: str, result: str, max_chars: int) -> str:
@@ -142,21 +133,22 @@ def _process_tool_result_sync(func_name: str, result: str, max_chars: int) -> st
         return result
 
     # Truncate and save to a local artifact file
-    config = get_config()
     filename = f"tool_{func_name}_{hashlib.sha256(result.encode()).hexdigest()[:8]}.txt"
-    artifact_path = os.path.join(config.data_dir, filename)
-    os.makedirs(config.data_dir, exist_ok=True)
+    svc = get_artifact_service()
+    base_path = getattr(svc, "base_path", None) or getattr(svc, "_base_path", None)
+    if base_path is None:
+        config = get_config()
+        base_path = config.data_dir
+    artifact_path = os.path.join(base_path, filename)
+    os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
     with open(artifact_path, "w", encoding="utf-8") as f:
         f.write(result)
 
     summary = (
-        f"[TRUNCATED] Output too large ({len(result)} chars). "
-        f"Full output saved to: {artifact_path}\n"
-        f"Showing first {max_chars // 2} chars:\n"
-        f"{result[:max_chars // 2]}\n"
-        f"...\n"
-        f"Showing last {max_chars // 2} chars:\n"
-        f"{result[-max_chars // 2:]}"
+        f"[TRUNCATED: Showing first {max_chars} characters]\n"
+        f"Output truncated for context efficiency. Total Size: {len(result)} characters.\n"
+        f"Full output saved as legacy artifact: {artifact_path}\n"
+        f"{result[:max_chars]}"
     )
     return summary
 
@@ -165,30 +157,25 @@ async def _process_tool_result_async(
     func_name: str, result: str, max_chars: int, ctx: ToolContext
 ) -> str:
     """Modern asynchronous tool result processing using ADK Artifacts."""
+    from google.genai import types as genai_types  # noqa: PLC0415
+
     if len(result) <= max_chars:
         return result
 
-    # Check for artifact service in context
-    art_service = getattr(ctx, "artifact_service", None)
-    if art_service:
-        try:
-            filename = f"tool_{func_name}_{int(time.time())}_{hashlib.sha256(result.encode()).hexdigest()[:8]}.txt"
-            # Use ADK Artifact API
-            await art_service.create_artifact(filename, result.encode("utf-8"))
-            summary = (
-                f"[TRUNCATED] Output too large ({len(result)} chars). "
-                f"Full output available via artifact: '{filename}'\n"
-                f"Showing first {max_chars // 2} chars:\n"
-                f"{result[:max_chars // 2]}\n"
-                f"...\n"
-                f"Showing last {max_chars // 2} chars:\n"
-                f"{result[-max_chars // 2:]}\n"
-                f"To see more, use the 'load_artifacts' tool with name: '{filename}'"
-            )
-            return summary
-        except Exception:
-            # Fallback to legacy sync save if ADK API fails
-            logger.debug("ADK artifact save failed, falling back to legacy save.")
+    try:
+        filename = f"{func_name}_{hashlib.sha256(result.encode()).hexdigest()[:8]}.txt"
+        part = genai_types.Part(text=result)
+        version = await ctx.save_artifact(filename, part)
+        summary = (
+            f"[TRUNCATED: Showing first {max_chars} characters]\n"
+            f"Output truncated for context efficiency. Total Size: {len(result)} characters.\n"
+            f"Full output saved as ADK artifact: {filename}, version {version}\n"
+            f"{result[:max_chars]}"
+        )
+        return summary
+    except Exception:
+        # Fallback to legacy sync save if ADK API fails
+        logger.debug("ADK artifact save failed, falling back to legacy save.")
 
     # Fallback to legacy sync save
     return _process_tool_result_sync(func_name, result, max_chars)
@@ -204,14 +191,17 @@ def artifact_tool(max_chars: int = 5000) -> Callable:
         if inspect.iscoroutinefunction(func):
 
             @wraps(func)
-            async def async_wrapper(*args: Any, **kwargs: Any) -> str:
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 # Extract ToolContext if provided as a kwarg (ADK standard)
-                ctx = kwargs.get("ctx")
+                ctx = kwargs.get("tool_context") or kwargs.get("ctx")
                 result = await func(*args, **kwargs)
                 if not isinstance(result, str):
-                    result = str(result)
+                    s = str(result)
+                    if len(s) <= max_chars:
+                        return result
+                    result = s
 
-                if ctx and isinstance(ctx, ToolContext):
+                if ctx and hasattr(ctx, "save_artifact"):
                     return await _process_tool_result_async(
                         func.__name__, result, max_chars, ctx
                     )
@@ -221,10 +211,13 @@ def artifact_tool(max_chars: int = 5000) -> Callable:
         else:
 
             @wraps(func)
-            def sync_wrapper(*args: Any, **kwargs: Any) -> str:
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 result = func(*args, **kwargs)
                 if not isinstance(result, str):
-                    result = str(result)
+                    s = str(result)
+                    if len(s) <= max_chars:
+                        return result
+                    result = s
                 return _process_tool_result_sync(func.__name__, result, max_chars)
 
             return sync_wrapper

@@ -10,7 +10,7 @@ TrashDig is a multi-agent, language-agnostic vulnerability scanner and security 
     *   **StackScout**: Hybrid environment detection (deterministic + LLM inference).
     *   **WebRouteMapper**: Deep attack surface mapping for web applications.
     *   **Hunter**: Autonomous, hypothesis-driven depth-first analysis with cross-file taint tracing.
-    *   **Skeptic**: Adversarial reviewer that critques findings to reduce false positives.
+    *   **Skeptic**: Adversarial reviewer that critiques findings to reduce false positives.
     *   **Validator**: Containerized Proof-of-Concept (PoC) generation and verification.
 *   **Context Compaction**: Automated history pruning and summarization to handle long-running research sessions without exceeding model token limits.
 *   **Parallel Execution**: Asynchronous task processing with a worker-pool pattern to scan projects faster.
@@ -81,15 +81,34 @@ flowchart TD
 
 ### Prerequisites
 
+*   Python 3.14+
 *   [mise](https://mise.jdx.dev/)
 *   [uv](https://github.com/astral-sh/uv)
-*   A Gemini API Key (set via `GOOGLE_API_KEY`)
+*   A Gemini API Key (set via `GOOGLE_API_KEY` or in `trashdig.toml` under `[providers.google]`)
+*   Docker (required for the `ValidatorAgent` PoC sandbox)
 
 ### Installation & Usage
 
 1.  **Sync Environment**: `uv sync`
-2.  **Launch TUI**: `mise run run`
+2.  **Launch TUI**: `uv run trashdig [DIR]` or `mise run run`
 3.  **Run Tests**: `mise run test`
+4.  **Full Validation** (lint + type check + tests): `mise run check`
+
+### Alternate LLM Provider
+
+TrashDig also supports [OpenRouter](https://openrouter.ai/) as an LLM backend. Configure it in `trashdig.toml`:
+
+```toml
+provider = "openrouter"
+
+[providers.openrouter]
+api_key = "YOUR_OPENROUTER_API_KEY"
+base_url = "https://openrouter.ai/api/v1"
+```
+
+### Supported Languages
+
+Tree-sitter AST analysis is supported for: **Python**, **JavaScript/TypeScript**, **Go**, and **C#**.
 
 ---
 
