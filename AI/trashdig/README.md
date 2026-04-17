@@ -38,42 +38,93 @@ Performs deep-dive analysis on prioritized targets. It uses **semgrep** for patt
 
 ```mermaid
 flowchart TD
-    User([User / TUI]) -->|scan path| C[Coordinator]
-    User -->|star targets| C
-    User -->|verify finding| C
-
-    C -->|SCAN task| SS[StackScout]
-    SS -->|Project Profile| C
-    C -.->|If WebApp| WRM[WebRouteMapper]
-    WRM -->|Attack Surface Map| C
-
-    C -->|HUNT task| H[Hunter]
-    H -->|Findings + Hypotheses| C
-    C -->|Recursively Spawn| H
-
-    C -->|VERIFY task| S[Skeptic]
-    S -->|Debunked / Validated| C
-    C -.->|If Validated| V[Validator]
-    V -->|Verified / False Positive| C
-
-    C -->|Persist| DB[(SQLite DB)]
-    C -->|Stats Hook| UI([TUI / UI])
-    E -->|Record Usage| CT[Cost Tracker]
-    cb[Callbacks] -->|Record Usage| CT
-    cb -->|Log| DB
-
-    subgraph Infrastructure
-        direction LR
-        E[Engine]
-        PM[Permission Manager]
-        SB[Sandboxing]
+    User([User / TUI]) -->|scan path| C
+    
+    subgraph Core [LLM-Driven Orchestration]
+        C[Coordinator Agent]
     end
 
-    SS -.->|uses| E
-    H -.->|uses| E
-    S -.->|uses| E
-    V -.->|uses| SB
+    subgraph Recon [Recon Suite]
+        SS[StackScout Agent]
+        WRM[WebRouteMapper Agent]
+    end
+
+    subgraph Hunt [Autonomous Hunting Loop]
+        HL{{Hunter LoopAgent}}
+        HO[Hunter Orchestrator Agent]
+        H[Hunter Agent]
+        
+        HL -.->|deterministic loop| HO
+        HO -->|delegates| H
+    end
+
+    subgraph Verify [Verification Pipeline]
+        S[Skeptic Agent]
+        V[Validator Agent]
+    end
+
+    %% Relationships
+    C -->|SCAN| SS
+    C -.->|If WebApp| WRM
+    C -->|HUNT| HL
+    C -->|VERIFY| S
+    S -.->|If Validated| V
+
+    %% Infrastructure & Persistence
+    C -->|Persist| DB[(SQLite DB)]
+    C -->|Stats/Cost| CT[Cost Tracker]
+    cb[Callbacks] -->|intercept| RL[Rate Limiter]
+    RL -.->|throttles| C
+    
+    %% Legend/Formatting
+    style HL fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#bbf,stroke:#333,stroke-width:2px
+    style SS fill:#bbf,stroke:#333,stroke-width:2px
+    style WRM fill:#bbf,stroke:#333,stroke-width:2px
+    style HO fill:#bbf,stroke:#333,stroke-width:2px
+    style H fill:#bbf,stroke:#333,stroke-width:2px
+    style S fill:#bbf,stroke:#333,stroke-width:2px
+    style V fill:#bbf,stroke:#333,stroke-width:2px
+
+    classDef llm fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef loop fill:#f9f,stroke:#333,stroke-dasharray: 5 5;
+    class HL loop;
+    class C,SS,WRM,HO,H,S,V llm;
 ```
+
+---
+
+## 🛠 Agent Toolset
+
+TrashDig agents have access to a suite of deterministic and research-oriented tools to perform their tasks.
+
+| Category | Tool Name | Description | Used By |
+| :--- | :--- | :--- | :--- |
+| **Recon & Search** | `get_project_structure` | Lists all relevant files in the workspace. | SS, WRM |
+| | `detect_frameworks` | Identifies web frameworks, databases, and libraries. | SS |
+| | `list_files` | Lists directory contents with sizes and dates. | All Agents |
+| | `find_files` | Finds files by name pattern. | All Agents |
+| | `detect_language` | Detects programming language for files/projects. | SS, H |
+| | `ripgrep_search` | High-speed textual search across the codebase. | All Agents |
+| | `google_search` | Searches the web for security advisories or tech info. | SS, H, S, V |
+| | `web_fetch` | Downloads and parses web pages for research. | All Agents |
+| **Code Analysis** | `get_ast_summary` | Generates a simplified AST of a file (tree-sitter). | SS, WRM, H |
+| | `get_symbol_definition` | Finds the source definition of a class or function. | H |
+| | `find_references` | Finds all usages of a specific symbol. | SS, H |
+| | `get_scope_info` | Extracts local variables and parameters for a line. | SS, H |
+| | `read_file` | Reads the full content of a file. | H, S, V |
+| | `semgrep_scan` | Pattern-based security scanning. | H |
+| **Data Flow** | `trace_variable` | Traces a variable's usage within a file. | H |
+| | `trace_variable_semantic`| AST-aware intra-file taint tracing. | H |
+| | `trace_taint_cross_file`| Follows untrusted data across module boundaries. | H |
+| **Execution** | `bash_tool` | Executes shell commands in a local sandbox. | V |
+| | `container_bash_tool` | Executes commands in an isolated Docker container. | V |
+| **Orchestration** | `get_next_hypothesis` | Retrieves the next prioritized hunting target. | HO |
+| | `save_findings` | Persists discovered vulnerabilities to the database. | HO |
+| | `exit_loop` | Deterministically ends the autonomous hunting loop. | HO |
+| **Knowledge** | `query_cwe_database` | Queries CWE definitions and vulnerability examples. | SS, H |
+
+> **Key**: **SS**: StackScout, **WRM**: WebRouteMapper, **H**: Hunter, **HO**: HunterOrchestrator, **S**: Skeptic, **V**: Validator
 
 ---
 

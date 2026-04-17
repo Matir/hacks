@@ -153,6 +153,11 @@
 
 ## 🛠️ Post-Review Refinements (from April 2026 Review)
 
+### New Tools (April 2026)
+- [x] **[LOW]** Implement `list_files` tool (ls equivalent).
+- [x] **[LOW]** Implement `find_files` tool (find equivalent).
+- [x] **[LOW]** Implement `detect_language` tool (file-level and project-level language detection).
+
 ### Semantic Intelligence & Taint Tracing
 - [x] **[HIGH]** Fix `trace_taint_cross_file` limitations: handle namespaces, imports, and complex callee expressions (e.g., `obj.method()`).
 - [x] **[MEDIUM]** Improve `get_ast_summary` and `get_scope_info`: support nested definitions, JS arrow functions, and local variable assignments.

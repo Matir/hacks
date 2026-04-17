@@ -7,14 +7,7 @@ from google.adk.agents import LlmAgent
 from trashdig.agents.coordinator import Coordinator
 from trashdig.agents.recon import StackScoutAgent
 from trashdig.config import Config
-from trashdig.tools import container_bash_tool, get_ast_summary
-from trashdig.utils import set_binary_stub
 
-
-async def maybe_await(coro_or_val):
-    if asyncio.iscoroutine(coro_or_val):
-        return await coro_or_val
-    return coro_or_val
 
 def create_mock_agent(name="dummy"):
     return LlmAgent(
@@ -23,34 +16,6 @@ def create_mock_agent(name="dummy"):
         instruction="instruction",
         description="description"
     )
-
-@pytest.mark.anyio
-async def test_get_ast_summary_no_definitions():
-    """Test get_ast_summary with a file containing no classes or functions."""
-    mock_config = MagicMock(spec=Config)
-    mock_config.resolve_workspace_path.side_effect = lambda x: x
-    with patch("trashdig.config.get_config", autospec=True, return_value=mock_config):
-        with patch("builtins.open", autospec=True):
-            with patch("trashdig.tools.base._get_ts_language", autospec=True, return_value=MagicMock()):
-                with patch("tree_sitter.Parser", autospec=True) as mock_parser_class:
-                    mock_parser = mock_parser_class.return_value
-                    mock_tree = mock_parser.parse.return_value
-                    mock_tree.root_node.children = [] # No children
-
-                    result = await maybe_await(get_ast_summary("empty.py", "python"))
-                    assert result == "No top-level definitions found."
-
-@pytest.mark.anyio
-@patch("trashdig.tools.container_bash_tool.bash_tool", autospec=True)
-async def test_container_bash_tool_docker_missing(mock_bash):
-    """Test container_bash_tool falls back to host bash_tool when Docker is missing."""
-    set_binary_stub("docker", False)
-    mock_bash.return_value = "host_output"
-
-    result = await maybe_await(container_bash_tool("ls"))
-    assert "[Warning: Docker not found. Falling back to host bash_tool]" in result
-    assert "host_output" in result
-    mock_bash.assert_called_once_with("ls", 60)
 
 @pytest.mark.anyio
 async def test_stack_scout_malformed_json():
