@@ -44,7 +44,7 @@ class Config:
     config_path: str = "trashdig.toml"
     data: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.config_path is None:
             self.config_path = "trashdig.toml"
         self._load()
@@ -58,6 +58,16 @@ class Config:
     def require_sandbox(self) -> bool:
         """Whether to require sandboxing for tool execution."""
         return self.data.get("require_sandbox", True)
+
+    @property
+    def rpm_limit(self) -> int | None:
+        """Requests per minute limit for LLM calls."""
+        return self.data.get("rpm_limit")
+
+    @property
+    def tpm_limit(self) -> int | None:
+        """Tokens per minute limit for LLM calls."""
+        return self.data.get("tpm_limit")
 
     @property
     def workspace_root(self) -> str:

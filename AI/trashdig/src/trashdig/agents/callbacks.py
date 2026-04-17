@@ -18,6 +18,7 @@ from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
 from trashdig.agents.types import EngineState
+from trashdig.services.rate_limiter import get_rate_limiter
 
 # Standard library and 3rd party imports are at the top.
 # The following imports are for type hinting only and avoid circular dependencies.
@@ -126,8 +127,12 @@ class TrashDigCallback:
     # Model hooks
     # ------------------------------------------------------------------
 
-    def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
-        """Capture the prompt before it is sent to the model."""
+    async def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
+        """Capture the prompt and wait for a rate-limit slot."""
+        limiter = get_rate_limiter()
+        if limiter:
+            await limiter.wait_for_request()
+
         prompt = ""
         if req.contents:
             for content in req.contents:
@@ -138,10 +143,10 @@ class TrashDigCallback:
         self._last_prompt = prompt.strip()
         return None
 
-    def on_after_model(
+    async def on_after_model(
         self, ctx: CallbackContext | None = None, resp: LlmResponse | None = None, **kwargs: Any
     ) -> LlmResponse | None:
-        """Record token usage, cost, log conversation, and trigger compaction."""
+        """Record usage, cost, log conversation, and update rate limiter usage."""
         # Restore RUNNING state after tool call finishes and model resumes
         if self._c._state == EngineState.WAITING_FOR_TOOLS:
             self._c._state = EngineState.RUNNING
@@ -158,6 +163,12 @@ class TrashDigCallback:
         usage = resp.usage_metadata
         in_t = (getattr(usage, "prompt_token_count", None) or 0) if usage else 0
         out_t = (getattr(usage, "candidates_token_count", None) or 0) if usage else 0
+
+        # Update rate limiter if present
+        limiter = get_rate_limiter()
+        if limiter:
+            total_t = (getattr(usage, "total_token_count", None) or (in_t + out_t))
+            await limiter.update_usage(total_t)
 
         agent_name = getattr(ctx, "agent_name", "unknown")
         agent = self._c._agent_by_name(agent_name)
@@ -194,7 +205,7 @@ class TrashDigCallback:
         )
         return None  # Never replace the model response
 
-    def on_model_error(
+    async def on_model_error(
         self, ctx: CallbackContext, req: LlmRequest, err: Exception
     ) -> LlmResponse | None:
         """Increment the LLM error counter on model API failures."""

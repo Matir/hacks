@@ -33,7 +33,18 @@ def mock_coordinator():
     coord._agent_by_name.return_value = agent
     return coord
 
-def test_callback_on_after_model(mock_coordinator):
+@pytest.mark.anyio
+async def test_callback_on_before_model(mock_coordinator):
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+    req = MagicMock()
+    req.contents = [genai_types.Content(parts=[genai_types.Part(text="Test Prompt")])]
+
+    await cb.on_before_model(ctx, req)
+    assert cb._last_prompt == "Test Prompt"
+
+@pytest.mark.anyio
+async def test_callback_on_after_model(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -49,7 +60,7 @@ def test_callback_on_after_model(mock_coordinator):
     resp.content = genai_types.Content(parts=[genai_types.Part(text="Response")])
     resp.usage_metadata = usage
 
-    cb.on_after_model(ctx, resp)
+    await cb.on_after_model(ctx, resp)
 
     # Check cost tracker update
     mock_coordinator._cost_tracker.record_usage.assert_called_once_with(
@@ -63,6 +74,17 @@ def test_callback_on_after_model(mock_coordinator):
 
     # Check DB logging
     mock_coordinator.db.log_conversation.assert_called_once()
+
+@pytest.mark.anyio
+async def test_callback_on_model_error(mock_coordinator):
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "test_agent"
+
+    await cb.on_model_error(ctx, MagicMock(), Exception("Test Error"))
+
+    # Check error signaling
+    mock_coordinator._on_llm_error.assert_called_once()
 
 def test_callback_on_before_tool(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
