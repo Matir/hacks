@@ -13,7 +13,7 @@ from textual.widgets import Footer, Header, Input, Label, RichLog, Static, Tree
 from textual_autocomplete import AutoComplete, DropdownItem
 
 from trashdig.agents.coordinator import Coordinator
-from trashdig.agents.utils import get_project_structure, log_auth_info
+from trashdig.agents.utils.helpers import get_project_structure, log_auth_info
 from trashdig.config import Config
 from trashdig.findings import Finding
 from trashdig.tools import get_artifact_service

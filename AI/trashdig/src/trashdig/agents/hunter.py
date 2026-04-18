@@ -4,14 +4,17 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from google.adk.tools import load_artifacts as load_artifacts_tool
 
-from trashdig.agents.utils import google_provider_extras, load_prompt
+from trashdig.agents.utils.helpers import google_provider_extras, load_prompt
 from trashdig.config import AgentConfig
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
+    detect_language,
+    find_files,
     find_references,
     get_ast_summary,
     get_scope_info,
     get_symbol_definition,
+    list_files,
     query_cwe_database,
     read_file,
     ripgrep_search,
@@ -59,6 +62,9 @@ def create_hunter_agent(
         FunctionTool(trace_taint_cross_file),
         FunctionTool(web_fetch),
         FunctionTool(read_file),
+        FunctionTool(detect_language),
+        FunctionTool(list_files),
+        FunctionTool(find_files),
         load_artifacts_tool,
     ]
     if extras["google_search_tool"] is not None:

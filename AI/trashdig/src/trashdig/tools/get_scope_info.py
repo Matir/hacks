@@ -121,6 +121,7 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
             content = f.read()
 
         parser = _make_parser(language)
+        assert parser is not None  # ts_lang already verified non-None above
         tree = parser.parse(content)
 
         target_line = line_number - 1

@@ -1,7 +1,7 @@
 import os
 import tempfile
 
-from trashdig.agents.utils import (
+from trashdig.agents.utils.helpers import (
     detect_frameworks,
     get_project_structure,
     read_file_content,

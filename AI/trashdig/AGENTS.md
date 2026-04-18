@@ -73,6 +73,32 @@ The Hunter agent uses a multi-stage approach to trace untrusted data:
 2.  **Cross-file Tracing**: Use `trace_taint_cross_file` to follow data into callees, resolving parameter names across module boundaries.
 3.  **Semantic Resolution**: Leverages `tree-sitter` to distinguish between simple variable usages and assignments/sinks.
 
+## 📂 `agents/` Package Structure
+
+The `agents/` package follows a strict layout:
+
+```
+src/trashdig/agents/
+├── coordinator.py       # Coordinator agent
+├── hunter.py            # Hunter agent
+├── recon.py             # StackScout + WebRouteMapper agents
+├── skeptic.py           # Skeptic agent
+├── validator.py         # Validator agent
+└── utils/               # Shared support code (NOT agent definitions)
+    ├── __init__.py      # Re-exports everything for convenience
+    ├── callbacks.py     # ADK callbacks (TrashDigCallback)
+    ├── helpers.py       # Utility functions (load_prompt, run_agent, etc.)
+    ├── json_utils.py    # LLM response parsing helpers
+    └── types.py         # Shared types (TaskType, EngineState, Hypothesis, etc.)
+```
+
+**Rules:**
+- **Top-level modules** (`coordinator.py`, `hunter.py`, etc.) each define exactly **one agent** (or a closely related group of agents like `recon.py`). They must not contain shared utility functions or type definitions.
+- **`utils/` subpackage** is for everything that is *not* an agent definition: shared types, utility functions, callback handlers, JSON parsing helpers, and any other cross-cutting concerns.
+- When adding a new agent, create a new top-level module (e.g., `agents/new_agent.py`).
+- When adding shared helpers, add them to the appropriate `utils/` submodule (`helpers.py`, `types.py`, `callbacks.py`, or `json_utils.py`), or create a new submodule inside `utils/` if the concern is distinct enough.
+- Never put agent definitions inside `utils/`.
+
 ## 📜 Engineering Standards (The Rules)
 
 These rules are foundational. Adhere to them for all modifications:
@@ -100,6 +126,10 @@ These rules are foundational. Adhere to them for all modifications:
     *   Each group should be separated by a newline, and imports should be
         sorted alphabetically within the group.
 10. **Mocking**: When using `unittest.mock`, always use `autospec=True` (or `spec=...`) for `patch` and `Mock`/`MagicMock` whenever possible. This ensures that mocks have the same interface as the objects they are replacing, preventing tests from passing with incorrect method calls.
+11. **Agent & Tool Registration**: `tests/test_agent_tools.py` maintains the authoritative record of which tools each agent receives. Any change to the tool surface of an agent or the tool inventory of the package **must** be reflected there:
+    *   **New tool** (`trashdig/tools/new_tool.py`): add its function name to `ALL_TOOLS` in `test_agent_tools.py`, then add it to `EXPECTED_TOOLS` in every agent class that should use it.
+    *   **New agent** (`trashdig/agents/new_agent.py`): add a concrete test class that inherits from `AgentToolsMixin` and `unittest.TestCase`, sets `MODULE`, `FACTORY`, and `EXPECTED_TOOLS`, and follows the pattern of the existing classes in that file.
+    *   **Modified tool list**: update the affected agent's `EXPECTED_TOOLS`. The test suite enforces both directions — every expected tool must be present, and no registered custom tool may be silently attached without being declared.
 
 ## 📂 Contextual References
 
@@ -107,3 +137,4 @@ These rules are foundational. Adhere to them for all modifications:
 *   `TODO.md`: Current progress and upcoming milestones.
 *   `trashdig.toml`: Central configuration for UI and Agent models.
 *   `prompts/`: Directory containing the "brains" of each agent.
+*   `tests/test_agent_tools.py`: Authoritative record of each agent's tool surface. See rule 11 and the module docstring for the extension pattern.

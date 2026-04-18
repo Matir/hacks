@@ -1,4 +1,4 @@
-from ..agents.utils import get_project_structure as _get_struct
+from ..agents.utils.helpers import get_project_structure as _get_struct
 
 
 def get_project_structure(path: str = ".") -> str:

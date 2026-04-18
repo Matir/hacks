@@ -1,6 +1,6 @@
 import json
 
-from ..agents.types import Hypothesis, TaskType
+from ..agents.utils.types import Hypothesis, TaskType
 from ..services.database import get_database
 
 

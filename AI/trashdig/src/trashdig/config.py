@@ -177,7 +177,7 @@ def get_config(config_path: str | None = None) -> Config:
     """Returns the singleton Config instance."""
     global _GLOBAL_CONFIG  # noqa: PLW0603
     if _GLOBAL_CONFIG is None:
-        _GLOBAL_CONFIG = Config(config_path)
+        _GLOBAL_CONFIG = Config(config_path or "trashdig.toml")
     return _GLOBAL_CONFIG
 
 

@@ -46,7 +46,7 @@ def detect_language(path: str) -> str:
         return EXTENSION_MAP.get(ext, "unknown")
     
     if os.path.isdir(path):
-        counts = Counter()
+        counts: Counter[str] = Counter()
         total_files = 0
         for root, _, files in os.walk(path):
             # Skip hidden directories and common noisy ones

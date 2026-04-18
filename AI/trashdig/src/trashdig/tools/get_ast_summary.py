@@ -30,6 +30,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
             content = f.read()
 
         parser = _make_parser(language)
+        assert parser is not None  # ts_lang already verified non-None above
         tree = parser.parse(content)
 
         summary: list[str] = []

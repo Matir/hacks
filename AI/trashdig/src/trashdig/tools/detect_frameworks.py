@@ -1,7 +1,7 @@
 import json
 
-from ..agents.utils import detect_frameworks as _detect
-from ..agents.utils import get_project_structure as _get_struct
+from ..agents.utils.helpers import detect_frameworks as _detect
+from ..agents.utils.helpers import get_project_structure as _get_struct
 
 
 def detect_frameworks(path: str = ".") -> str:

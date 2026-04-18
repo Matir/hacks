@@ -4,7 +4,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from google.adk.tools import load_artifacts as load_artifacts_tool
 
-from trashdig.agents.utils import (
+from trashdig.agents.utils.helpers import (
     google_provider_extras,
     load_prompt,
 )
@@ -12,10 +12,13 @@ from trashdig.config import AgentConfig
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
     detect_frameworks,
+    detect_language,
+    find_files,
     find_references,
     get_ast_summary,
     get_project_structure,
     get_scope_info,
+    list_files,
     query_cwe_database,
     ripgrep_search,
     web_fetch,
@@ -66,6 +69,9 @@ def create_stack_scout_agent(
         FunctionTool(web_fetch),
         FunctionTool(get_project_structure),
         FunctionTool(detect_frameworks),
+        FunctionTool(detect_language),
+        FunctionTool(list_files),
+        FunctionTool(find_files),
         load_artifacts_tool,
     ]
     if extras["google_search_tool"]:
@@ -107,6 +113,8 @@ def create_web_route_mapper_agent(
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
         FunctionTool(get_project_structure),
+        FunctionTool(list_files),
+        FunctionTool(find_files),
         load_artifacts_tool,
     ]
 

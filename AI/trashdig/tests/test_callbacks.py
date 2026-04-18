@@ -7,9 +7,9 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
 from google.adk.tools.base_tool import BaseTool
 
-from trashdig.agents.callbacks import TrashDigCallback
 from trashdig.agents.coordinator import Coordinator
-from trashdig.agents.types import EngineState
+from trashdig.agents.utils.callbacks import TrashDigCallback
+from trashdig.agents.utils.types import EngineState
 
 
 @pytest.fixture(autouse=True)

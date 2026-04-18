@@ -17,7 +17,7 @@ from google.adk.models.llm_response import LlmResponse
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
-from trashdig.agents.types import EngineState
+from trashdig.agents.utils.types import EngineState
 from trashdig.services.rate_limiter import get_rate_limiter
 
 # Standard library and 3rd party imports are at the top.

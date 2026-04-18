@@ -28,6 +28,7 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
             content = f.read()
 
         parser = _make_parser(language)
+        assert parser is not None  # ts_lang already verified non-None above
         tree = parser.parse(content)
 
         usages: list[str] = []

@@ -40,7 +40,7 @@ class Finding:
             md += f"\n## Proof of Concept\n```python\n{self.poc}\n```\n"
         return md
 
-    def save(self, output_dir: str | None = None) -> None:
+    def save(self, output_dir: str | None = None) -> str:
         """Saves the finding to a Markdown file.
 
         Args:

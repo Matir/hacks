@@ -3,10 +3,10 @@ from typing import Any
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
-from trashdig.agents.utils import google_provider_extras, load_prompt, read_file_content
+from trashdig.agents.utils.helpers import google_provider_extras, load_prompt
 from trashdig.config import AgentConfig
 from trashdig.services.permissions import PermissionManager
-from trashdig.tools import ripgrep_search, web_fetch
+from trashdig.tools import find_files, list_files, read_file, ripgrep_search, web_fetch
 
 
 class SkepticAgent(LlmAgent):
@@ -26,8 +26,10 @@ def create_skeptic_agent(
     extras = google_provider_extras(config.provider)
     tools: list[Any] = [
         FunctionTool(ripgrep_search),
-        FunctionTool(read_file_content),
+        FunctionTool(read_file),
         FunctionTool(web_fetch),
+        FunctionTool(list_files),
+        FunctionTool(find_files),
     ]
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])

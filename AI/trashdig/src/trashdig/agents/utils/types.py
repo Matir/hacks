@@ -58,4 +58,3 @@ class Hypothesis(Task):
     """
     description: str = ""
     confidence: float = 0.0 # 0.0 to 1.0
-

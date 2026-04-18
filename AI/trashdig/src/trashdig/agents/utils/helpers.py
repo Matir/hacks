@@ -92,14 +92,14 @@ def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig 
 
 def log_auth_info(config: "Config", logger: logging.Logger) -> None:
     """Log authentication information for every provider referenced by agents."""
-    referenced: dict[str, Any] = {}
+    referenced: dict[str, "ProviderConfig"] = {}
     for agent_cfg in config.agents.values():
         if agent_cfg.provider not in referenced:
-            referenced[agent_cfg.provider] = config.providers.get(agent_cfg.provider)
+            referenced[agent_cfg.provider] = config.get_provider_config(agent_cfg.provider)
 
     if not referenced:
-        default_provider = getattr(config, "default_provider", "google")
-        referenced[default_provider] = config.providers.get(default_provider)
+        default_provider = config.default_provider
+        referenced[default_provider] = config.get_provider_config(default_provider)
 
     for prov_name, prov_cfg in referenced.items():
         for line in describe_provider_auth(prov_name, prov_cfg):
@@ -116,8 +116,8 @@ def load_prompt(file_name: str) -> str:
         The content of the prompt file.
     """
     # Prompts are located in the 'prompts' directory at the project root.
-    # We find it relative to this file: src/trashdig/agents/utils.py -> project_root/prompts
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    # We find it relative to this file: src/trashdig/agents/utils/helpers.py -> project_root/prompts
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
     prompt_path = os.path.join(base_dir, "prompts", file_name)
 
     if not os.path.exists(prompt_path):

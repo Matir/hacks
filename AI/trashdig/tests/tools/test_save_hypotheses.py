@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from trashdig.agents.types import TaskType
+from trashdig.agents.utils.types import TaskType
 from trashdig.tools.save_hypotheses import save_hypotheses
 
 @pytest.fixture

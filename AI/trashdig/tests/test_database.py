@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from trashdig.agents.types import Hypothesis, TaskType
+from trashdig.agents.utils.types import Hypothesis, TaskType
 from trashdig.findings import Finding
 from trashdig.services.database import _args_hash, get_database
 
