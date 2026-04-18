@@ -18,10 +18,22 @@ run = "uv run ruff check ."
 
 [tasks.check]
 description = "Run all lints and tests"
-depends = ["lint", "typecheck", "test"]
+depends = ["lint", "typecheck", "test", "toml-check"]
 
 [tasks.format]
+description = "Format all files"
+depends = ["ruff-format", "toml-sort"]
+
+[tasks.ruff-format]
 run = "uv run ruff format ."
+
+[tasks.toml-sort]
+description = "Sort pyproject.toml"
+run = "uv run toml-sort pyproject.toml"
+
+[tasks.toml-check]
+description = "Check if pyproject.toml is sorted"
+run = "uv run toml-sort pyproject.toml --check"
 
 [tasks.coverage]
 run = "uv run pytest --cov=src/trashdig tests"

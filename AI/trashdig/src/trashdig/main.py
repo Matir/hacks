@@ -12,12 +12,14 @@ from rich.console import Console
 
 from trashdig.agents.coordinator import Coordinator
 from trashdig.config import load_config
+from trashdig.sandbox.landlock_tool import init_sandbox_mp_context
 from trashdig.services.rate_limiter import init_rate_limiter
 from trashdig.tools import init_artifact_manager
 from trashdig.tui.app import TrashDigApp
 
 # Suppress experimental ADK feature warnings
 warnings.filterwarnings("ignore", message=".*FeatureName.PLUGGABLE_AUTH.*")
+
 
 def main() -> None:
     """Main entry point for TrashDig."""
@@ -57,12 +59,17 @@ def main() -> None:
         parser.error(f"Not a directory: {workspace_root}")
 
     config = load_config(
-        config_flag=args.config,
-        data_dir_flag=args.data_dir,
-        workspace_root=workspace_root
+        config_flag=args.config, data_dir_flag=args.data_dir, workspace_root=workspace_root
     )
 
+    # Initialise the forkserver start method before any threads are spawned.
+    # This must happen after load_config() so the config singleton is inherited
+    # by the forkserver process, and before asyncio.run() / app.run() which
+    # create threads.
+    init_sandbox_mp_context("forkserver")
+
     if args.dump_config:
+
         def filter_none(d: Any) -> Any:
             if isinstance(d, dict):
                 return {k: filter_none(v) for k, v in d.items() if v is not None}
@@ -86,9 +93,7 @@ def main() -> None:
         console.print("[bold blue]TrashDig:[/bold blue] running in batch mode...")
 
         coordinator = Coordinator(
-            config,
-            project_path=config.workspace_root,
-            artifact_service=art_service
+            config, project_path=config.workspace_root, artifact_service=art_service
         )
 
         # Connect simple console logger
@@ -107,6 +112,7 @@ def main() -> None:
     else:
         app = TrashDigApp(config=config, workspace_root=config.workspace_root)
         app.run()
+
 
 if __name__ == "__main__":
     main()

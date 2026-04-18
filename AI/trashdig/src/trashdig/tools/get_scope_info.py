@@ -1,6 +1,7 @@
 from typing import Any
 
 from trashdig.metadata.languages import get_language_metadata
+from trashdig.sandbox.landlock_tool import landlock_tool
 
 from .base import _get_ts_language, _make_parser, get_config
 
@@ -8,13 +9,13 @@ from .base import _get_ts_language, _make_parser, get_config
 def _find_enclosing_scopes(node: Any, target_line: int, metadata: Any) -> list[Any]:
     """Finds all scope-defining nodes enclosing a line number (innermost last)."""
     scopes = []
-    
+
     if (
         node.type in metadata.scope_types
         and node.start_point[0] <= target_line <= node.end_point[0]
     ):
         scopes.append(node)
-    
+
     for child in node.children:
         res = _find_enclosing_scopes(child, target_line, metadata)
         if res:
@@ -25,29 +26,29 @@ def _find_enclosing_scopes(node: Any, target_line: int, metadata: Any) -> list[A
 def _extract_params(func_node: Any, metadata: Any) -> list[str]:
     """Extract parameter names from a function node."""
     params: list[str] = []
-    
+
     # Standard parameters field
     params_node = func_node.child_by_field_name("parameters")
     if params_node:
         for p in params_node.children:
             if p.type == "identifier":
-                name = p.text.decode('utf-8')
+                name = p.text.decode("utf-8")
                 if name not in metadata.skip_symbols:
                     params.append(name)
             elif p.type in metadata.parameter_types:
-                 # Recursive check for identifier in these types
-                 for child in p.children:
-                     if child.type == "identifier":
-                         name = child.text.decode('utf-8')
-                         if name not in metadata.skip_symbols:
+                # Recursive check for identifier in these types
+                for child in p.children:
+                    if child.type == "identifier":
+                        name = child.text.decode("utf-8")
+                        if name not in metadata.skip_symbols:
                             params.append(name)
-                         break
-    
+                        break
+
     # Language-specific special cases
     if not params and metadata.name == "javascript" and func_node.type == "arrow_function":
         p = func_node.child_by_field_name("parameter")
         if p and p.type == "identifier":
-            params.append(p.text.decode('utf-8'))
+            params.append(p.text.decode("utf-8"))
 
     return params
 
@@ -65,17 +66,17 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
             # Python/JS/Go assignment
             left = node.child_by_field_name("left")
             if not left and node.type == "variable_declaration":
-                 # JS/C# decls might have multiple declarators
-                 for child in node.children:
-                     if child.type == "variable_declarator":
-                         name_node = child.child_by_field_name("name")
-                         if name_node and name_node.type == "identifier":
-                            name = name_node.text.decode('utf-8')
+                # JS/C# decls might have multiple declarators
+                for child in node.children:
+                    if child.type == "variable_declarator":
+                        name_node = child.child_by_field_name("name")
+                        if name_node and name_node.type == "identifier":
+                            name = name_node.text.decode("utf-8")
                             if name not in vars_found:
                                 vars_found.append(name)
-            
+
             if left and left.type == "identifier":
-                name = left.text.decode('utf-8')
+                name = left.text.decode("utf-8")
                 if name not in vars_found and name not in metadata.skip_symbols:
                     vars_found.append(name)
             elif node.type == "lexical_declaration" or node.type == "variable_declaration":
@@ -84,7 +85,7 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
                     if child.type == "variable_declarator":
                         name_node = child.child_by_field_name("name")
                         if name_node and name_node.type == "identifier":
-                            name = name_node.text.decode('utf-8')
+                            name = name_node.text.decode("utf-8")
                             if name not in vars_found:
                                 vars_found.append(name)
 
@@ -99,6 +100,7 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
     return vars_found
 
 
+@landlock_tool()
 def get_scope_info(file_path: str, line_number: int, language: str = "python") -> str:
     """Identifies the variables and parameters available at a specific line.
 
@@ -133,11 +135,11 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
         # Innermost scope
         inner_scope = scopes[-1]
         name_node = inner_scope.child_by_field_name("name")
-        scope_name = name_node.text.decode('utf-8') if name_node else "anonymous"
-        
+        scope_name = name_node.text.decode("utf-8") if name_node else "anonymous"
+
         params = _extract_params(inner_scope, metadata)
         local_vars = _extract_local_variables(inner_scope, target_line, metadata)
-        
+
         # Remove params from local_vars to avoid duplication
         local_vars = [v for v in local_vars if v not in params]
 
@@ -151,14 +153,14 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
             for outer in scopes[:-1]:
                 outer_vars.extend(_extract_params(outer, metadata))
                 outer_vars.extend(_extract_local_variables(outer, target_line, metadata))
-            
+
             # De-duplicate and remove inner params/vars
             all_inner = set(params) | set(local_vars)
             unique_outer = []
             for v in outer_vars:
                 if v not in all_inner and v not in unique_outer:
                     unique_outer.append(v)
-            
+
             if unique_outer:
                 report.append(f"Outer Variables: {', '.join(unique_outer)}")
 

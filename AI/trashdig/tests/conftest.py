@@ -2,7 +2,19 @@ import os
 
 import pytest
 
+from trashdig.sandbox.landlock_tool import init_sandbox_mp_context
 from trashdig.utils import clear_binary_stubs
+
+
+@pytest.fixture(scope="session", autouse=True)
+def init_landlock_spawn_context():
+    """Switch the landlock sandbox to the 'spawn' start method for the test session.
+
+    Using 'spawn' avoids needing a live forkserver and provides a clean
+    Python interpreter for each sandboxed child, which is correct and safe
+    for tests (albeit slightly slower than 'forkserver').
+    """
+    init_sandbox_mp_context("spawn")
 
 
 @pytest.fixture(autouse=True)

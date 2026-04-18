@@ -1,10 +1,13 @@
 from typing import Any
 
+from trashdig.sandbox.landlock_tool import landlock_tool
+
 from .base import artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
 
 
 @artifact_tool(max_chars=5000)
+@landlock_tool()
 def find_references(symbol_name: str, path: str | None = None, tool_context: Any = None) -> str:
     """Finds all references (call sites, usages) of a symbol in the project.
 

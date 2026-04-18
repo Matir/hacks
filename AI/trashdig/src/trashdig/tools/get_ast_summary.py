@@ -2,11 +2,13 @@ from typing import Any
 
 import trashdig.config as _config_module
 from trashdig.metadata.languages import get_language_metadata
+from trashdig.sandbox.landlock_tool import landlock_tool
 
 from .base import _get_ts_language, _make_parser, artifact_tool
 
 
 @artifact_tool(max_chars=5000)
+@landlock_tool()
 def get_ast_summary(file_path: str, language: str = "python", tool_context: Any = None) -> str:
     """Generates a simplified AST summary of a file using tree-sitter.
 
@@ -39,7 +41,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
             indent = "  " * depth
             is_definition = False
             name = "anonymous"
-            display_type = node.type.replace('_', ' ').capitalize()
+            display_type = node.type.replace("_", " ").capitalize()
 
             if node.type in metadata.definition_types:
                 is_definition = True
@@ -52,10 +54,13 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
                         if name_node:
                             break
                 if name_node:
-                    name = name_node.text.decode('utf-8')
-            
+                    name = name_node.text.decode("utf-8")
+
             # JavaScript arrow functions: const foo = () => {}
-            elif language in ("javascript", "typescript", "js", "ts") and node.type == "lexical_declaration":
+            elif (
+                language in ("javascript", "typescript", "js", "ts")
+                and node.type == "lexical_declaration"
+            ):
                 # Look for variable_declarator with arrow_function
                 for child in node.children:
                     if child.type == "variable_declarator":
@@ -65,7 +70,7 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
                             is_definition = True
                             display_type = "Arrow function"
                             if name_node:
-                                name = name_node.text.decode('utf-8')
+                                name = name_node.text.decode("utf-8")
 
             if is_definition:
                 summary.append(f"{indent}{display_type}: {name}")

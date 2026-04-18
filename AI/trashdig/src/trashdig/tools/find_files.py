@@ -1,7 +1,13 @@
 import fnmatch
 import os
 
-def find_files(pattern: str, directory: str = ".", recursive: bool = True, case_sensitive: bool = False) -> str:
+from trashdig.sandbox.landlock_tool import landlock_tool
+
+
+@landlock_tool()
+def find_files(
+    pattern: str, directory: str = ".", recursive: bool = True, case_sensitive: bool = False
+) -> str:
     """Finds files by name pattern in a given directory.
 
     Args:
@@ -16,7 +22,7 @@ def find_files(pattern: str, directory: str = ".", recursive: bool = True, case_
     matches = []
     if not case_sensitive:
         pattern = pattern.lower()
-    
+
     try:
         if recursive:
             for root, _, files in os.walk(directory):

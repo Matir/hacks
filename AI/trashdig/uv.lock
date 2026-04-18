@@ -1251,6 +1251,15 @@ wheels = [
 ]
 
 [[package]]
+name = "landlock"
+version = "1.0.0.dev5"
+source = { registry = "https://pypi.org/simple/" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/e2/ad65eb9afcde46eb055dce9b7003b372b1de19da94acf800a2e352ba5ae1/landlock-1.0.0.dev5.tar.gz", hash = "sha256:e82d511992be24986c51e3c9d2bfcc956833c2f82f95004216262aa4e2d50a2e", size = 7115, upload-time = "2025-05-03T16:51:57.738Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/45/c0/5cff902d2ff3df3db965e0b36208017569abf4a93ed30fe9ffafbf171c95/landlock-1.0.0.dev5-py3-none-any.whl", hash = "sha256:6d72357f5dc23d64b3b3d976672b61af736281b8d34a5825c1a61b602f2df815", size = 7969, upload-time = "2025-05-03T16:51:56.798Z" },
+]
+
+[[package]]
 name = "librt"
 version = "0.9.0"
 source = { registry = "https://pypi.org/simple/" }
@@ -2417,6 +2426,18 @@ wheels = [
 ]
 
 [[package]]
+name = "toml-sort"
+version = "0.24.4"
+source = { registry = "https://pypi.org/simple/" }
+dependencies = [
+    { name = "tomlkit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/47/c5/d6f650fdcf8e1f83096815fa67fb13a9a345b99da6015c60c4b7e4a8ea2b/toml_sort-0.24.4.tar.gz", hash = "sha256:429b69f5b98b7047a11380c80ecf0838556bdea1a8902d0be564961c48841423", size = 17793, upload-time = "2026-03-24T14:05:53.637Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/5a/1f0e54df4eacf0f4d8f94ba50cf72be33d2a3f04babdfb1931bead48a0ab/toml_sort-0.24.4-py3-none-any.whl", hash = "sha256:125aa5fb94f33c542c6901040456145dd38f79bbb310b56b436a93057d30a739", size = 16577, upload-time = "2026-03-24T14:05:54.757Z" },
+]
+
+[[package]]
 name = "tomli"
 version = "2.0.2"
 source = { registry = "https://pypi.org/simple/" }
@@ -2435,12 +2456,22 @@ wheels = [
 ]
 
 [[package]]
+name = "tomlkit"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple/" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz", hash = "sha256:cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064", size = 187167, upload-time = "2026-01-13T01:14:53.304Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/11/87d6d29fb5d237229d67973a6c9e06e048f01cf4994dee194ab0ea841814/tomlkit-0.14.0-py3-none-any.whl", hash = "sha256:592064ed85b40fa213469f81ac584f67a4f2992509a7c3ea2d632208623a3680", size = 39310, upload-time = "2026-01-13T01:14:51.965Z" },
+]
+
+[[package]]
 name = "trashdig"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "google-adk" },
+    { name = "landlock", marker = "sys_platform == 'linux'" },
     { name = "pathspec" },
     { name = "semgrep" },
     { name = "textual" },
@@ -2459,12 +2490,14 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "toml-sort" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "google-adk" },
+    { name = "landlock", marker = "sys_platform == 'linux'", specifier = ">=1.0.0.dev5" },
     { name = "pathspec", specifier = ">=1.0.4" },
     { name = "semgrep", specifier = ">=1.159.0" },
     { name = "textual", specifier = ">=8.2.3" },
@@ -2483,6 +2516,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.10" },
+    { name = "toml-sort", specifier = ">=0.24.4" },
 ]
 
 [[package]]

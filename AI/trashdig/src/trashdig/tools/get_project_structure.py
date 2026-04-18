@@ -1,6 +1,9 @@
+from trashdig.sandbox.landlock_tool import landlock_tool
+
 from ..agents.utils.helpers import get_project_structure as _get_struct
 
 
+@landlock_tool()
 def get_project_structure(path: str = ".") -> str:
     """Returns a list of all files in the project, respecting .gitignore.
 

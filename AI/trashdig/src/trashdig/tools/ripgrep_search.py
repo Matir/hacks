@@ -1,10 +1,18 @@
 from typing import Any
 
+from trashdig.sandbox.landlock_tool import landlock_tool
+
 from .base import _run_sandboxed, artifact_tool, get_config
 
 
 @artifact_tool(max_chars=4000)
-def ripgrep_search(pattern: str, path: str | None = None, extra_args: list[str] | None = None, tool_context: Any = None) -> str:
+@landlock_tool()
+def ripgrep_search(
+    pattern: str,
+    path: str | None = None,
+    extra_args: list[str] | None = None,
+    tool_context: Any = None,
+) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
 
     Args:

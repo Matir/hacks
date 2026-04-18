@@ -5,6 +5,12 @@ import os
 import sys
 
 from trashdig.sandbox.base import Sandbox
+from trashdig.sandbox.landlock_tool import (
+    SandboxError,
+    ToolTimeoutError,
+    init_sandbox_mp_context,
+    landlock_tool,
+)
 from trashdig.sandbox.null import NullSandbox
 
 logger = logging.getLogger(__name__)
@@ -63,17 +69,11 @@ def get_sandbox(
         try:
             from trashdig.sandbox.bx import BxSandbox  # noqa: PLC0415
 
-            return BxSandbox(
-                workspace_dir=workspace_dir, network=network, allowlist=allowlist
-            )
+            return BxSandbox(workspace_dir=workspace_dir, network=network, allowlist=allowlist)
         except RuntimeError as e:
             if require_sandbox:
-                raise RuntimeError(
-                    f"Sandbox required but BxSandbox not available: {e}"
-                ) from e
-            logger.warning(
-                "BxSandbox not available, falling back to NullSandbox: %s", e
-            )
+                raise RuntimeError(f"Sandbox required but BxSandbox not available: {e}") from e
+            logger.warning("BxSandbox not available, falling back to NullSandbox: %s", e)
 
     else:
         msg = (
@@ -87,4 +87,12 @@ def get_sandbox(
     return NullSandbox(workspace_dir=workspace_dir, network=network, allowlist=allowlist)
 
 
-__all__ = ["Sandbox", "NullSandbox", "get_sandbox"]
+__all__ = [
+    "Sandbox",
+    "NullSandbox",
+    "SandboxError",
+    "ToolTimeoutError",
+    "get_sandbox",
+    "init_sandbox_mp_context",
+    "landlock_tool",
+]

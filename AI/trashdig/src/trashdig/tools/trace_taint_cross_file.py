@@ -4,6 +4,7 @@ from contextlib import suppress
 from typing import Any
 
 from trashdig.metadata.languages import get_language_metadata
+from trashdig.sandbox.landlock_tool import landlock_tool
 
 from .base import _make_parser, artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
@@ -49,31 +50,43 @@ def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:
     """Extract the full path of a callee (e.g. ['module', 'func'])."""
     if func_node.type == "identifier":
         return [func_node.text.decode("utf-8")]
-    if func_node.type == "attribute" or (metadata.name == "csharp" and func_node.type == "member_access_expression"):
+    if func_node.type == "attribute" or (
+        metadata.name == "csharp" and func_node.type == "member_access_expression"
+    ):
         # In python: (attribute object: (_) attribute: (identifier))
         # In JS: (attribute_expression object: (_) property: (property_identifier))
         # In Go: (selector_expression operand: (_) field: (field_identifier))
         # This implementation is a bit Python-centric, but trying to generalize
-        
+
         obj = func_node.child_by_field_name("object") or func_node.child_by_field_name("operand")
-        attr = func_node.child_by_field_name("attribute") or func_node.child_by_field_name("property") or func_node.child_by_field_name("field") or func_node.child_by_field_name("name")
-        
+        attr = (
+            func_node.child_by_field_name("attribute")
+            or func_node.child_by_field_name("property")
+            or func_node.child_by_field_name("field")
+            or func_node.child_by_field_name("name")
+        )
+
         path: list[str] = []
         if obj:
             if obj.type == "identifier":
                 path.append(obj.text.decode("utf-8"))
-            elif obj.type in ("attribute", "selector_expression", "member_access_expression", "attribute_expression"):
+            elif obj.type in (
+                "attribute",
+                "selector_expression",
+                "member_access_expression",
+                "attribute_expression",
+            ):
                 path.extend(_get_full_callee_path(obj, metadata))
             elif obj.type == "call" or obj.type == "call_expression":
                 # For call().method, we might want to know the call's callee
                 inner_callee_node = obj.child_by_field_name("function")
                 if inner_callee_node:
                     path.extend(_get_full_callee_path(inner_callee_node, metadata))
-                path.append("()") # Marker for call
-        
+                path.append("()")  # Marker for call
+
         if attr and attr.type in ("identifier", "property_identifier", "field_identifier"):
             path.append(attr.text.decode("utf-8"))
-        
+
         return path
     return []
 
@@ -181,13 +194,9 @@ def _find_calls_passing_variable(
             callee_node = node.children[0] if node.children else None
             callee = _extract_callee_name(callee_node) if callee_node else None
 
-            arg_list = next(
-                (c for c in node.children if c.type == "argument_list"), None
-            )
+            arg_list = next((c for c in node.children if c.type == "argument_list"), None)
             if callee and arg_list:
-                actual_args = [
-                    c for c in arg_list.children if c.type not in ("(", ")", ",")
-                ]
+                actual_args = [c for c in arg_list.children if c.type not in ("(", ")", ",")]
                 for idx, arg in enumerate(actual_args):
                     if _node_contains_identifier(arg, variable_name):
                         results.append((callee, idx, node.start_point[0] + 1, callee_node))
@@ -272,7 +281,7 @@ def _find_function_node(node: Any, func_name: str, metadata: Any) -> Any | None:
     if node.type in metadata.definition_types:
         name_node = node.child_by_field_name("name")
         if not name_node:
-             for field in ("declarator", "identifier"):
+            for field in ("declarator", "identifier"):
                 name_node = node.child_by_field_name(field)
                 if name_node:
                     break
@@ -291,9 +300,9 @@ def _extract_function_params(func_node: Any, metadata: Any) -> list[str]:
     if params_node is None:
         # JS arrow function fallback
         if metadata.name == "javascript" and func_node.type == "arrow_function":
-             p = func_node.child_by_field_name("parameter")
-             if p and p.type == "identifier":
-                 return [p.text.decode('utf-8')]
+            p = func_node.child_by_field_name("parameter")
+            if p and p.type == "identifier":
+                return [p.text.decode("utf-8")]
         return []
 
     params: list[str] = []
@@ -303,9 +312,7 @@ def _extract_function_params(func_node: Any, metadata: Any) -> list[str]:
             if p.type == "identifier":
                 name = p.text.decode("utf-8")
             else:
-                name_child = next(
-                    (c for c in p.children if c.type == "identifier"), None
-                )
+                name_child = next((c for c in p.children if c.type == "identifier"), None)
                 name = name_child.text.decode("utf-8") if name_child else p.text.decode("utf-8")
 
             if name not in metadata.skip_symbols:
@@ -376,7 +383,11 @@ def _find_assignment(
                     if child.type == "variable_declarator":
                         name_node = child.child_by_field_name("name")
                         val_node = child.child_by_field_name("value")
-                        if name_node and name_node.text.decode("utf-8") == variable_name and val_node:
+                        if (
+                            name_node
+                            and name_node.text.decode("utf-8") == variable_name
+                            and val_node
+                        ):
                             if val_node.type in ("call", "call_expression"):
                                 callee = val_node.child_by_field_name("function")
                                 if callee:
@@ -395,7 +406,6 @@ def _find_assignment(
         return None
 
     return walk(tree.root_node)
-
 
 
 def _process_tainted_calls(  # noqa: PLR0913
@@ -425,7 +435,7 @@ def _process_tainted_calls(  # noqa: PLR0913
 
         # Check for method sinks (e.g. conn.execute)
         is_method_sink_candidate = callee in metadata.method_sinks
-        
+
         report_lines.append(
             f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
         )
@@ -475,15 +485,15 @@ def _process_tainted_calls(  # noqa: PLR0913
             callee_files = _find_function_files(callee, project_root, metadata)
 
         # 4. Final heuristic for method sinks:
-        # If it's a method sink (like .execute) and we still have NO files OR multiple files 
+        # If it's a method sink (like .execute) and we still have NO files OR multiple files
         # but none were resolved via imports, it might be a library sink (sqlite3.execute).
         if is_method_sink_candidate and not callee_files:
-             report_lines.append(
+            report_lines.append(
                 f"{indent}  *** SINK (Method) *** Line {line_no}: '{var}' passed to '{callee}()' "
                 f"on object '{obj_name}' — potential library sink"
             )
-             found_sink = True
-             continue
+            found_sink = True
+            continue
 
         if not callee_files:
             report_lines.append(
@@ -502,8 +512,14 @@ def _process_tainted_calls(  # noqa: PLR0913
         param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, metadata)
         if param_name:
             _trace_recursive(
-                param_name, callee_file, depth + 1, max_depth,
-                visited, report_lines, project_root, metadata
+                param_name,
+                callee_file,
+                depth + 1,
+                max_depth,
+                visited,
+                report_lines,
+                project_root,
+                metadata,
             )
         else:
             report_lines.append(
@@ -545,26 +561,23 @@ def _trace_recursive(  # noqa: PLR0913
 
     calls = _find_calls_passing_variable(var, content, metadata.name)
     found_sink = _process_tainted_calls(
-        calls, var, report_lines, indent, project_root,
-        metadata, depth, max_depth, visited, content
+        calls, var, report_lines, indent, project_root, metadata, depth, max_depth, visited, content
     )
 
     return_lines = _find_returns_variable(var, content, metadata.name)
     for line_no in return_lines:
         report_lines.append(
-            f"{indent}  RETURN Line {line_no}: '{var}' returned — "
-            f"caller must be traced separately"
+            f"{indent}  RETURN Line {line_no}: '{var}' returned — caller must be traced separately"
         )
 
     if not calls and not return_lines:
         report_lines.append(f"{indent}  SAFE: '{var}' has no outgoing flow in this file")
-    elif not found_sink and not return_lines and all(
-        c[0] not in metadata.sinks for c in calls
-    ):
+    elif not found_sink and not return_lines and all(c[0] not in metadata.sinks for c in calls):
         pass  # child traces already reported
 
 
 @artifact_tool(max_chars=8000)
+@landlock_tool()
 def trace_taint_cross_file(
     variable: str,
     source_file: str,
@@ -602,13 +615,14 @@ def trace_taint_cross_file(
     visited: set[tuple[str, str]] = set()
 
     _trace_recursive(
-        variable, source_file, 0, max_depth, visited,
-        report_lines, project_root, metadata
+        variable, source_file, 0, max_depth, visited, report_lines, project_root, metadata
     )
 
     report_lines.append("\n" + "=" * 60)
     has_sink = any("*** SINK" in line for line in report_lines)
     report_lines.append(
-        "RESULT: POTENTIAL VULNERABILITY FOUND" if has_sink else "RESULT: No sinks reached within depth limit"
+        "RESULT: POTENTIAL VULNERABILITY FOUND"
+        if has_sink
+        else "RESULT: No sinks reached within depth limit"
     )
     return "\n".join(report_lines)
