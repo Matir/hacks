@@ -1,0 +1,25 @@
+{
+	# Global options for logging
+	log {
+		output stderr
+		format console
+	}
+}
+
+# Caddy automatically handles HTTP to HTTPS redirection and SSL certificates for public domains.
+claw.matir.dev {
+	# Forward authentication to Authelia on another host
+	forward_auth https://auth.matir.dev {
+		uri /api/verify?rd=https://auth.matir.dev/
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+
+	# Reverse proxy to the service running on localhost
+	reverse_proxy localhost:18789
+
+	# Explicitly log requests for this site
+	log {
+		output stderr
+		format console
+	}
+}

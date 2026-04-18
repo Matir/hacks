@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "ghidra-mcp": {
+      "command": "uvx",
+      "args": [
+        "pyghidra-mcp-cli"
+      ]
+    },
+    "radare2": {
+      "command": "r2pm",
+      "args": [
+        "-r",
+        "r2mcp"
+      ]
+    },
+    "nvd": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "nvd-cve-mcp-server"
+      ]
+    },
+    "wiremcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@iflow-mcp/wiremcp"
+      ]
+    },
+    "exploitdb": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "github:Cyreslab-AI/exploitdb-mcp-server"
+      ]
+    }
+  }
+}
