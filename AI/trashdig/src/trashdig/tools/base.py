@@ -3,7 +3,6 @@ import inspect
 import logging
 import os
 import subprocess
-import time
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -97,13 +96,21 @@ def _get_ts_language(lang: Any) -> Any:
     return None
 
 
+# Language objects are read-only after construction and safe to share across
+# threads. Parser objects are NOT thread-safe (mutable C state), so we cache
+# only the Language and construct a new Parser per call.
+_LANGUAGE_CACHE: dict[str, tree_sitter.Language] = {}
+
+
 def _make_parser(lang: Any) -> tree_sitter.Parser | None:
-    """Creates a tree-sitter parser for the given language."""
-    ts_lang = _get_ts_language(lang)
-    if ts_lang is None:
-        return None
-    parser = tree_sitter.Parser(ts_lang)
-    return parser
+    """Creates a tree-sitter parser with a cached Language for the given language."""
+    lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
+    if lang_name not in _LANGUAGE_CACHE:
+        ts_lang = _get_ts_language(lang)
+        if ts_lang is None:
+            return None
+        _LANGUAGE_CACHE[lang_name] = ts_lang
+    return tree_sitter.Parser(_LANGUAGE_CACHE[lang_name])
 
 
 _artifact_service: BaseArtifactService | None = None
@@ -111,7 +118,7 @@ _artifact_service: BaseArtifactService | None = None
 
 def init_artifact_manager(data_dir: str) -> BaseArtifactService:
     """Initializes and returns an artifact service, storing it as the singleton."""
-    global _artifact_service
+    global _artifact_service  # noqa: PLW0603
     artifacts_dir = os.path.join(data_dir, "artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
     _artifact_service = FileArtifactService(artifacts_dir)
@@ -120,7 +127,7 @@ def init_artifact_manager(data_dir: str) -> BaseArtifactService:
 
 def get_artifact_service() -> BaseArtifactService:
     """Returns the artifact service instance configured for the project."""
-    global _artifact_service
+    global _artifact_service  # noqa: PLW0602
     if _artifact_service is not None:
         return _artifact_service
     config = get_config()

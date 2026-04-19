@@ -1,5 +1,6 @@
 import os
 import tempfile
+import threading
 import tomllib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -44,7 +45,7 @@ class Config:
     config_path: str = "trashdig.toml"
     data: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if self.config_path is None:
             self.config_path = "trashdig.toml"
         self._load()
@@ -99,7 +100,24 @@ class Config:
         for token, val in tokens.items():
             path = path.replace(token, val)
 
-        return os.path.abspath(path)
+        resolved = os.path.abspath(path)
+
+        # Prevent path traversal: only allow paths inside the workspace, or
+        # inside the system temp directory when the template explicitly uses
+        # {tmpdir} (not as a side-effect of {workspace} being under /tmp).
+        workspace = os.path.abspath(self.workspace_root)
+        in_workspace = (resolved.startswith(workspace + os.sep)
+                        or resolved == workspace)
+        tmpdir = os.path.abspath(tempfile.gettempdir())
+        in_tmpdir = ("{tmpdir}" in path_template
+                     and (resolved.startswith(tmpdir + os.sep)
+                          or resolved == tmpdir))
+        if not (in_workspace or in_tmpdir):
+            raise ValueError(
+                f"Resolved path {resolved!r} escapes workspace {workspace!r}"
+            )
+
+        return resolved
 
     def resolve_data_path(self, filename: str) -> str:
         """Resolves a filename relative to the data directory."""
@@ -171,13 +189,16 @@ class Config:
 
 
 _GLOBAL_CONFIG: Config | None = None
+_GLOBAL_CONFIG_LOCK = threading.Lock()
 
 
 def get_config(config_path: str | None = None) -> Config:
     """Returns the singleton Config instance."""
     global _GLOBAL_CONFIG  # noqa: PLW0603
     if _GLOBAL_CONFIG is None:
-        _GLOBAL_CONFIG = Config(config_path or "trashdig.toml")
+        with _GLOBAL_CONFIG_LOCK:
+            if _GLOBAL_CONFIG is None:
+                _GLOBAL_CONFIG = Config(config_path or "trashdig.toml")
     return _GLOBAL_CONFIG
 
 
