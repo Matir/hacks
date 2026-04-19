@@ -1,5 +1,7 @@
 from typing import Any
 
+from trashdig.utils import is_binary_available
+
 from .base import _run_sandboxed, artifact_tool, get_config
 
 
@@ -15,6 +17,9 @@ def semgrep_scan(path: str | None = None, config: str = "p/security-audit", tool
     Returns:
         The JSON output of the semgrep scan as a string.
     """
+    if not is_binary_available("semgrep"):
+        return "Error: semgrep is not installed or not in PATH."
+
     if path is None:
         path = get_config().workspace_root
 

@@ -97,12 +97,19 @@ def _get_ts_language(lang: Any) -> Any:
     return None
 
 
+_PARSER_CACHE: dict[str, tree_sitter.Parser] = {}
+
+
 def _make_parser(lang: Any) -> tree_sitter.Parser | None:
-    """Creates a tree-sitter parser for the given language."""
+    """Returns a cached tree-sitter parser for the given language."""
+    lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
+    if lang_name in _PARSER_CACHE:
+        return _PARSER_CACHE[lang_name]
     ts_lang = _get_ts_language(lang)
     if ts_lang is None:
         return None
     parser = tree_sitter.Parser(ts_lang)
+    _PARSER_CACHE[lang_name] = parser
     return parser
 
 

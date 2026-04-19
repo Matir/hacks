@@ -33,7 +33,11 @@ def ripgrep_search(
 
     result = _run_sandboxed(cmd, network=False, workspace_dir=path)
 
-    # The existing tests expect specific error messages if rg is not found
+    # rg exit codes: 0 = matches found, 1 = no matches (not an error), 2 = error
     if result.returncode == 127:  # noqa: PLR2004
         return result.stderr
-    return result.stdout if result.stdout else result.stderr
+    if result.returncode == 1:
+        return ""
+    if result.returncode != 0:
+        return result.stderr or f"ripgrep error (exit {result.returncode})"
+    return result.stdout
