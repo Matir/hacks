@@ -1,6 +1,24 @@
 import pytest
 from unittest.mock import patch
+
+import trashdig.tools.base
 from trashdig.config import Config
+
+
+@pytest.fixture(autouse=True)
+def clear_language_cache():
+    """Clear the tree-sitter language cache before each test.
+
+    Some tests mock _get_ts_language to return a MagicMock, which gets stored
+    in the module-level _LANGUAGE_CACHE.  Without clearing it, that stale mock
+    leaks into subsequent tests that call _make_parser() directly and then fail
+    with TypeError when tree_sitter.Parser receives a MagicMock instead of a
+    real Language object.
+    """
+    trashdig.tools.base._LANGUAGE_CACHE.clear()
+    yield
+    trashdig.tools.base._LANGUAGE_CACHE.clear()
+
 
 @pytest.fixture(autouse=True)
 def mock_cfg():

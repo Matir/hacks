@@ -28,6 +28,10 @@ def test_update_hypothesis_status_delegates_to_pool(tmp_path):
 
 
 def test_update_hypothesis_status_error():
-    res = update_hypothesis_status("task1", "completed",
-                                   db_path="/nonexistent/path/db.db")
+    # Simulate a database error by making get_database raise.  We can't rely
+    # on an invalid path to trigger the error because ProjectDatabase.__init__
+    # calls os.makedirs(), which creates any missing directories.
+    with patch("trashdig.tools.update_hypothesis_status.get_database",
+               side_effect=Exception("disk full")):
+        res = update_hypothesis_status("task1", "completed")
     assert "Error updating database" in res

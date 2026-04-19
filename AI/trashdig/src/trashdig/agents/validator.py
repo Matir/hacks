@@ -23,7 +23,9 @@ class ValidatorAgent(LlmAgent):
 
 
 def create_validator_agent(
-    config: AgentConfig | None = None, permission_manager: PermissionManager | None = None
+    config: AgentConfig | None = None,
+    permission_manager: PermissionManager | None = None,
+    extra_tools: list[Any] | None = None,
 ) -> ValidatorAgent:
     """Creates a Validator agent."""
     if config is None:
@@ -46,6 +48,8 @@ def create_validator_agent(
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)
+    if extra_tools:
+        tools.extend(extra_tools)
 
     kwargs = (
         {"generate_content_config": extras["generate_content_config"]}

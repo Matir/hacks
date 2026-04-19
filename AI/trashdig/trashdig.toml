@@ -28,11 +28,68 @@ data_dir = "{workspace}/.trashdig"
 [agents.archaeologist]
 # model = "gemini-2.0-flash"
 # provider = "google"
+# max_turns = 20   # max LLM calls before the agent is force-stopped
+
+[agents.stack_scout]
+# model = "gemini-2.0-flash"
+# provider = "google"
+# max_turns = 20
+
+[agents.web_route_mapper]
+# model = "gemini-2.0-flash"
+# provider = "google"
+# max_turns = 15
 
 [agents.hunter]
 # model = "gemini-2.0-pro-exp-02-05"
 # provider = "google"
+# max_turns = 30
+
+[agents.skeptic]
+# model = "gemini-2.0-flash"
+# provider = "google"
+# max_turns = 10
 
 [agents.validator]
 # model = "gemini-2.0-flash"
 # provider = "google"
+# max_turns = 15
+
+# ---------------------------------------------------------------------------
+# MCP Server Integrations
+# ---------------------------------------------------------------------------
+# Each [[mcp_servers]] entry wires an external MCP server as a toolset.
+# Tools are prefixed "mcp_<name>_*" to avoid name collisions.
+#
+# Transport options:
+#   "stdio"  — spawn a local process (command + args)
+#   "sse"    — connect to a Server-Sent Events endpoint (url)
+#   "http"   — connect to a Streamable HTTP endpoint (url)
+#
+# Optional keys:
+#   tool_filter = ["tool_a", "tool_b"]   # allow only these tools (default: all)
+#   agents      = ["hunter", "skeptic"]  # restrict to these agents (default: all)
+#   timeout     = 10.0                   # connection timeout in seconds
+#
+# Example: mcp-server-fetch (web page retrieval via MCP)
+# [[mcp_servers]]
+# name      = "fetch"
+# transport = "stdio"
+# command   = "uvx"
+# args      = ["mcp-server-fetch"]
+# agents    = ["hunter", "skeptic"]
+#
+# Example: local CVE lookup MCP server over SSE
+# [[mcp_servers]]
+# name        = "nvd"
+# transport   = "sse"
+# url         = "http://localhost:8765/sse"
+# tool_filter = ["search_cve", "get_cve_details"]
+# agents      = ["hunter"]
+#
+# Example: security advisory MCP server over Streamable HTTP
+# [[mcp_servers]]
+# name      = "ghsa"
+# transport = "http"
+# url       = "http://localhost:9000/mcp"
+# agents    = ["hunter", "skeptic", "validator"]

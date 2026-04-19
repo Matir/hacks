@@ -113,9 +113,10 @@
     - [ ] Assess overlap with existing `ProjectDatabase` — may be redundant.
 
 ### Tool Ecosystem
-- [ ] **[MEDIUM]** Integrate MCP (Model Context Protocol) tools via ADK's native MCP support.
-    - [ ] Evaluate existing security-focused MCP servers (e.g., static analysis, CVE lookup) as drop-in tools.
-    - [ ] See ADK docs: `docs/mcp/index.md` and `docs/tools/mcp-tools.md`.
+- [x] **[MEDIUM]** Integrate MCP (Model Context Protocol) tools via ADK's native MCP support.
+    - [x] Evaluate existing security-focused MCP servers (e.g., static analysis, CVE lookup) as drop-in tools.
+    - [x] See ADK docs: `docs/mcp/index.md` and `docs/tools/mcp-tools.md`.
+    - [x] Implemented: `McpServerConfig` in `config.py`, `tools/mcp_toolsets.py` factory, `extra_tools` on all agent factories, wired in `Coordinator`. Configure via `[[mcp_servers]]` in `trashdig.toml`.
 - [ ] **[LOW]** Use ADK OpenAPI tool generation for third-party security APIs.
     - [ ] Candidates: NVD/CVE API, bug bounty platform APIs (HackerOne, Bugcrowd), GitHub Security Advisory API.
     - [ ] See ADK docs: `docs/tools/openapi-tools.md`.

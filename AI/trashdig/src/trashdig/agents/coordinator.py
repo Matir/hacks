@@ -34,6 +34,7 @@ from trashdig.tools import (
     save_hypotheses,
     update_hypothesis_status,
 )
+from trashdig.tools.mcp_toolsets import build_mcp_toolsets
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     # All mutable state
     # ------------------------------------------------------------------
+    _config: Config = PrivateAttr()
     _db: ProjectDatabase = PrivateAttr()
     _session_service: BaseSessionService = PrivateAttr()
     _artifact_service: BaseArtifactService | None = PrivateAttr()
@@ -85,22 +87,27 @@ class Coordinator(LlmAgent):
         stack_scout = create_stack_scout_agent(
             config.get_agent_config("stack_scout") or config.get_agent_config("archaeologist"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "stack_scout"),
         )
         web_route_mapper = create_web_route_mapper_agent(
             config.get_agent_config("web_route_mapper"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "web_route_mapper"),
         )
         hunter = create_hunter_agent(
             config.get_agent_config("hunter"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "hunter"),
         )
         skeptic = create_skeptic_agent(
             config.get_agent_config("skeptic"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "skeptic"),
         )
         validator = create_validator_agent(
             config.get_agent_config("validator"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "validator"),
         )
 
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
@@ -144,6 +151,7 @@ class Coordinator(LlmAgent):
 
         cost_tracker = CostTracker()
 
+        object.__setattr__(self, "_config", config)
         object.__setattr__(self, "_db", db)
         object.__setattr__(self, "_session_service", session_service)
         object.__setattr__(self, "_artifact_service", artifact_service)
@@ -166,6 +174,11 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     # TUI compatibility properties (read-only)
     # ------------------------------------------------------------------
+
+    @property
+    def config(self) -> Config:
+        """Returns the TrashDig configuration."""
+        return self._config
 
     @property
     def project_path(self) -> str:
@@ -379,6 +392,7 @@ class Coordinator(LlmAgent):
 
     async def run_full_scan(self, path: str = ".") -> None:
         """Run the full SCAN → HUNT → VERIFY pipeline with hypothesis loop."""
+        TrashDigCallback.get_instance().reset_turn_counts()
         # Phase 1: Recon
         await self.run_recon(path)
 
@@ -458,6 +472,7 @@ class Coordinator(LlmAgent):
 
     async def run_recon(self, path: str = ".") -> dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
+        TrashDigCallback.get_instance().reset_turn_counts()
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
 
         abs_path = os.path.abspath(path)  # noqa: ASYNC240
@@ -531,6 +546,7 @@ class Coordinator(LlmAgent):
         Returns:
             A list of new Finding objects discovered.
         """
+        TrashDigCallback.get_instance().reset_turn_counts()
         new_findings: list[Finding] = []
         for i, target in enumerate(targets, 1):
             self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")
