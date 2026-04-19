@@ -54,6 +54,7 @@ class AgentConfig:
     provider: str = "google"
     temperature: float = 0.0
     max_tokens: int = 4096
+    max_turns: int | None = None
 
 
 @dataclass
@@ -215,6 +216,7 @@ class Config:
             name=agent_name,
             model=cfg_data.get("model", self.default_model),
             provider=cfg_data.get("provider", self.default_provider),
+            max_turns=cfg_data.get("max_turns"),
         )
 
     def get_provider_config(self, provider_name: str) -> ProviderConfig:

@@ -51,6 +51,7 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     # All mutable state
     # ------------------------------------------------------------------
+    _config: Config = PrivateAttr()
     _db: ProjectDatabase = PrivateAttr()
     _session_service: BaseSessionService = PrivateAttr()
     _artifact_service: BaseArtifactService | None = PrivateAttr()
@@ -150,6 +151,7 @@ class Coordinator(LlmAgent):
 
         cost_tracker = CostTracker()
 
+        object.__setattr__(self, "_config", config)
         object.__setattr__(self, "_db", db)
         object.__setattr__(self, "_session_service", session_service)
         object.__setattr__(self, "_artifact_service", artifact_service)
@@ -172,6 +174,11 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     # TUI compatibility properties (read-only)
     # ------------------------------------------------------------------
+
+    @property
+    def config(self) -> Config:
+        """Returns the TrashDig configuration."""
+        return self._config
 
     @property
     def project_path(self) -> str:
@@ -385,6 +392,7 @@ class Coordinator(LlmAgent):
 
     async def run_full_scan(self, path: str = ".") -> None:
         """Run the full SCAN → HUNT → VERIFY pipeline with hypothesis loop."""
+        TrashDigCallback.get_instance().reset_turn_counts()
         # Phase 1: Recon
         await self.run_recon(path)
 
@@ -464,6 +472,7 @@ class Coordinator(LlmAgent):
 
     async def run_recon(self, path: str = ".") -> dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
+        TrashDigCallback.get_instance().reset_turn_counts()
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
 
         abs_path = os.path.abspath(path)  # noqa: ASYNC240
@@ -537,6 +546,7 @@ class Coordinator(LlmAgent):
         Returns:
             A list of new Finding objects discovered.
         """
+        TrashDigCallback.get_instance().reset_turn_counts()
         new_findings: list[Finding] = []
         for i, target in enumerate(targets, 1):
             self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")

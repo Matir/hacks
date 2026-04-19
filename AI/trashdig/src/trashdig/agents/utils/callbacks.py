@@ -16,6 +16,7 @@ from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
+from google.genai import types
 
 from trashdig.agents.utils.types import EngineState
 from trashdig.services.rate_limiter import get_rate_limiter
@@ -47,6 +48,7 @@ class TrashDigCallback:
         """
         self._c = coordinator
         self._last_prompt: str = ""
+        self._turn_counts: dict[str, int] = {}
 
     @classmethod
     def get_instance(cls, coordinator: Coordinator | None = None) -> TrashDigCallback:
@@ -71,6 +73,10 @@ class TrashDigCallback:
     def _reset(cls) -> None:
         """Reset the singleton instance (for testing)."""
         cls._instance = None
+
+    def reset_turn_counts(self) -> None:
+        """Clear per-agent turn counters at the start of a new scan."""
+        self._turn_counts.clear()
 
     def attach_to(self, agent: Any) -> None:
         """Attach this callback manager to an ADK agent.
@@ -128,7 +134,32 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
 
     async def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
-        """Capture the prompt and wait for a rate-limit slot."""
+        """Enforce per-agent turn limits, capture prompt, and wait for rate-limit slot."""
+        agent_name = getattr(ctx, "agent_name", None) or "unknown"
+        self._turn_counts[agent_name] = self._turn_counts.get(agent_name, 0) + 1
+        current = self._turn_counts[agent_name]
+
+        max_turns = self._c.config.get_agent_config(agent_name).max_turns
+        if max_turns is not None and current > max_turns:
+            self._c.log(
+                f"[bold red]Turn limit:[/bold red] {agent_name} reached "
+                f"max_turns={max_turns} (turn {current}). Stopping."
+            )
+            logger.warning(
+                "Agent %s exceeded max_turns=%d (turn %d); returning stop response.",
+                agent_name, max_turns, current,
+            )
+            return LlmResponse(
+                content=types.Content(
+                    role="model",
+                    parts=[types.Part(text=(
+                        f"Turn limit of {max_turns} reached. "
+                        "Stopping and returning control to the coordinator."
+                    ))],
+                ),
+                finish_reason=types.FinishReason.STOP,
+            )
+
         limiter = get_rate_limiter()
         if limiter:
             await limiter.wait_for_request()
