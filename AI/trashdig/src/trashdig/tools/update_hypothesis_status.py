@@ -18,13 +18,11 @@ def update_hypothesis_status(task_id: str, status: str, db_path: str | None = No
     if db_path is None:
         db_path = get_config().db_path
     try:
-        conn = sqlite3.connect(db_path)
-        conn.execute(
-            "UPDATE hypotheses SET status = ?, updated_at = ? WHERE task_id = ?",
-            (status, datetime.now(UTC).isoformat(), task_id)
-        )
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE hypotheses SET status = ?, updated_at = ? WHERE task_id = ?",
+                (status, datetime.now(UTC).isoformat(), task_id)
+            )
         return f"Hypothesis {task_id} updated to {status}."
     except Exception as e:
         return f"Error updating database: {str(e)}"

@@ -21,7 +21,9 @@ class RateLimiter:
         self.tpm_limit = tpm_limit
 
         self._rpm_tokens = float(rpm_limit) if rpm_limit else 0.0
-        self._tpm_tokens = float(tpm_limit) if tpm_limit else 0.0
+        # Start at 0 so the first minute's requests consume from the refill budget,
+        # not from a pre-loaded full bucket that would allow 2x the limit as a burst.
+        self._tpm_tokens = 0.0
 
         self._last_update = time.monotonic()
         self._lock = asyncio.Lock()

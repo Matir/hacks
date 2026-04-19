@@ -99,7 +99,19 @@ class Config:
         for token, val in tokens.items():
             path = path.replace(token, val)
 
-        return os.path.abspath(path)
+        resolved = os.path.abspath(path)
+
+        # Prevent path traversal: only allow paths inside the workspace or the
+        # system temp directory (e.g. {tmpdir} token).
+        workspace = os.path.abspath(self.workspace_root)
+        tmpdir = os.path.abspath(tempfile.gettempdir())
+        if not (resolved.startswith(workspace + os.sep) or resolved == workspace
+                or resolved.startswith(tmpdir + os.sep) or resolved == tmpdir):
+            raise ValueError(
+                f"Resolved path {resolved!r} escapes workspace {workspace!r}"
+            )
+
+        return resolved
 
     def resolve_data_path(self, filename: str) -> str:
         """Resolves a filename relative to the data directory."""
