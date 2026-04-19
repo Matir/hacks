@@ -34,6 +34,7 @@ from trashdig.tools import (
     save_hypotheses,
     update_hypothesis_status,
 )
+from trashdig.tools.mcp_toolsets import build_mcp_toolsets
 
 logger = logging.getLogger(__name__)
 
@@ -85,22 +86,27 @@ class Coordinator(LlmAgent):
         stack_scout = create_stack_scout_agent(
             config.get_agent_config("stack_scout") or config.get_agent_config("archaeologist"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "stack_scout"),
         )
         web_route_mapper = create_web_route_mapper_agent(
             config.get_agent_config("web_route_mapper"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "web_route_mapper"),
         )
         hunter = create_hunter_agent(
             config.get_agent_config("hunter"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "hunter"),
         )
         skeptic = create_skeptic_agent(
             config.get_agent_config("skeptic"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "skeptic"),
         )
         validator = create_validator_agent(
             config.get_agent_config("validator"),
             permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "validator"),
         )
 
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")

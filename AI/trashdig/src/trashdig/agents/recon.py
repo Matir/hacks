@@ -45,12 +45,14 @@ class WebRouteMapperAgent(LlmAgent):
 def create_stack_scout_agent(
     config: AgentConfig | None = None,
     permission_manager: PermissionManager | None = None,
+    extra_tools: list[Any] | None = None,
 ) -> LlmAgent:
     """Creates a StackScout agent for environment and tech stack detection.
 
     Args:
         config: Agent configuration.
         permission_manager: Permission manager for tools.
+        extra_tools: Additional toolsets (e.g. McpToolset instances) to append.
 
     Returns:
         A configured LlmAgent instance.
@@ -79,6 +81,8 @@ def create_stack_scout_agent(
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)
+    if extra_tools:
+        tools.extend(extra_tools)
 
     kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
 
@@ -94,12 +98,14 @@ def create_stack_scout_agent(
 def create_web_route_mapper_agent(
     config: AgentConfig | None = None,
     permission_manager: PermissionManager | None = None,
+    extra_tools: list[Any] | None = None,
 ) -> LlmAgent:
     """Creates a WebRouteMapper agent for attack surface discovery.
 
     Args:
         config: Agent configuration.
         permission_manager: Permission manager for tools.
+        extra_tools: Additional toolsets (e.g. McpToolset instances) to append.
 
     Returns:
         A configured LlmAgent instance.
@@ -120,6 +126,8 @@ def create_web_route_mapper_agent(
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)
+    if extra_tools:
+        tools.extend(extra_tools)
 
     kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
 

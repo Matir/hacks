@@ -32,13 +32,16 @@ class HunterAgent(LlmAgent):
 
 
 def create_hunter_agent(
-    config: AgentConfig | None = None, permission_manager: PermissionManager | None = None
+    config: AgentConfig | None = None,
+    permission_manager: PermissionManager | None = None,
+    extra_tools: list[Any] | None = None,
 ) -> HunterAgent:
     """Creates a Hunter agent.
 
     Args:
         config: Optional agent configuration.
         permission_manager: Optional permission manager.
+        extra_tools: Additional toolsets (e.g. McpToolset instances) to append.
 
     Returns:
         A configured HunterAgent instance.
@@ -72,6 +75,8 @@ def create_hunter_agent(
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)
+    if extra_tools:
+        tools.extend(extra_tools)
 
     kwargs = (
         {"generate_content_config": extras["generate_content_config"]}

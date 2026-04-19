@@ -4,7 +4,7 @@ import threading
 import tomllib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 
 def _find_user_config() -> str | None:
@@ -27,6 +27,23 @@ class ProviderConfig:
     name: str = "google"
     api_key: str | None = None
     base_url: str | None = None
+
+
+@dataclass
+class McpServerConfig:
+    """Configuration for an external MCP server."""
+    name: str
+    transport: Literal["stdio", "sse", "http"] = "stdio"
+    # stdio params
+    command: str | None = None
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    # sse / http params
+    url: str | None = None
+    # common
+    tool_filter: list[str] = field(default_factory=list)
+    agents: list[str] = field(default_factory=list)  # empty → all agents
+    timeout: float | None = None
 
 
 @dataclass
@@ -167,6 +184,24 @@ class Config:
                 model=cfg.get("model", self.default_model),
                 provider=cfg.get("provider", self.default_provider),
             )
+        return result
+
+    @property
+    def mcp_servers(self) -> list[McpServerConfig]:
+        """Returns configured MCP server integrations."""
+        result = []
+        for entry in self.data.get("mcp_servers", []):
+            result.append(McpServerConfig(
+                name=entry["name"],
+                transport=entry.get("transport", "stdio"),
+                command=entry.get("command"),
+                args=entry.get("args", []),
+                env=entry.get("env", {}),
+                url=entry.get("url"),
+                tool_filter=entry.get("tool_filter", []),
+                agents=entry.get("agents", []),
+                timeout=entry.get("timeout"),
+            ))
         return result
 
     def get_agent_config(self, agent_name: str) -> AgentConfig:

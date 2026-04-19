@@ -31,6 +31,7 @@ import trashdig.tools
 # ALL_TOOLS (in test_agent_tools.py) does not need to list them.
 TOOLS_PKG_NON_TOOLS: frozenset[str] = frozenset({
     "artifact_tool",         # decorator applied to tool implementations
+    "build_mcp_toolsets",    # factory for McpToolset instances (not an agent tool)
     "get_artifact_service",  # runtime singleton accessor
     "init_artifact_manager", # one-time initialisation helper
 })
