@@ -97,20 +97,21 @@ def _get_ts_language(lang: Any) -> Any:
     return None
 
 
-_PARSER_CACHE: dict[str, tree_sitter.Parser] = {}
+# Language objects are read-only after construction and safe to share across
+# threads. Parser objects are NOT thread-safe (mutable C state), so we cache
+# only the Language and construct a new Parser per call.
+_LANGUAGE_CACHE: dict[str, tree_sitter.Language] = {}
 
 
 def _make_parser(lang: Any) -> tree_sitter.Parser | None:
-    """Returns a cached tree-sitter parser for the given language."""
+    """Creates a tree-sitter parser with a cached Language for the given language."""
     lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
-    if lang_name in _PARSER_CACHE:
-        return _PARSER_CACHE[lang_name]
-    ts_lang = _get_ts_language(lang)
-    if ts_lang is None:
-        return None
-    parser = tree_sitter.Parser(ts_lang)
-    _PARSER_CACHE[lang_name] = parser
-    return parser
+    if lang_name not in _LANGUAGE_CACHE:
+        ts_lang = _get_ts_language(lang)
+        if ts_lang is None:
+            return None
+        _LANGUAGE_CACHE[lang_name] = ts_lang
+    return tree_sitter.Parser(_LANGUAGE_CACHE[lang_name])
 
 
 _artifact_service: BaseArtifactService | None = None
