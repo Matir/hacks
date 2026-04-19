@@ -1,6 +1,7 @@
+import pytest
 from unittest.mock import patch
 
-from trashdig.config import load_config
+from trashdig.config import Config, load_config
 
 
 @patch("trashdig.config._find_user_config", autospec=True, return_value=None)
@@ -88,3 +89,34 @@ def test_load_config_priority(mock_user_config, tmp_path, monkeypatch):
     dot_trashdig_toml.unlink()
     config = load_config()
     assert config.default_model == "from-trashdig"
+
+
+# ---------------------------------------------------------------------------
+# resolve_workspace_path — path traversal protection
+# ---------------------------------------------------------------------------
+
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
+def test_resolve_workspace_path_traversal_blocked(mock_user_config, tmp_path):
+    cfg = Config()
+    cfg.data["workspace_root"] = str(tmp_path)
+    with pytest.raises(ValueError, match="escapes workspace"):
+        cfg.resolve_workspace_path("{workspace}/../../etc/passwd")
+
+
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
+def test_resolve_workspace_path_within_workspace(mock_user_config, tmp_path):
+    cfg = Config()
+    cfg.data["workspace_root"] = str(tmp_path)
+    result = cfg.resolve_workspace_path("{workspace}/data/output.db")
+    assert result.startswith(str(tmp_path))
+    assert "output.db" in result
+
+
+@patch("trashdig.config._find_user_config", autospec=True, return_value=None)
+def test_resolve_workspace_path_tmpdir_allowed(mock_user_config, tmp_path):
+    import tempfile
+    cfg = Config()
+    cfg.data["workspace_root"] = str(tmp_path)
+    tmpdir = tempfile.gettempdir()
+    result = cfg.resolve_workspace_path("{tmpdir}/trashdig-run")
+    assert result.startswith(tmpdir)

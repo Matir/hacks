@@ -1,23 +1,33 @@
-import sqlite3
-import pytest
+from unittest.mock import MagicMock, patch
+
+from trashdig.agents.utils.types import Hypothesis, TaskType
+from trashdig.services.database import get_database
 from trashdig.tools.update_hypothesis_status import update_hypothesis_status
 
+
 def test_update_hypothesis_status(tmp_path):
-    db_path = tmp_path / "test.db"
-    conn = sqlite3.connect(db_path)
-    conn.execute("CREATE TABLE hypotheses (task_id TEXT, status TEXT, updated_at TEXT)")
-    conn.execute("INSERT INTO hypotheses (task_id, status) VALUES ('task1', 'pending')")
-    conn.commit()
-    conn.close()
+    db_path = str(tmp_path / "test.db")
+    db = get_database(db_path=db_path)
+    hypo = Hypothesis(type=TaskType.HUNT, target="app.py",
+                      description="test", confidence=0.8)
+    db.save_hypothesis("/proj", hypo)
+    task_id = db.get_hypotheses("/proj")[0]["task_id"]
 
-    res = update_hypothesis_status("task1", "completed", db_path=str(db_path))
+    res = update_hypothesis_status(task_id, "completed", db_path=db_path)
     assert "updated to completed" in res
+    assert db.get_hypotheses("/proj")[0]["status"] == "completed"
 
-    conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT status FROM hypotheses WHERE task_id='task1'").fetchone()
-    assert row[0] == "completed"
-    conn.close()
+
+def test_update_hypothesis_status_delegates_to_pool(tmp_path):
+    mock_db = MagicMock()
+    with patch("trashdig.tools.update_hypothesis_status.get_database",
+               autospec=True, return_value=mock_db):
+        res = update_hypothesis_status("task-x", "failed")
+    mock_db.update_hypothesis_status.assert_called_once_with("task-x", "failed")
+    assert "updated to failed" in res
+
 
 def test_update_hypothesis_status_error():
-    res = update_hypothesis_status("task1", "completed", db_path="/nonexistent/path/db.db")
+    res = update_hypothesis_status("task1", "completed",
+                                   db_path="/nonexistent/path/db.db")
     assert "Error updating database" in res

@@ -107,3 +107,18 @@ async def test_tpm_negative_tokens():
     end = time.monotonic()
 
     assert end - start >= 0.4
+
+
+def test_tpm_initial_tokens_zero():
+    # Bucket must start at 0 so the first minute can't use 2x the TPM limit.
+    limiter = RateLimiter(tpm_limit=100_000)
+    assert limiter._tpm_tokens == 0.0
+
+
+@pytest.mark.anyio
+async def test_tpm_first_request_proceeds_immediately():
+    # With _tpm_tokens at 0, the first request should not wait.
+    limiter = RateLimiter(tpm_limit=6000)
+    start = time.monotonic()
+    await limiter.wait_for_request()
+    assert time.monotonic() - start < 0.1

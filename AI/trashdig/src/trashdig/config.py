@@ -102,12 +102,17 @@ class Config:
 
         resolved = os.path.abspath(path)
 
-        # Prevent path traversal: only allow paths inside the workspace or the
-        # system temp directory (e.g. {tmpdir} token).
+        # Prevent path traversal: only allow paths inside the workspace, or
+        # inside the system temp directory when the template explicitly uses
+        # {tmpdir} (not as a side-effect of {workspace} being under /tmp).
         workspace = os.path.abspath(self.workspace_root)
+        in_workspace = (resolved.startswith(workspace + os.sep)
+                        or resolved == workspace)
         tmpdir = os.path.abspath(tempfile.gettempdir())
-        if not (resolved.startswith(workspace + os.sep) or resolved == workspace
-                or resolved.startswith(tmpdir + os.sep) or resolved == tmpdir):
+        in_tmpdir = ("{tmpdir}" in path_template
+                     and (resolved.startswith(tmpdir + os.sep)
+                          or resolved == tmpdir))
+        if not (in_workspace or in_tmpdir):
             raise ValueError(
                 f"Resolved path {resolved!r} escapes workspace {workspace!r}"
             )
