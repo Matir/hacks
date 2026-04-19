@@ -3,7 +3,6 @@ import inspect
 import logging
 import os
 import subprocess
-import time
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -119,7 +118,7 @@ _artifact_service: BaseArtifactService | None = None
 
 def init_artifact_manager(data_dir: str) -> BaseArtifactService:
     """Initializes and returns an artifact service, storing it as the singleton."""
-    global _artifact_service
+    global _artifact_service  # noqa: PLW0603
     artifacts_dir = os.path.join(data_dir, "artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
     _artifact_service = FileArtifactService(artifacts_dir)
@@ -128,7 +127,7 @@ def init_artifact_manager(data_dir: str) -> BaseArtifactService:
 
 def get_artifact_service() -> BaseArtifactService:
     """Returns the artifact service instance configured for the project."""
-    global _artifact_service
+    global _artifact_service  # noqa: PLW0602
     if _artifact_service is not None:
         return _artifact_service
     config = get_config()

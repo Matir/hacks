@@ -1,5 +1,7 @@
-import pytest
+import tempfile
 from unittest.mock import patch
+
+import pytest
 
 from trashdig.config import Config, load_config
 
@@ -114,7 +116,6 @@ def test_resolve_workspace_path_within_workspace(mock_user_config, tmp_path):
 
 @patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_resolve_workspace_path_tmpdir_allowed(mock_user_config, tmp_path):
-    import tempfile
     cfg = Config()
     cfg.data["workspace_root"] = str(tmp_path)
     tmpdir = tempfile.gettempdir()

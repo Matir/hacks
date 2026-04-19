@@ -45,7 +45,7 @@ class Config:
     config_path: str = "trashdig.toml"
     data: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if self.config_path is None:
             self.config_path = "trashdig.toml"
         self._load()
