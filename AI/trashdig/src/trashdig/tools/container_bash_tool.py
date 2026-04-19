@@ -6,6 +6,29 @@ from trashdig.utils import is_binary_available
 from .base import artifact_tool, get_config
 from .bash_tool import bash_tool
 
+# Base image names (before the colon) that are permitted. Extend via
+# container_image_allowlist in trashdig.toml.
+_DEFAULT_IMAGE_ALLOWLIST: frozenset[str] = frozenset({
+    "python",
+    "node",
+    "golang",
+    "ruby",
+    "openjdk",
+    "eclipse-temurin",
+    "ubuntu",
+    "debian",
+    "alpine",
+})
+
+
+def _image_allowed(image: str) -> bool:
+    """Return True if the image's base name is in the allowlist."""
+    extra = set(get_config().data.get("container_image_allowlist", []))
+    # Strip optional registry/org prefix (e.g. docker.io/library/python:3.11 → python:3.11)
+    name_part = image.rsplit("/", 1)[-1]
+    base = name_part.split(":")[0]
+    return base in (_DEFAULT_IMAGE_ALLOWLIST | extra)
+
 
 @artifact_tool(max_chars=5000)
 def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: int = 60) -> str:
@@ -21,6 +44,10 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
     Returns:
         The output of the command or an error message.
     """
+    if not _image_allowed(image):
+        allowed = sorted(_DEFAULT_IMAGE_ALLOWLIST | set(get_config().data.get("container_image_allowlist", [])))
+        return f"Error: Docker image {image!r} is not in the allowlist. Allowed bases: {allowed}"
+
     # Check if Docker is available
     docker_available = is_binary_available("docker")
 
