@@ -1,6 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from trashdig.tools.web_fetch import web_fetch
+
 
 @pytest.mark.anyio
 @patch("aiohttp.ClientSession.get")

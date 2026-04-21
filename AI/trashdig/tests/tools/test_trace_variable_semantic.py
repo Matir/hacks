@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
+
 from trashdig.tools.trace_variable_semantic import trace_variable_semantic
+
 
 @patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")

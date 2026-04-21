@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
+
 from google.adk.tools import ToolContext
+
 from trashdig.tools.exit_loop import exit_loop
+
 
 def test_exit_loop():
     mock_ctx = MagicMock(spec=ToolContext)

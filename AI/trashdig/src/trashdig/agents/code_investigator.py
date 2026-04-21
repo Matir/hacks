@@ -8,39 +8,50 @@ from trashdig.config import AgentConfig
 from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
     find_files,
+    find_references,
+    get_ast_summary,
+    get_project_structure,
+    get_scope_info,
+    get_symbol_definition,
     list_files,
     read_file,
     ripgrep_search,
-    web_fetch,
+    trace_taint_cross_file,
+    trace_variable_semantic,
 )
 
 
-class SkepticAgent(LlmAgent):
-    """Skeptic Agent for TrashDig."""
+class CodeInvestigatorAgent(LlmAgent):
+    """Code Investigator Agent for TrashDig."""
+
     pass
 
 
-def create_skeptic_agent(
+def create_code_investigator_agent(
     config: AgentConfig | None = None,
     permission_manager: PermissionManager | None = None,
     extra_tools: list[Any] | None = None,
-) -> SkepticAgent:
-    """Creates a Skeptic agent."""
+) -> CodeInvestigatorAgent:
+    """Creates a Code Investigator agent."""
     if config is None:
         config = AgentConfig()
 
-    instruction = load_prompt("skeptic.md")
+    instruction = load_prompt("code_investigator.md")
 
     extras = google_provider_extras(config.provider)
     tools: list[Any] = [
-        FunctionTool(ripgrep_search),
-        FunctionTool(read_file),
-        FunctionTool(web_fetch),
         FunctionTool(list_files),
         FunctionTool(find_files),
+        FunctionTool(get_project_structure),
+        FunctionTool(ripgrep_search),
+        FunctionTool(find_references),
+        FunctionTool(read_file),
+        FunctionTool(get_ast_summary),
+        FunctionTool(get_symbol_definition),
+        FunctionTool(trace_variable_semantic),
+        FunctionTool(get_scope_info),
+        FunctionTool(trace_taint_cross_file),
     ]
-    if extras["google_search_tool"] is not None:
-        tools.append(extras["google_search_tool"])
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)
@@ -53,11 +64,11 @@ def create_skeptic_agent(
         else {}
     )
 
-    return SkepticAgent(
-        name="skeptic",
+    return CodeInvestigatorAgent(
+        name="code_investigator",
         model=config.model,
         instruction=instruction,
-        description="Critically reviews potential vulnerabilities to identify false positives.",
+        description="Answers specific technical questions about the codebase.",
         tools=tools,
         **kwargs,
     )

@@ -8,9 +8,10 @@ from google.adk.agents import LlmAgent, LoopAgent
 from google.adk.artifacts import BaseArtifactService
 from google.adk.sessions import BaseSessionService
 from google.adk.sessions.sqlite_session_service import SqliteSessionService
-from google.adk.tools import FunctionTool
+from google.adk.tools import AgentTool, FunctionTool
 from pydantic import PrivateAttr
 
+from trashdig.agents.code_investigator import create_code_investigator_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.recon import (
     create_stack_scout_agent,
@@ -84,6 +85,12 @@ class Coordinator(LlmAgent):
 
         perm = PermissionManager(config, on_confirm=on_confirm)
 
+        code_investigator = create_code_investigator_agent(
+            config.get_agent_config("code_investigator"),
+            permission_manager=perm,
+        )
+        investigator_tool = AgentTool(code_investigator)
+
         stack_scout = create_stack_scout_agent(
             config.get_agent_config("stack_scout") or config.get_agent_config("archaeologist"),
             permission_manager=perm,
@@ -97,13 +104,15 @@ class Coordinator(LlmAgent):
         hunter = create_hunter_agent(
             config.get_agent_config("hunter"),
             permission_manager=perm,
-            extra_tools=build_mcp_toolsets(config, "hunter"),
+            extra_tools=[investigator_tool] + build_mcp_toolsets(config, "hunter"),
         )
+
         skeptic = create_skeptic_agent(
             config.get_agent_config("skeptic"),
             permission_manager=perm,
-            extra_tools=build_mcp_toolsets(config, "skeptic"),
+            extra_tools=[investigator_tool] + build_mcp_toolsets(config, "skeptic"),
         )
+
         validator = create_validator_agent(
             config.get_agent_config("validator"),
             permission_manager=perm,

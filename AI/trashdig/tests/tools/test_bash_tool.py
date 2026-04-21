@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
+
 from trashdig.tools.bash_tool import bash_tool
+
 
 @patch("subprocess.run")
 def test_bash_tool(mock_run):

@@ -93,3 +93,56 @@ def test_wrap_tools():
     assert len(wrapped_tools) == 2
     assert wrapped_tools[0].func() == "1"
     assert wrapped_tools[1].func() == "2"
+
+def test_wrap_non_tool():
+    pm = PermissionManager()
+    not_a_tool = "string"
+    assert pm.wrap_tool(not_a_tool) == "string"
+
+def test_tool_decorator_sync():
+    pm = PermissionManager()
+    
+    @pm.tool_decorator
+    def my_tool(x: int = 1):
+        return x
+    
+    assert my_tool(10) == 10
+    assert my_tool() == 1
+
+@pytest.mark.anyio
+async def test_tool_decorator_async():
+    pm = PermissionManager()
+    
+    @pm.tool_decorator
+    async def my_tool(x: int = 1):
+        return x
+    
+    assert await my_tool(10) == 10
+    assert await my_tool() == 1
+
+def test_tool_decorator_denied():
+    mock_confirm = MagicMock(return_value=False)
+    pm = PermissionManager(on_confirm=mock_confirm)
+    pm.sensitive_tools.add("my_tool")
+
+    @pm.tool_decorator
+    def my_tool(command: str):
+        return f"Running {command}"
+
+    assert "Permission denied" in my_tool(command="ls")
+
+def test_argument_binding_failure():
+    # This covers the 'except TypeError' block in wrap_tool/tool_decorator
+    pm = PermissionManager()
+    
+    def sync_tool(a, b):
+        return a + b
+    
+    tool = FunctionTool(sync_tool)
+    wrapped = pm.wrap_tool(tool)
+    
+    # Passing wrong number of arguments to trigger TypeError in bind()
+    # But note that the wrapped function itself will still be called with these args
+    # so we need to be careful. The bind() failure just falls back to tool_args = kwargs.
+    with pytest.raises(TypeError):
+        wrapped.func(1, 2, 3)

@@ -1,6 +1,7 @@
-import json
 from unittest.mock import MagicMock, patch
+
 from trashdig.tools.query_cwe_database import query_cwe_database
+
 
 @patch("json.load")
 @patch("builtins.open")

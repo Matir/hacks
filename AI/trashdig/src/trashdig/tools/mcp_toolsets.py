@@ -23,16 +23,17 @@ def build_mcp_toolsets(config: Config, agent_name: str) -> list[McpToolset]:
     """
     toolsets = []
     for srv in config.mcp_servers:
-        if srv.agents and agent_name not in srv.agents:
-            continue
-        toolset = _toolset_from_config(srv)
-        if toolset is not None:
-            toolsets.append(toolset)
+        if not srv.agents or agent_name in srv.agents:
+            toolset = _toolset_from_config(srv)
+            if toolset:
+                toolsets.append(toolset)
     return toolsets
 
 
 def _toolset_from_config(srv: McpServerConfig) -> McpToolset | None:
     tool_filter: list[str] | None = srv.tool_filter or None
+    connection_params: StdioConnectionParams | SseConnectionParams | StreamableHTTPConnectionParams
+
 
     try:
         if srv.transport == "stdio":

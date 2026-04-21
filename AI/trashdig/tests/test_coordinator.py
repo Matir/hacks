@@ -25,15 +25,18 @@ def mock_config(tmp_path):
     return config
 
 def create_mock_agent(name):
-    return LlmAgent(name=name, model="gemini-2.0-flash", instruction="test")
+    # LlmAgent is a Pydantic model, initialize it properly
+    return LlmAgent(name=name, model="gemini-2.0-flash", instruction="test", tools=[])
 
+@patch("trashdig.agents.coordinator.create_code_investigator_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
-def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_create_investigator, mock_config):
+    mock_create_investigator.return_value = create_mock_agent("code_investigator")
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
     mock_create_hunt.return_value = create_mock_agent("hunter")
@@ -46,6 +49,10 @@ def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_cre
     assert coord.hunter is not None
     assert coord.skeptic is not None
     assert coord.validator is not None
+
+    # Verify Code Investigator call occurred
+    assert mock_create_investigator.called
+
     assert isinstance(coord.session_id, str)
 
 @pytest.mark.anyio

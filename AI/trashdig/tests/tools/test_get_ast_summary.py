@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
+
 from trashdig.tools.get_ast_summary import get_ast_summary
+
 
 @patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")
@@ -46,19 +48,19 @@ def test_get_ast_summary_js_arrow(mock_parser_make, mock_metadata, mock_ts_lang)
     meta = MagicMock()
     meta.definition_types = ["function_definition"]
     mock_metadata.return_value = meta
-    
+
     parser = MagicMock()
     mock_parser_make.return_value = parser
-    
+
     tree = MagicMock()
     parser.parse.return_value = tree
-    
+
     # Mocking JS arrow function structure
     # const foo = () => {}
     # lexical_declaration -> variable_declarator -> name: foo, value: arrow_function
     node = MagicMock()
     node.type = "lexical_declaration"
-    
+
     decl = MagicMock()
     decl.type = "variable_declarator"
     name_node = MagicMock()
@@ -66,7 +68,7 @@ def test_get_ast_summary_js_arrow(mock_parser_make, mock_metadata, mock_ts_lang)
     name_node.text = b"foo"
     val_node = MagicMock()
     val_node.type = "arrow_function"
-    
+
     decl.child_by_field_name.side_effect = lambda f: name_node if f == "name" else val_node if f == "value" else None
     node.children = [decl]
     tree.root_node.children = [node]

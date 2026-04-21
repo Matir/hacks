@@ -1,4 +1,3 @@
-import os
 import sys
 from unittest.mock import ANY, MagicMock, patch
 

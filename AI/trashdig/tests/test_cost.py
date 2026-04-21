@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from trashdig.services.cost import CostTracker
+
 
 @pytest.fixture
 def mock_pricing():

@@ -1,7 +1,8 @@
 import json
 import sqlite3
-import pytest
+
 from trashdig.tools.get_next_hypothesis import get_next_hypothesis
+
 
 def test_get_next_hypothesis(tmp_path):
     db_path = tmp_path / "test.db"

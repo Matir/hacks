@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
+
 from trashdig.tools.get_scope_info import get_scope_info
+
 
 @patch("trashdig.tools.base._get_ts_language")
 @patch("tree_sitter.Parser")
@@ -60,17 +62,17 @@ def test_get_scope_info_complex_params(mock_parser_make, mock_metadata, mock_ts_
     meta.parameter_types = ["typed_parameter", "parameter_declaration"]
     meta.skip_symbols = []
     mock_metadata.return_value = meta
-    
+
     parser = MagicMock()
     mock_parser_make.return_value = parser
     tree = MagicMock()
     parser.parse.return_value = tree
-    
+
     func_node = MagicMock()
     func_node.type = "function_definition"
     func_node.start_point = (0, 0)
     func_node.end_point = (10, 0)
-    
+
     params_node = MagicMock()
     # One simple identifier
     p1 = MagicMock()
@@ -83,10 +85,10 @@ def test_get_scope_info_complex_params(mock_parser_make, mock_metadata, mock_ts_
     p2_inner.type = "identifier"
     p2_inner.text = b"b"
     p2.children = [p2_inner]
-    
+
     params_node.children = [p1, p2]
     func_node.child_by_field_name.side_effect = lambda f: params_node if f == "parameters" else None
-    
+
     tree.root_node.children = [func_node]
 
     with patch("builtins.open", MagicMock()):
@@ -105,12 +107,12 @@ def test_get_scope_info_nested(mock_parser_make, mock_metadata, mock_ts_lang):
     meta.skip_symbols = []
     meta.name = "python"
     mock_metadata.return_value = meta
-    
+
     parser = MagicMock()
     mock_parser_make.return_value = parser
     tree = MagicMock()
     parser.parse.return_value = tree
-    
+
     # Outer function
     outer = MagicMock()
     outer.type = "function_definition"
@@ -118,7 +120,7 @@ def test_get_scope_info_nested(mock_parser_make, mock_metadata, mock_ts_lang):
     outer.end_point = (20, 0)
     outer_name = MagicMock()
     outer_name.text = b"outer"
-    
+
     # Local var in outer
     assign = MagicMock()
     assign.type = "assignment"
@@ -128,7 +130,7 @@ def test_get_scope_info_nested(mock_parser_make, mock_metadata, mock_ts_lang):
     left.text = b"v1"
     assign.child_by_field_name.return_value = left
     assign.children = []
-    
+
     # Inner function
     inner = MagicMock()
     inner.type = "function_definition"
@@ -137,10 +139,10 @@ def test_get_scope_info_nested(mock_parser_make, mock_metadata, mock_ts_lang):
     inner_name = MagicMock()
     inner_name.text = b"inner"
     inner.children = []
-    
+
     outer.children = [assign, inner]
     tree.root_node.children = [outer]
-    
+
     outer.child_by_field_name.side_effect = lambda f: outer_name if f == "name" else None
     inner.child_by_field_name.side_effect = lambda f: inner_name if f == "name" else None
 

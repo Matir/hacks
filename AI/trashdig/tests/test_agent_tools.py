@@ -96,6 +96,7 @@ from unittest.mock import patch
 from agent_test_utils import iter_agent_factories, iter_tool_callables
 
 import trashdig.tools
+from trashdig.agents.code_investigator import create_code_investigator_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.skeptic import create_skeptic_agent
@@ -323,6 +324,26 @@ class AgentToolsMixin:
 # ---------------------------------------------------------------------------
 # Per-agent test classes
 # ---------------------------------------------------------------------------
+
+class TestCodeInvestigatorTools(AgentToolsMixin, unittest.TestCase):
+    """CodeInvestigator should have its technical investigation toolset."""
+
+    MODULE = "trashdig.agents.code_investigator"
+    FACTORY = create_code_investigator_agent
+    EXPECTED_TOOLS = [
+        "find_files",
+        "find_references",
+        "get_ast_summary",
+        "get_project_structure",
+        "get_scope_info",
+        "get_symbol_definition",
+        "list_files",
+        "read_file",
+        "ripgrep_search",
+        "trace_taint_cross_file",
+        "trace_variable_semantic",
+    ]
+
 
 class TestStackScoutTools(AgentToolsMixin, unittest.TestCase):
     """StackScout should have every tool listed in README under SS column."""

@@ -1,7 +1,8 @@
 import json
-import pytest
 from unittest.mock import patch
+
 from trashdig.tools.detect_frameworks import detect_frameworks
+
 
 @patch("trashdig.tools.detect_frameworks._get_struct", autospec=True)
 @patch("trashdig.tools.detect_frameworks._detect", autospec=True)

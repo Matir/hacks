@@ -1,5 +1,7 @@
 from unittest.mock import patch
+
 from trashdig.tools.get_symbol_definition import get_symbol_definition
+
 
 @patch("trashdig.tools.get_symbol_definition.ripgrep_search")
 def test_get_symbol_definition(mock_rg):

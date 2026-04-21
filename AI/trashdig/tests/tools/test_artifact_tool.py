@@ -4,8 +4,8 @@ import re
 import shutil
 from unittest.mock import AsyncMock
 
-from google.adk.agents.callback_context import CallbackContext
 import pytest
+from google.adk.agents.callback_context import CallbackContext
 
 from trashdig.tools import artifact_tool, get_artifact_service, init_artifact_manager
 

@@ -19,6 +19,10 @@ TrashDig operates as a team of specialized agents coordinated by a top-level **C
         *   **Role**: Attack Surface Mapper.
         *   **Tasks**: Uses AST-aware parsing to map all web endpoints (e.g., Express routes, FastAPI decorators).
         *   **Goal**: Generate a structured artifact of the application's attack surface.
+    *   **CodeInvestigator Agent**:
+        *   **Role**: Context-Optimized Codebase Analyst.
+        *   **Tasks**: Answers specific technical questions about the codebase (e.g., "Is this variable sanitized?", "Where is this interface implemented?").
+        *   **Goal**: Provide concise, evidence-based answers to other agents to minimize their context window usage.
 3.  **Hunter Agent (Sub-Agent)**:
     *   **Role**: Deep-Dive Researcher.
     *   **Tasks**: Performs hypothesis-driven analysis, AST-aware taint analysis, and **Cross-File** symbol tracing.

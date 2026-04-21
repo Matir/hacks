@@ -1,5 +1,7 @@
 from unittest.mock import patch
+
 from trashdig.tools.find_references import find_references
+
 
 @patch("trashdig.tools.find_references.ripgrep_search")
 def test_find_references(mock_rg):

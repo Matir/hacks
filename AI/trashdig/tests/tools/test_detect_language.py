@@ -1,5 +1,6 @@
 from trashdig.tools.detect_language import detect_language
 
+
 def test_detect_language_file(temp_project):
     assert detect_language(str(temp_project / "src" / "main.py")) == "python"
     assert detect_language(str(temp_project / "web" / "app.js")) == "javascript"

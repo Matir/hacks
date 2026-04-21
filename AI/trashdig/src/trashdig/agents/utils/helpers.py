@@ -92,7 +92,7 @@ def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig 
 
 def log_auth_info(config: "Config", logger: logging.Logger) -> None:
     """Log authentication information for every provider referenced by agents."""
-    referenced: dict[str, "ProviderConfig"] = {}
+    referenced: dict[str, ProviderConfig] = {}
     for agent_cfg in config.agents.values():
         if agent_cfg.provider not in referenced:
             referenced[agent_cfg.provider] = config.get_provider_config(agent_cfg.provider)

@@ -1,5 +1,7 @@
 from unittest.mock import patch
+
 from trashdig.tools.trace_variable import trace_variable
+
 
 @patch("trashdig.tools.trace_variable.ripgrep_search")
 def test_trace_variable(mock_rg):

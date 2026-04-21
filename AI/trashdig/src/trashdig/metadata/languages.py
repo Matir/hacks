@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass
 class LanguageMetadata:
     """Metadata about a programming language for AST analysis."""
-    
+
     name: str
     extensions: list[str]
     # Node types that define a function, method, or class
@@ -52,8 +51,8 @@ PYTHON_METADATA = LanguageMetadata(
 JAVASCRIPT_METADATA = LanguageMetadata(
     name="javascript",
     extensions=[".js", ".jsx", ".ts", ".tsx"],
-    definition_types={"function_definition", "function_declaration", "arrow_function", "method_definition", "class_definition"},
-    scope_types={"function_definition", "function_declaration", "arrow_function", "method_definition", "class_definition"},
+    definition_types={"function_definition", "function_declaration", "arrow_function", "method_definition", "class_definition", "class_declaration"},
+    scope_types={"function_definition", "function_declaration", "arrow_function", "method_definition", "class_definition", "class_declaration"},
     assignment_types={"assignment", "variable_declaration", "lexical_declaration"},
     parameter_types={"identifier", "formal_parameter"},
     sinks={

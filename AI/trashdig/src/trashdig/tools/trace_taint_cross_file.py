@@ -461,16 +461,15 @@ def _process_tainted_calls(  # noqa: PLR0913
                 m_path = _module_to_file_path(imported_module, project_root)
                 if m_path:
                     callee_files = [m_path]
-                else:
-                    # It's an imported module but not in project (e.g. stdlib)
-                    # If it's a known method sink, treat as sink
-                    if is_method_sink_candidate:
-                        report_lines.append(
-                            f"{indent}  *** SINK (Library) *** Line {line_no}: '{var}' passed to '{callee}()' "
-                            f"on library object '{obj_name}' (module '{imported_module}')"
-                        )
-                        found_sink = True
-                        continue
+                # It's an imported module but not in project (e.g. stdlib)
+                # If it's a known method sink, treat as sink
+                elif is_method_sink_candidate:
+                    report_lines.append(
+                        f"{indent}  *** SINK (Library) *** Line {line_no}: '{var}' passed to '{callee}()' "
+                        f"on library object '{obj_name}' (module '{imported_module}')"
+                    )
+                    found_sink = True
+                    continue
 
         # 2. Check if the function itself is imported
         if not callee_files:
