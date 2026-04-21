@@ -1,1 +1,0 @@
-"""TrashDig engine package."""

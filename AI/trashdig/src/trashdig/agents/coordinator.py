@@ -92,7 +92,7 @@ class Coordinator(LlmAgent):
         investigator_tool = AgentTool(code_investigator)
 
         stack_scout = create_stack_scout_agent(
-            config.get_agent_config("stack_scout") or config.get_agent_config("archaeologist"),
+            config.get_agent_config("stack_scout"),
             permission_manager=perm,
             extra_tools=build_mcp_toolsets(config, "stack_scout"),
         )

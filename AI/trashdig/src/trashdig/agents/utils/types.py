@@ -6,7 +6,7 @@ from typing import Any
 
 class TaskType(Enum):
     """Enumeration of task types for agents."""
-    SCAN = auto()           # Archaeologist mapping
+    SCAN = auto()           # StackScout mapping
     HUNT = auto()           # Hunter deep-dive
     VERIFY = auto()         # Validator PoC
     RESOLVE_SYMBOL = auto() # Follow definition

@@ -49,7 +49,7 @@ class McpServerConfig:
 @dataclass
 class AgentConfig:
     """Configuration for a specific TrashDig agent."""
-    name: str = "archaeologist"
+    name: str = "stack_scout"
     model: str = "gemini-2.0-flash-exp"
     provider: str = "google"
     temperature: float = 0.0

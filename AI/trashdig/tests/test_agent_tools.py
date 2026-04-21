@@ -156,7 +156,6 @@ ALL_TOOLS: frozenset[str] = frozenset({
     "save_hypotheses",
     "semgrep_scan",
     "trace_taint_cross_file",
-    "trace_variable",
     "trace_variable_semantic",
     "update_hypothesis_status",
     "web_fetch",
@@ -397,7 +396,6 @@ class TestHunterTools(AgentToolsMixin, unittest.TestCase):
         "ripgrep_search",
         "semgrep_scan",
         "trace_taint_cross_file",
-        "trace_variable",
         "trace_variable_semantic",
         "web_fetch",
     ]

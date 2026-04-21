@@ -20,7 +20,6 @@ from trashdig.tools import (
     ripgrep_search,
     semgrep_scan,
     trace_taint_cross_file,
-    trace_variable,
     trace_variable_semantic,
     web_fetch,
 )
@@ -58,7 +57,6 @@ def create_hunter_agent(
         FunctionTool(get_ast_summary),
         FunctionTool(query_cwe_database),
         FunctionTool(get_symbol_definition),
-        FunctionTool(trace_variable),
         FunctionTool(find_references),
         FunctionTool(get_scope_info),
         FunctionTool(trace_variable_semantic),

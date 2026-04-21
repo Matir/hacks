@@ -21,7 +21,6 @@ from .save_findings import save_findings
 from .save_hypotheses import save_hypotheses
 from .semgrep_scan import semgrep_scan
 from .trace_taint_cross_file import trace_taint_cross_file
-from .trace_variable import trace_variable
 from .trace_variable_semantic import trace_variable_semantic
 from .update_hypothesis_status import update_hypothesis_status
 from .web_fetch import web_fetch
@@ -50,7 +49,6 @@ __all__ = [
     "save_hypotheses",
     "semgrep_scan",
     "trace_taint_cross_file",
-    "trace_variable",
     "trace_variable_semantic",
     "update_hypothesis_status",
     "web_fetch",

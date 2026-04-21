@@ -15,7 +15,6 @@ The following tools are targeted for wrapping:
 - `find_files`
 - `get_ast_summary`
 - `ripgrep_search`
-- `trace_variable`
 - `trace_variable_semantic`
 - `trace_taint_cross_file`
 - `get_scope_info`

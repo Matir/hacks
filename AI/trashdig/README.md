@@ -114,8 +114,7 @@ TrashDig agents have access to a suite of deterministic and research-oriented to
 | | `get_scope_info` | Extracts local variables and parameters for a line. | SS, H |
 | | `read_file` | Reads the full content of a file. | H, S, V |
 | | `semgrep_scan` | Pattern-based security scanning. | H |
-| **Data Flow** | `trace_variable` | Traces a variable's usage within a file. | H |
-| | `trace_variable_semantic`| AST-aware intra-file taint tracing. | H |
+| **Data Flow** | `trace_variable_semantic`| AST-aware intra-file taint tracing. | H |
 | | `trace_taint_cross_file`| Follows untrusted data across module boundaries. | H |
 | **Execution** | `bash_tool` | Executes shell commands in a local sandbox. | V |
 | | `container_bash_tool` | Executes commands in an isolated Docker container. | V |

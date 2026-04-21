@@ -21,7 +21,7 @@ def test_load_config_from_file(mock_user_config, tmp_path):
     [ui]
     interface = "textual"
 
-    [agents.archaeologist]
+    [agents.stack_scout]
     model = "custom-model"
     provider = "openrouter"
 
@@ -33,8 +33,8 @@ def test_load_config_from_file(mock_user_config, tmp_path):
 
     config = load_config(str(config_file))
     assert config.interface == "textual"
-    assert config.agents["archaeologist"].model == "custom-model"
-    assert config.agents["archaeologist"].provider == "openrouter"
+    assert config.agents["stack_scout"].model == "custom-model"
+    assert config.agents["stack_scout"].provider == "openrouter"
     assert config.agents["hunter"].model == "gemini-2.0-flash"
     assert config.agents["hunter"].provider == "google" # Default
 
@@ -45,7 +45,7 @@ def test_load_config_global_defaults(mock_user_config, tmp_path):
     model = "global-model"
     provider = "global-provider"
 
-    [agents.archaeologist]
+    [agents.stack_scout]
     # Should use global defaults
 
     [agents.hunter]
@@ -59,9 +59,9 @@ def test_load_config_global_defaults(mock_user_config, tmp_path):
     assert config.default_model == "global-model"
     assert config.default_provider == "global-provider"
 
-    # Check archaeologist (inherited)
-    assert config.agents["archaeologist"].model == "global-model"
-    assert config.agents["archaeologist"].provider == "global-provider"
+    # Check stack_scout (inherited)
+    assert config.agents["stack_scout"].model == "global-model"
+    assert config.agents["stack_scout"].provider == "global-provider"
 
     # Check hunter (partial override)
     assert config.agents["hunter"].model == "hunter-model"

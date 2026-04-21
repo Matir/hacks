@@ -22,7 +22,7 @@ This plan outlines the path to transition TrashDig from a linear scanner to a ne
 ### Phase 2: Hypothesis-Driven Orchestration
 - **Refactor `Coordinator`**: Introduce a `TaskQueue` where agents can post "Hypotheses."
 - **Observe-Hypothesize-Verify Loop**:
-    - `Archaeologist` observes and posts targets.
+    - `StackScout` observes and posts targets.
     - `Hunter` picks up targets, generates a "Vulnerability Hypothesis," and requests specific data flow traces.
     - `Hunter` spawns sub-tasks for the `Validator` or `DefinitionResolver`.
 
@@ -39,3 +39,4 @@ This plan outlines the path to transition TrashDig from a linear scanner to a ne
 ## Next Steps
 1. Implement the `bash_tool` and `ValidatorAgent` infrastructure.
 2. Update `TODO.md` with these milestones.
+TODO.md` with these milestones.

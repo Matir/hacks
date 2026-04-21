@@ -38,7 +38,7 @@
     - [x] Use `asyncio.Semaphore` for a configurable concurrency limit.
     - [ ] *Note: Moving to ADK native parallel agent execution.*
 
-## Recon Agent Suite (Replacing Archaeologist)
+## Recon Agent Suite (Replacing Legacy Archeology)
 - [x] **[HIGH]** StackScout Agent: Hybrid Environment Detection.
     - [x] Combine deterministic checks (regex/file signatures) with inference-based LLM analysis to explain how the stack is implemented.
 - [x] **[MEDIUM]** WebRouteMapper Agent: Conditional Surface Mapping.
