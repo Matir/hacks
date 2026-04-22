@@ -1,7 +1,10 @@
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from trashdig.config import Config, McpServerConfig
-from trashdig.tools.mcp_toolsets import build_mcp_toolsets, _toolset_from_config
+from trashdig.tools.mcp_toolsets import _toolset_from_config, build_mcp_toolsets
+
 
 @pytest.fixture
 def mock_config():
@@ -26,7 +29,7 @@ def test_build_mcp_toolsets(mock_config):
     with patch("trashdig.tools.mcp_toolsets.McpToolset") as mock_toolset:
         toolsets = build_mcp_toolsets(mock_config, "agent1")
         assert len(toolsets) == 2
-        
+
         toolsets = build_mcp_toolsets(mock_config, "agent2")
         assert len(toolsets) == 1
         assert toolsets[0] == mock_toolset.return_value
@@ -70,10 +73,10 @@ def test_toolset_from_config_http():
 def test_toolset_from_config_invalid():
     srv = McpServerConfig(name="test", transport="unknown")
     assert _toolset_from_config(srv) is None
-    
+
     srv = McpServerConfig(name="test", transport="stdio") # Missing command
     assert _toolset_from_config(srv) is None
-    
+
     srv = McpServerConfig(name="test", transport="sse") # Missing url
     assert _toolset_from_config(srv) is None
 

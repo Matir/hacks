@@ -14,6 +14,7 @@ from trashdig.agents.coordinator import Coordinator
 from trashdig.config import load_config
 from trashdig.sandbox.landlock_tool import init_sandbox_mp_context
 from trashdig.services.rate_limiter import init_rate_limiter
+from trashdig.services.session import init_session_service
 from trashdig.tools import init_artifact_manager
 from trashdig.tui.app import TrashDigApp
 
@@ -83,6 +84,7 @@ def main() -> None:
         return
 
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)
+    init_session_service(db_path=config.data_dir + "/trashdig.db")
     art_service = init_artifact_manager(data_dir=config.data_dir)
 
     # Automatic batch mode if not a TTY or explicitly requested

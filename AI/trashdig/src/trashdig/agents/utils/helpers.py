@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from google.adk.artifacts import BaseArtifactService
     from google.adk.sessions import BaseSessionService
 
+    from trashdig.agents.summarizer import SummarizerAgent
     from trashdig.config import Config, ProviderConfig
 
 
@@ -210,6 +211,7 @@ async def run_agent(  # noqa: PLR0913
     session_service: "BaseSessionService",
     artifact_service: Optional["BaseArtifactService"] = None,
     user_id: str = "default_user",
+    summarizer: Optional["SummarizerAgent"] = None,
 ) -> str:
     """Helper to run an agent synchronously-like and return the final text response.
 
@@ -220,6 +222,7 @@ async def run_agent(  # noqa: PLR0913
         session_service: The ADK SessionService.
         artifact_service: The ADK ArtifactService.
         user_id: The user ID.
+        summarizer: Optional ADK Summarizer agent for context compaction.
 
     Returns:
         The final text response from the agent.
@@ -230,6 +233,7 @@ async def run_agent(  # noqa: PLR0913
         session_service=session_service,
         artifact_service=artifact_service,
         auto_create_session=True,
+        history_summarizer=summarizer,
     )
 
     content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])

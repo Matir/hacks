@@ -12,6 +12,7 @@
     - [x] Use `SqliteSessionService` backed by `.trashdig/trashdig.db`.
     - [x] All agents in a scan share a `session_id_prefix`; stable IDs via `{prefix}:{agent.name}`.
     - [x] Scan sessions tracked in `scan_sessions` table for crash-safe resumption.
+    - [x] Centralize `SessionService` management in `src/trashdig/services/session.py`.
 - [x] **[MEDIUM]** Adopt ADK Artifact API.
     - [x] Refactor `@artifact_tool` to use `ToolContext.save_artifact` with legacy fallback.
     - [x] Update agents to use artifact references for large analysis blobs (ASTs, routes).
@@ -31,12 +32,12 @@
 - [x] **[REFAC]** Implement `Engine` State Machine (`src/trashdig/engine/`).
     - [x] Move core logic from `utils.run_prompt` into a formal `Engine` class.
     - [x] *Note: Custom Engine has been removed in favor of ADK Runner + Callbacks.*
-- [ ] **[REFAC]** Context Compaction & History Management.
+- [x] **[REFAC]** Context Compaction & History Management.
     - [x] Implement a `ContextManager` to monitor tokens.
-    - [ ] *Note: Moving to ADK native compaction/summarization.*
-- [ ] **[REFAC]** Implement Parallel Task Execution in `Coordinator`.
+    - [x] *Note: Moving to ADK native compaction/summarization.*
+- [x] **[REFAC]** Implement Parallel Task Execution in `Coordinator`.
     - [x] Use `asyncio.Semaphore` for a configurable concurrency limit.
-    - [ ] *Note: Moving to ADK native parallel agent execution.*
+    - [x] *Note: Moving to ADK native parallel agent execution.*
 
 ## Recon Agent Suite (Replacing Legacy Archeology)
 - [x] **[HIGH]** StackScout Agent: Hybrid Environment Detection.

@@ -1,18 +1,19 @@
-import os
-import logging
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from trashdig.agents.utils.helpers import (
-    google_provider_extras,
     describe_provider_auth,
-    log_auth_info,
-    get_project_structure,
-    read_file_content,
     detect_frameworks,
+    get_project_structure,
     get_response_text,
+    google_provider_extras,
     load_prompt,
-    run_agent
+    log_auth_info,
+    read_file_content,
+    run_agent,
 )
+
 
 def test_google_provider_extras():
     assert google_provider_extras("openai") == {"google_search_tool": None, "generate_content_config": None}
@@ -25,7 +26,7 @@ def test_describe_provider_auth_google(monkeypatch):
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     monkeypatch.delenv("GCP_PROJECT", raising=False)
-    
+
     # Mocking os.path.exists for well_known ADC
     with patch("os.path.exists", return_value=False):
         lines = describe_provider_auth("google", None)
@@ -41,7 +42,7 @@ def test_describe_provider_auth_generic(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     lines = describe_provider_auth("openai", None)
     assert any("no API key found" in l for l in lines)
-    
+
     monkeypatch.setenv("OPENAI_API_KEY", "sk-...")
     lines = describe_provider_auth("openai", None)
     assert any("API key from OPENAI_API_KEY" in l for l in lines)
@@ -52,7 +53,7 @@ def test_log_auth_info():
     mock_agent.provider = "google"
     mock_config.agents = {"agent1": mock_agent}
     mock_config.get_provider_config.return_value = None
-    
+
     logger = MagicMock()
     log_auth_info(mock_config, logger)
     assert logger.info.called
@@ -63,7 +64,7 @@ def test_get_project_structure(tmp_path):
     (tmp_path / ".gitignore").write_text("*.pyc\n.venv/")
     (tmp_path / "main.pyc").write_text("binary")
     (tmp_path / ".venv").mkdir()
-    
+
     files = get_project_structure(str(tmp_path))
     assert "src/main.py" in files
     assert "main.pyc" not in files
@@ -91,7 +92,7 @@ def test_get_response_text():
     part2.text = "World"
     resp.content.parts = [part1, part2]
     assert get_response_text(resp) == "Hello World"
-    
+
     assert get_response_text(None) == ""
 
 def test_load_prompt(tmp_path):
@@ -107,21 +108,20 @@ def test_load_prompt(tmp_path):
 
 @pytest.mark.anyio
 async def test_run_agent():
-    from trashdig.agents.utils.helpers import run_agent
     mock_agent = MagicMock()
     mock_agent.name = "test_agent"
     mock_session_service = MagicMock()
-    
+
     # Mock Runner.run_async to yield an event
     mock_event = MagicMock()
     mock_event.content.parts = [MagicMock(text="response")]
-    
+
     async def mock_run_async(*args, **kwargs):
         yield mock_event
-        
+
     with patch("trashdig.agents.utils.helpers.Runner") as mock_runner_cls:
         mock_runner = mock_runner_cls.return_value
         mock_runner.run_async.side_effect = mock_run_async
-        
+
         result = await run_agent(mock_agent, "prompt", "session", mock_session_service)
         assert result == "response"

@@ -36,6 +36,11 @@ TrashDig operates as a team of specialized agents coordinated by a top-level **C
         *   **Role**: Proof-of-Concept Specialist.
         *   **Tasks**: Generates and executes PoC scripts in a containerized environment to prove reachability and exploitability.
         *   **Goal**: Empirical proof of vulnerability.
+5.  **Context Management (Sub-Agent)**:
+    *   **Summarizer Agent**:
+        *   **Role**: History Compactor.
+        *   **Tasks**: Condenses long research logs and tool outputs while preserving key findings and hypothesis state.
+        *   **Goal**: Prevent context window overflow during deep-dive investigations.
 
 ## 🛠 Technical Stack & ADK Integration
 
@@ -87,6 +92,7 @@ src/trashdig/agents/
 ├── hunter.py            # Hunter agent
 ├── recon.py             # StackScout + WebRouteMapper agents
 ├── skeptic.py           # Skeptic agent
+├── summarizer.py        # Summarizer agent
 ├── validator.py         # Validator agent
 └── utils/               # Shared support code (NOT agent definitions)
     ├── __init__.py      # Re-exports everything for convenience

@@ -100,6 +100,7 @@ from trashdig.agents.code_investigator import create_code_investigator_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.skeptic import create_skeptic_agent
+from trashdig.agents.summarizer import create_summarizer_agent
 from trashdig.agents.validator import create_validator_agent
 from trashdig.config import AgentConfig
 
@@ -429,6 +430,14 @@ class TestValidatorTools(AgentToolsMixin, unittest.TestCase):
         "ripgrep_search",
         "web_fetch",
     ]
+
+
+class TestSummarizerTools(AgentToolsMixin, unittest.TestCase):
+    """Summarizer should have no tools."""
+
+    MODULE = "trashdig.agents.summarizer"
+    FACTORY = create_summarizer_agent
+    EXPECTED_TOOLS = []
 
 
 # ---------------------------------------------------------------------------

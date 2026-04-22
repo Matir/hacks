@@ -7,7 +7,6 @@ from typing import Any
 from google.adk.agents import LlmAgent, LoopAgent
 from google.adk.artifacts import BaseArtifactService
 from google.adk.sessions import BaseSessionService
-from google.adk.sessions.sqlite_session_service import SqliteSessionService
 from google.adk.tools import AgentTool, FunctionTool
 from pydantic import PrivateAttr
 
@@ -18,6 +17,7 @@ from trashdig.agents.recon import (
     create_web_route_mapper_agent,
 )
 from trashdig.agents.skeptic import create_skeptic_agent
+from trashdig.agents.summarizer import create_summarizer_agent
 from trashdig.agents.utils.callbacks import TrashDigCallback
 from trashdig.agents.utils.helpers import load_prompt, read_file_content, run_agent
 from trashdig.agents.utils.json_utils import parse_json_response
@@ -28,6 +28,7 @@ from trashdig.findings import Finding
 from trashdig.services.cost import CostTracker
 from trashdig.services.database import ProjectDatabase, get_database
 from trashdig.services.permissions import PermissionManager
+from trashdig.services.session import get_session_service
 from trashdig.tools import (
     exit_loop,
     get_next_hypothesis,
@@ -67,6 +68,7 @@ class Coordinator(LlmAgent):
     _attack_surface: list[dict[str, Any]] = PrivateAttr()
     _tech_stack: str = PrivateAttr()
 
+    _summarizer: Any = PrivateAttr()
     _llm_errors: int = PrivateAttr()
 
     def __init__(
@@ -119,6 +121,10 @@ class Coordinator(LlmAgent):
             extra_tools=build_mcp_toolsets(config, "validator"),
         )
 
+        summarizer = create_summarizer_agent(
+            config.get_agent_config("summarizer") or config.get_agent_config("hunter")
+        )
+
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
         if not isinstance(db_path, str):
             db_path = ".trashdig/trashdig.db"
@@ -156,7 +162,7 @@ class Coordinator(LlmAgent):
         # --- PrivateAttr initialisation ---
         db = get_database(db_path)
         scan_session_id = db.get_or_create_scan_session(project_path_str)
-        session_service = SqliteSessionService(db_path=db_path)
+        session_service = get_session_service()
 
         cost_tracker = CostTracker()
 
@@ -172,6 +178,7 @@ class Coordinator(LlmAgent):
         object.__setattr__(self, "_scan_results", {})
         object.__setattr__(self, "_attack_surface", [])
         object.__setattr__(self, "_tech_stack", "")
+        object.__setattr__(self, "_summarizer", summarizer)
         object.__setattr__(self, "_llm_errors", 0)
         object.__setattr__(self, "_state", EngineState.IDLE)
 
@@ -200,153 +207,123 @@ class Coordinator(LlmAgent):
         return self._db
 
     @property
-    def session_id(self) -> str:
-        """Returns the current scan session ID."""
+    def scan_session_id(self) -> str:
+        """Returns the unique ID for the current scan session."""
         return self._scan_session_id
 
-    @session_id.setter
-    def session_id(self, val: str) -> None:
-        """Sets the current scan session ID."""
-        object.__setattr__(self, "_scan_session_id", val)
+    @property
+    def session_id(self) -> str:
+        """Alias for scan_session_id."""
+        return self._scan_session_id
 
     @property
     def findings(self) -> list[Finding]:
-        """Returns the list of findings discovered in the current session."""
+        """Returns the list of discovered findings."""
         return self._findings
 
     @findings.setter
-    def findings(self, val: list[Finding]) -> None:
-        """Sets the list of findings."""
-        object.__setattr__(self, "_findings", val)
+    def findings(self, value: list[Finding]) -> None:
+        object.__setattr__(self, "_findings", value)
 
     @property
     def scan_results(self) -> dict[str, Any]:
-        """Returns the project mapping results from StackScout."""
+        """Returns the project mapping results."""
         return self._scan_results
 
     @scan_results.setter
-    def scan_results(self, val: dict[str, Any]) -> None:
-        """Sets the project mapping results."""
-        object.__setattr__(self, "_scan_results", val)
+    def scan_results(self, value: dict[str, Any]) -> None:
+        object.__setattr__(self, "_scan_results", value)
 
     @property
     def attack_surface(self) -> list[dict[str, Any]]:
-        """Returns the list of identified web endpoints."""
+        """Returns the list of discovered web endpoints."""
         return self._attack_surface
-
-    @attack_surface.setter
-    def attack_surface(self, val: list[dict[str, Any]]) -> None:
-        """Sets the attack surface data."""
-        object.__setattr__(self, "_attack_surface", val)
 
     @property
     def tech_stack(self) -> str:
-        """Returns a string description of the project tech stack."""
+        """Returns the identified technology stack string."""
         return self._tech_stack
 
     @property
-    def task_queue(self) -> list:
-        """Legacy property for task queueing."""
-        return []
-
-    @property
-    def completed_tasks(self) -> list:
-        """Legacy property for completed tasks."""
-        return []
-
-    @property
-    def total_messages(self) -> int:
-        """Returns the total number of LLM messages in the session."""
-        return 0
-
-    @property
-    def input_tokens(self) -> int:
-        """Returns the cumulative count of input tokens used."""
-        return self._cost_tracker.total_input_tokens
-
-    @property
-    def output_tokens(self) -> int:
-        """Returns the cumulative count of output tokens used."""
-        return self._cost_tracker.total_output_tokens
-
-    @property
     def total_cost(self) -> float:
-        """Returns the cumulative USD cost of LLM interactions."""
+        """Returns the total USD cost of the scan session."""
         return self._cost_tracker.total_cost
 
     @property
+    def hunter(self) -> LlmAgent:
+        """Returns the Hunter agent instance."""
+        # Find it in sub_agents or sub_agents of sub_agents
+        for sa in self.sub_agents:
+            if sa.name == "hunter_loop":
+                return sa.sub_agents[0].sub_agents[0]  # hunter_loop -> orchestrator -> hunter
+        raise RuntimeError("Hunter agent not found in Coordinator sub-agents.")
+
+    @property
+    def stack_scout(self) -> LlmAgent:
+        """Returns the StackScout agent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "stack_scout":
+                return sa
+        raise RuntimeError("StackScout agent not found in Coordinator sub-agents.")
+
+    @property
+    def web_route_mapper(self) -> LlmAgent:
+        """Returns the WebRouteMapper agent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "web_route_mapper":
+                return sa
+        raise RuntimeError("WebRouteMapper agent not found in Coordinator sub-agents.")
+
+    @property
+    def hunter_loop(self) -> LoopAgent:
+        """Returns the Hunter LoopAgent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "hunter_loop":
+                return sa
+        raise RuntimeError("Hunter loop agent not found in Coordinator sub-agents.")
+
+    @property
+    def skeptic(self) -> LlmAgent:
+        """Returns the Skeptic agent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "skeptic":
+                return sa
+        raise RuntimeError("Skeptic agent not found in Coordinator sub-agents.")
+
+    @property
+    def validator(self) -> LlmAgent:
+        """Returns the Validator agent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "validator":
+                return sa
+        raise RuntimeError("Validator agent not found in Coordinator sub-agents.")
+
+    @property
+    def state(self) -> EngineState:
+        """Returns the current engine state."""
+        return self._state
+
+    @property
     def llm_errors(self) -> int:
-        """Returns the count of LLM-related errors encountered."""
+        """Returns the number of LLM errors encountered."""
         return self._llm_errors
 
-    # Convenience accessors for individual sub-agents
-    @property
-    def stack_scout(self) -> Any:
-        """Returns the StackScout agent instance."""
-        return self._agent_by_name("stack_scout")
-
-    @property
-    def web_route_mapper(self) -> Any:
-        """Returns the WebRouteMapper agent instance."""
-        return self._agent_by_name("web_route_mapper")
-
-    @property
-    def hunter_loop(self) -> Any:
-        """Returns the Hunter LoopAgent instance."""
-        return self._agent_by_name("hunter_loop")
-
-    @property
-    def hunter(self) -> Any:
-        """Returns the inner Hunter agent instance."""
-        # The actual hunter is now nested inside hunter_loop -> hunter_orchestrator
-        orchestrator = next((a for a in self.hunter_loop.sub_agents if a.name == "hunter_orchestrator"), None)
-        if orchestrator:
-            return next((a for a in orchestrator.sub_agents if a.name == "hunter"), None)
-        return None
-
-    @property
-    def skeptic(self) -> Any:
-        """Returns the Skeptic agent instance."""
-        return self._agent_by_name("skeptic")
-
-    @property
-    def validator(self) -> Any:
-        """Returns the Validator agent instance."""
-        return self._agent_by_name("validator")
-
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Internal state mutation (via Callbacks)
     # ------------------------------------------------------------------
 
-    def _on_stats(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        new_msg: bool = False,
-        model_name: str | None = None,
-    ) -> None:
+    def _on_stats(self, in_tokens: int, out_tokens: int, new_msg: bool = False, model_name: str = "unknown") -> None:
+        """Called by callbacks to update TUI stats."""
         if self.on_stats_event:
             self.on_stats_event()
-
-    def _agent_by_name(self, name: str) -> Any:
-        """Finds an agent by name, searching recursively through sub-agents."""
-        def _search(agents: list[Any]) -> Any:
-            for a in agents:
-                if a.name == name:
-                    return a
-                if hasattr(a, "sub_agents") and a.sub_agents:
-                    res = _search(a.sub_agents)
-                    if res:
-                        return res
-            return None
-        return _search(self.sub_agents + [self])
 
     def _on_llm_error(self) -> None:
-        self._llm_errors += 1
+        """Called by callbacks to increment error count."""
+        object.__setattr__(self, "_llm_errors", self._llm_errors + 1)
         if self.on_stats_event:
             self.on_stats_event()
 
-    def _on_conversation(  # noqa: PLR0913
+    def _log_conversation(
         self,
         agent_name: str,
         prompt: str,
@@ -412,7 +389,8 @@ class Coordinator(LlmAgent):
             session_id=f"{self._scan_session_id}:hunt_loop",
             user_id="default_user",
             session_service=self._session_service,
-            artifact_service=self._artifact_service
+            artifact_service=self._artifact_service,
+            history_summarizer=self._summarizer
         ):
             pass
 
@@ -444,9 +422,9 @@ class Coordinator(LlmAgent):
                 prompt,
                 session_id=f"{self._scan_session_id}:hunt:{target}",
                 session_service=self._session_service,
-                artifact_service=self._artifact_service
+                artifact_service=self._artifact_service,
+                summarizer=self._summarizer
             )
-
             try:
                 data = parse_json_response(text)
 
@@ -492,7 +470,8 @@ class Coordinator(LlmAgent):
             prompt,
             session_id=f"{self._scan_session_id}:recon:stack_scout",
             session_service=self._session_service,
-            artifact_service=self._artifact_service
+            artifact_service=self._artifact_service,
+            summarizer=self._summarizer
         )
 
         try:
@@ -516,7 +495,8 @@ class Coordinator(LlmAgent):
                 route_prompt,
                 session_id=f"{self._scan_session_id}:recon:routes",
                 session_service=self._session_service,
-                artifact_service=self._artifact_service
+                artifact_service=self._artifact_service,
+                summarizer=self._summarizer
             )
             try:
                 route_data = parse_json_response(r_text)
@@ -568,9 +548,9 @@ class Coordinator(LlmAgent):
                 prompt,
                 session_id=f"{self._scan_session_id}:hunt:{target}",
                 session_service=self._session_service,
-                artifact_service=self._artifact_service
+                artifact_service=self._artifact_service,
+                summarizer=self._summarizer
             )
-
             try:
                 data = parse_json_response(text)
 
@@ -591,50 +571,38 @@ class Coordinator(LlmAgent):
                         remediation=raw.get("remediation", "N/A"),
                         cwe_id=raw.get("cwe_id"),
                     )
-                    finding.save()
                     self._findings.append(finding)
                     new_findings.append(finding)
                     self._db.save_finding(self._project_path, finding)
 
-                    sev_color = {"critical": "red", "high": "red", "medium": "yellow", "low": "green"}.get((finding.severity or "").lower(), "white")
-                    self.log(f"  [bold {sev_color}]■[/bold {sev_color}] [bold]{finding.title}[/bold] — {finding.description[:80]}…")
-
                 # Handle hypotheses
-                for h in data.get("hypotheses", []):
+                new_hypotheses = data.get("hypotheses", [])
+                for hypo in new_hypotheses:
                     hypo_task = Hypothesis(
                         type=TaskType.HUNT,
-                        target=h.get("target", ""),
-                        description=h.get("description", ""),
-                        confidence=h.get("confidence", 0.5),
+                        target=hypo.get("target", ""),
+                        description=hypo.get("description", ""),
+                        confidence=hypo.get("confidence", 0.5),
+                        parent_id=f"hunt:{target}"
                     )
                     self._db.save_hypothesis(self._project_path, hypo_task)
-                    self.log(f"  [dim]Hypothesis: {hypo_task.target}[/dim]")
 
             except Exception as e:
                 self.log(f"[bold red]Error:[/bold red] Failed to parse Hunter output for {target}: {e}")
 
-        self.log(f"Finished: [bold green]HUNT[/bold green] — {len(new_findings)} findings found")
         return new_findings
 
     async def verify_finding(self, finding: Finding) -> dict[str, Any]:
-        """Runs the verification pipeline (Skeptic and Validator) for a finding.
+        """Verify a finding using Skeptic and Validator agents."""
+        self.log(f"[bold]Coordinator:[/bold] verifying [cyan]{finding.title}[/cyan]")
 
-        Args:
-            finding: The Finding object to verify.
-
-        Returns:
-            A dictionary containing the verification status and PoC code.
-        """
-        # 1. Run Skeptic
-        self.log(f"[bold]Skeptic:[/bold] reviewing [bold yellow]{finding.title}[/bold yellow]")
-        file_content = read_file_content(finding.file_path)
-
+        # Phase 3.1: Skeptic
         skeptic_prompt = load_prompt("skeptic_verify.md").format(
             title=finding.title,
             description=finding.description,
             vulnerable_code=finding.vulnerable_code,
             file_path=finding.file_path,
-            file_content=file_content
+            file_content=read_file_content(os.path.join(self._project_path, finding.file_path))
         )
 
         s_text = await run_agent(
@@ -642,63 +610,58 @@ class Coordinator(LlmAgent):
             skeptic_prompt,
             session_id=f"{self._scan_session_id}:verify:skeptic:{finding.title}",
             session_service=self._session_service,
-            artifact_service=self._artifact_service
+            artifact_service=self._artifact_service,
+            summarizer=self._summarizer
         )
 
         try:
             s_data = parse_json_response(s_text)
             is_valid = s_data.get("is_valid", True)
-        except Exception:
-            is_valid = True
+            finding.verification_status = "Verified" if is_valid else "False Positive"
+            finding.remediation = s_data.get("remediation", finding.remediation)
+        except Exception as e:
+            self.log(f"[bold red]Error:[/bold red] Failed to parse Skeptic output: {e}")
+            is_valid = True  # Conservative default
 
-        if not is_valid:
-            finding.verification_status = "Debunked"
-            finding.save()
-            self._db.update_finding_status(
-                self._project_path,
-                finding.title,
-                finding.file_path,
-                finding.verification_status,
-                "",
+        if is_valid:
+            # Phase 3.2: Validator
+            validator_prompt = load_prompt("validator_verify.md").format(
+                title=finding.title,
+                file_path=finding.file_path,
+                tech_stack=self._tech_stack
             )
-            self.log("Skeptic Result: [bold red]Debunked[/bold red]")
-            return {"status": "Debunked", "poc_code": ""}
 
-        # 2. Run Validator
-        self.log(f"[bold]Validator:[/bold] verifying [bold yellow]{finding.title}[/bold yellow]")
-        validator_prompt = load_prompt("validator_verify.md").format(
-            title=finding.title,
-            file_path=finding.file_path,
-            tech_stack=self._tech_stack
-        )
+            v_text = await run_agent(
+                self.validator,
+                validator_prompt,
+                session_id=f"{self._scan_session_id}:verify:validator:{finding.title}",
+                session_service=self._session_service,
+                artifact_service=self._artifact_service,
+                summarizer=self._summarizer
+            )
 
-        v_text = await run_agent(
-            self.validator,
-            validator_prompt,
-            session_id=f"{self._scan_session_id}:verify:validator:{finding.title}",
-            session_service=self._session_service,
-            artifact_service=self._artifact_service
-        )
+            try:
+                v_data = parse_json_response(v_text)
+                status = v_data.get("status", "Unverified")
+                finding.verification_status = status
+                finding.poc = v_data.get("poc") or v_data.get("poc_code")
+            except Exception as e:
+                self.log(f"[bold red]Error:[/bold red] Failed to parse Validator output: {e}")
 
-        try:
-            v_data = parse_json_response(v_text)
-            status = v_data.get("status", "Unverified")
-            poc_code = v_data.get("poc_code", "")
-        except Exception:
-            status = "Unverified"
-            poc_code = ""
+        self._db.save_finding(self._project_path, finding)
+        self.log(f"Verification complete: [bold]{finding.verification_status}[/bold]")
+        return {"status": finding.verification_status, "poc_code": finding.poc}
 
-        finding.verification_status = status
-        finding.poc = poc_code
-        finding.save()
-        self._db.update_finding_status(
-            self._project_path,
-            finding.title,
-            finding.file_path,
-            finding.verification_status,
-            finding.poc,
-        )
-
-        status_color = "green" if status == "Verified" else "red" if status == "False Positive" else "yellow"
-        self.log(f"Finished: [bold green]VERIFY[/bold green] — [{status_color}]{status}[/{status_color}]")
-        return {"status": status, "poc_code": poc_code}
+    def _agent_by_name(self, name: str) -> LlmAgent:
+        """Finds a sub-agent by name."""
+        if name == "coordinator":
+            return self
+        if name == "hunter_orchestrator":
+            return self.hunter_loop.sub_agents[0]
+        for sa in self.sub_agents:
+            if sa.name == name:
+                return sa
+        # Special case for LoopAgent nested agents
+        if name == "hunter":
+            return self.hunter
+        raise ValueError(f"Unknown agent name: {name}")

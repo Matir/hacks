@@ -1,15 +1,18 @@
 import os
-import pytest
-from trashdig.tools.get_ast_summary import get_ast_summary
-from trashdig.config import Config
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+from trashdig.config import Config
+from trashdig.tools.get_ast_summary import get_ast_summary
+
 
 @pytest.fixture(autouse=True)
 def mock_workspace(tmp_path):
     c = MagicMock(spec=Config)
     c.workspace_root = str(tmp_path)
     c.resolve_workspace_path.side_effect = lambda x: os.path.abspath(x)
-    
+
     with patch("trashdig.config.get_config", return_value=c), \
          patch("trashdig.tools.get_ast_summary._config_module.get_config", return_value=c):
         yield c
@@ -28,9 +31,9 @@ class Greeter:
 """
     f = tmp_path / "sample.py"
     f.write_text(code)
-    
+
     result = get_ast_summary(str(f), "python")
-    
+
     assert "Function definition: hello" in result
     assert "Class definition: Greeter" in result
     assert "Function definition: __init__" in result
@@ -52,9 +55,9 @@ class Calculator {
 """
     f = tmp_path / "sample.js"
     f.write_text(code)
-    
+
     result = get_ast_summary(str(f), "javascript")
-    
+
     # JavaScript uses "Function declaration" for 'function add'
     assert "Function declaration: add" in result
     assert "Arrow function: multiply" in result
@@ -82,9 +85,9 @@ type User struct {
 """
     f = tmp_path / "sample.go"
     f.write_text(code)
-    
+
     result = get_ast_summary(str(f), "go")
-    
+
     # Go uses "Function declaration"
     assert "Function declaration: main" in result
     assert "Method declaration: Add" in result
@@ -103,9 +106,9 @@ namespace Test {
 """
     f = tmp_path / "sample.cs"
     f.write_text(code)
-    
+
     result = get_ast_summary(str(f), "csharp")
-    
+
     # C# uses "Class declaration"
     assert "Class declaration: Program" in result
     assert "Method declaration: Main" in result
@@ -117,7 +120,7 @@ def test_get_ast_summary_unsupported_lang():
 def test_get_ast_summary_no_definitions(tmp_path):
     f = tmp_path / "empty.py"
     f.write_text("# Just a comment\nx = 1")
-    
+
     result = get_ast_summary(str(f), "python")
     assert result == "No top-level definitions found."
 

@@ -12,7 +12,7 @@ TrashDig is a multi-agent, language-agnostic vulnerability scanner and security 
     *   **Hunter**: Autonomous, hypothesis-driven depth-first analysis with cross-file taint tracing.
     *   **Skeptic**: Adversarial reviewer that critiques findings to reduce false positives.
     *   **Validator**: Containerized Proof-of-Concept (PoC) generation and verification.
-*   **Context Compaction**: Automated history pruning and summarization to handle long-running research sessions without exceeding model token limits.
+*   **Context Compaction**: Automated history pruning and summarization using a specialized **Summarizer** agent to handle long-running research sessions without exceeding model token limits.
 *   **Parallel Execution**: Asynchronous task processing with a worker-pool pattern to scan projects faster.
 *   **Safety Middleware**: Logic-level permission management and tool sandboxing (Docker/Minijail).
 *   **Persistent Intelligence**: SQLite-backed **ProjectDatabase** for findings, symbols, and session persistence.
@@ -34,6 +34,9 @@ Performs deep-dive analysis on prioritized targets. It uses **semgrep** for patt
 *   **Skeptic**: Acts as a "Socratic Debunker," attempting to find logic flaws or mitigations in the Hunter's findings.
 *   **Validator**: For findings that survive the Skeptic, it generates a Python/Bash PoC and executes it in an isolated **Docker** container to prove exploitability.
 
+### Context Management
+*   **Summarizer**: A specialized utility agent that condenses conversation history when the context window reaches a threshold, ensuring continuity in long deep-dives.
+
 ### Agent Relationship Diagram
 
 ```mermaid
@@ -42,6 +45,7 @@ flowchart TD
     
     subgraph Core [LLM-Driven Orchestration]
         C[Coordinator Agent]
+        SM[Summarizer Agent]
     end
 
     subgraph Recon [Recon Suite]
@@ -70,6 +74,10 @@ flowchart TD
     C -->|VERIFY| S
     S -.->|If Validated| V
 
+    %% Context Compaction
+    C -.->|compresses history| SM
+    HL -.->|compresses history| SM
+
     %% Infrastructure & Persistence
     C -->|Persist| DB[(SQLite DB)]
     C -->|Stats/Cost| CT[Cost Tracker]
@@ -85,6 +93,7 @@ flowchart TD
     style H fill:#bbf,stroke:#333,stroke-width:2px
     style S fill:#bbf,stroke:#333,stroke-width:2px
     style V fill:#bbf,stroke:#333,stroke-width:2px
+    style SM fill:#eee,stroke:#333,stroke-dasharray: 5 5
 
     classDef llm fill:#bbf,stroke:#333,stroke-width:2px;
     classDef loop fill:#f9f,stroke:#333,stroke-dasharray: 5 5;
@@ -123,7 +132,7 @@ TrashDig agents have access to a suite of deterministic and research-oriented to
 | | `exit_loop` | Deterministically ends the autonomous hunting loop. | HO |
 | **Knowledge** | `query_cwe_database` | Queries CWE definitions and vulnerability examples. | SS, H |
 
-> **Key**: **SS**: StackScout, **WRM**: WebRouteMapper, **H**: Hunter, **HO**: HunterOrchestrator, **S**: Skeptic, **V**: Validator
+> **Key**: **SS**: StackScout, **WRM**: WebRouteMapper, **H**: Hunter, **HO**: HunterOrchestrator, **S**: Skeptic, **V**: Validator, **SM**: Summarizer
 
 ---
 

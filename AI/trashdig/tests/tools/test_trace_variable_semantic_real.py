@@ -1,15 +1,18 @@
 import os
-import pytest
 from unittest.mock import MagicMock, patch
-from trashdig.tools.trace_variable_semantic import trace_variable_semantic
+
+import pytest
+
 from trashdig.config import Config
+from trashdig.tools.trace_variable_semantic import trace_variable_semantic
+
 
 @pytest.fixture(autouse=True)
 def mock_workspace(tmp_path):
     c = MagicMock(spec=Config)
     c.workspace_root = str(tmp_path)
     c.resolve_workspace_path.side_effect = lambda x: os.path.abspath(x)
-    
+
     with patch("trashdig.config.get_config", return_value=c), \
          patch("trashdig.tools.trace_variable_semantic.get_config", return_value=c):
         yield c
@@ -23,9 +26,9 @@ os.system(x)
 """
     f = tmp_path / "sample.py"
     f.write_text(code)
-    
+
     result = trace_variable_semantic("x", str(f), "python")
-    
+
     assert "Line 2: ASSIGNMENT/DEFINITION" in result
     assert "Line 3: USAGE" in result
     assert "Line 4: SINK ARGUMENT" in result # print(x) -> argument_list

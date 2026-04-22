@@ -1,9 +1,11 @@
-import os
 from unittest.mock import MagicMock, patch
+
 import pytest
-from textual.widgets import Input, RichLog, Static
+from textual.widgets import RichLog, Static
+
 from trashdig.config import Config
-from trashdig.tui.app import TrashDigApp, REPLPane
+from trashdig.tui.app import REPLPane, TrashDigApp
+
 
 @pytest.fixture
 def mock_config(tmp_path):

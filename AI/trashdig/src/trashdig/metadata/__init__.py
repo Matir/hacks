@@ -1,0 +1,1 @@
+"""TrashDig metadata package."""

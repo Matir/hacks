@@ -50,6 +50,10 @@ data_dir = "{workspace}/.trashdig"
 # provider = "google"
 # max_turns = 15
 
+[agents.summarizer]
+# model = "gemini-2.0-flash"
+# provider = "google"
+
 # ---------------------------------------------------------------------------
 # MCP Server Integrations
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
-import pytest
-from trashdig.agents.utils.json_utils import parse_json_response, extract_json_list
+from trashdig.agents.utils.json_utils import extract_json_list, parse_json_response
+
 
 def test_parse_json_response_direct():
     text = '{"key": "value"}'
@@ -8,7 +8,7 @@ def test_parse_json_response_direct():
 def test_parse_json_response_markdown():
     text = "```json\n{\"key\": \"value\"}\n```"
     assert parse_json_response(text) == {"key": "value"}
-    
+
     text = "```\n{\"key\": \"value\"}\n```"
     assert parse_json_response(text) == {"key": "value"}
 
@@ -29,9 +29,9 @@ def test_parse_json_response_invalid():
 def test_extract_json_list():
     text = '{"findings": [{"id": 1}, {"id": 2}]}'
     assert extract_json_list(text, "findings") == [{"id": 1}, {"id": 2}]
-    
+
     text = '{"findings": {"id": 1}}'
     assert extract_json_list(text, "findings") == [{"id": 1}]
-    
+
     text = '{"other": 1}'
     assert extract_json_list(text, "findings") == []

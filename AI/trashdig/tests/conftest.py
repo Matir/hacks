@@ -3,7 +3,16 @@ import os
 import pytest
 
 from trashdig.sandbox.landlock_tool import init_sandbox_mp_context
+from trashdig.services.session import init_session_service
 from trashdig.utils import clear_binary_stubs
+
+
+@pytest.fixture(scope="session", autouse=True)
+def init_session_service_fixture(tmp_path_factory):
+    """Initialise the global SessionService for the test session."""
+    tmp_dir = tmp_path_factory.mktemp("trashdig_test_data")
+    db_path = str(tmp_dir / "trashdig_test.db")
+    init_session_service(db_path)
 
 
 @pytest.fixture(scope="session", autouse=True)
