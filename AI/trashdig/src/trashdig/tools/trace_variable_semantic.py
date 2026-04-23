@@ -48,14 +48,43 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
             Args:
                 node: The current node in the traversal.
             """
-            if node.type == "identifier" and node.text.decode("utf-8") == variable_name:
-                parent = node.parent
+            is_match = False
+            if node.type in metadata.identifier_types:
+                text = node.text.decode("utf-8")
+                # PHP variables start with $, but user might pass name without $
+                if text == variable_name or text == f"${variable_name}":
+                    # Avoid double-counting (e.g. PHP variable_name vs name child)
+                    if not (
+                        node.parent and node.parent.type in metadata.identifier_types
+                    ):
+                        is_match = True
+
+            if is_match:
+                # Determine category by looking at parent/grandparent
                 category = "USAGE"
-                if parent:
-                    if parent.type in metadata.assignment_types:
-                        category = "ASSIGNMENT/DEFINITION"
-                    elif parent.type == "argument_list":
+                p = node.parent
+                while p and p != tree.root_node:
+                    if p.type in metadata.assignment_types:
+                        # Ensure it's the left side
+                        left = p.child_by_field_name("left")
+                        if not left:
+                            left = p.child_by_field_name("name")
+                        if not left:
+                            left = p.child_by_field_name("declarator")
+                        if not left:
+                            left = p.child_by_field_name("pattern")
+
+                        # If we matched the left side (or a descendant of it)
+                        if left and (left == node or any(c == node for c in left.children)):
+                            category = "ASSIGNMENT/DEFINITION"
+                        break
+                    if p.type in metadata.argument_types:
                         category = "SINK ARGUMENT"
+                        break
+                    # Don't go too far up
+                    if p.type in metadata.definition_types or p.type in metadata.scope_types:
+                        break
+                    p = p.parent
 
                 usages.append(f"Line {node.start_point[0] + 1}: {category}")
 

@@ -72,6 +72,69 @@ function outer(p1) {
     assert "Local Variables: v2" in result
     assert "Outer Variables: p1, v1" in result
 
+def test_get_scope_info_c_real(tmp_path):
+    code = """
+void func(int p1) {
+    int v1 = 1;
+    {
+        int v2 = 2;
+        // TARGET
+    }
+}
+"""
+    f = tmp_path / "sample.c"
+    f.write_text(code)
+
+    # // TARGET is on line 6 (0-indexed: line 5)
+    result = get_scope_info(str(f), 5, "c")
+
+    assert "Scope: anonymous (compound statement)" in result
+    assert "Local Variables: v2" in result
+    assert "Outer Variables: p1, v1" in result
+
+def test_get_scope_info_java_real(tmp_path):
+    code = """
+class Test {
+    void method(int p1) {
+        int v1 = 1;
+        if (true) {
+            int v2 = 2;
+            // TARGET
+        }
+    }
+}
+"""
+    f = tmp_path / "sample.java"
+    f.write_text(code)
+
+    # // TARGET is on line 7 (0-indexed: line 6)
+    result = get_scope_info(str(f), 6, "java")
+
+    assert "Scope: anonymous (block)" in result
+    assert "Local Variables: v2" in result
+    assert "Outer Variables: p1, v1" in result
+
+def test_get_scope_info_ruby_real(tmp_path):
+    code = """
+def method(p1)
+  v1 = 1
+  [1, 2].each do |p2|
+    v2 = 2
+    # TARGET
+  end
+end
+"""
+    f = tmp_path / "sample.rb"
+    f.write_text(code)
+
+    # # TARGET is on line 6 (0-indexed: line 5)
+    result = get_scope_info(str(f), 5, "ruby")
+
+    assert "Scope: anonymous (do block)" in result
+    assert "Parameters: p2" in result
+    assert "Local Variables: v2" in result
+    assert "Outer Variables: p1, v1" in result
+
 def test_get_scope_info_no_scope(tmp_path):
     f = tmp_path / "sample.py"
     f.write_text("x = 1\ny = 2")

@@ -34,6 +34,37 @@ os.system(x)
     assert "Line 4: SINK ARGUMENT" in result # print(x) -> argument_list
     assert "Line 5: SINK ARGUMENT" in result # os.system(x) -> argument_list
 
+def test_trace_variable_semantic_rust_real(tmp_path):
+    code = """
+let x = "danger";
+Command::new("sh").spawn(x);
+"""
+    f = tmp_path / "sample.rs"
+    f.write_text(code)
+
+    result = trace_variable_semantic("x", str(f), "rust")
+
+    assert "Line 2: ASSIGNMENT/DEFINITION" in result
+    assert "Line 3: SINK ARGUMENT" in result
+
+def test_trace_variable_semantic_php_real(tmp_path):
+    code = """
+<?php
+$x = $_GET['x'];
+system($x);
+?>
+"""
+    f = tmp_path / "sample.php"
+    f.write_text(code)
+
+    result = trace_variable_semantic("x", str(f), "php")
+
+    # PHP identifier is '$x' in the AST?
+    # Actually, tree-sitter-php might use 'variable_name' or just 'variable'
+    # Let's check.
+    assert "Line 3: ASSIGNMENT/DEFINITION" in result
+    assert "Line 4: SINK ARGUMENT" in result
+
 def test_trace_variable_semantic_not_found(tmp_path):
     f = tmp_path / "sample.py"
     f.write_text("a = 1")

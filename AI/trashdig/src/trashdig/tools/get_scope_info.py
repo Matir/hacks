@@ -51,6 +51,12 @@ def _extract_params(func_node: Any, metadata: Any) -> list[str]:
     params: list[str] = []
 
     params_node = func_node.child_by_field_name("parameters")
+    if not params_node:
+        # C/C++: function_definition -> function_declarator -> parameter_list
+        decl = func_node.child_by_field_name("declarator")
+        if decl:
+            params_node = decl.child_by_field_name("parameters")
+
     if params_node:
         for p in params_node.children:
             params.extend(_extract_params_from_node(p, metadata))
@@ -68,10 +74,13 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
     vars_found: list[str] = []
 
     def _handle_decl(node: Any) -> None:
-        """Helper for JS/C# multiple declarators."""
+        """Helper for JS/C#/C/Java multiple declarators."""
         for child in node.children:
-            if child.type == "variable_declarator":
+            if child.type in ("variable_declarator", "init_declarator"):
                 name_node = child.child_by_field_name("name")
+                if not name_node:
+                    name_node = child.child_by_field_name("declarator")
+
                 if name_node and name_node.type == "identifier":
                     name = name_node.text.decode("utf-8")
                     if name not in vars_found:
@@ -79,13 +88,20 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
 
     def _handle_assignment(node: Any) -> None:
         left = node.child_by_field_name("left")
-        if not left and node.type == "variable_declaration":
+        if not left:
+            left = node.child_by_field_name("name")
+
+        if not left and node.type in (
+            "variable_declaration",
+            "local_variable_declaration",
+            "declaration",
+        ):
             _handle_decl(node)
         elif left and left.type == "identifier":
             name = left.text.decode("utf-8")
             if name not in vars_found and name not in metadata.skip_symbols:
                 vars_found.append(name)
-        elif node.type in {"lexical_declaration", "variable_declaration"}:
+        elif node.type in ("lexical_declaration", "variable_declaration"):
             _handle_decl(node)
 
     def walk(node: Any) -> None:  # noqa: C901

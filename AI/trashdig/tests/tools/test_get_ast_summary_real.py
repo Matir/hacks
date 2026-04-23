@@ -113,6 +113,114 @@ namespace Test {
     assert "Class declaration: Program" in result
     assert "Method declaration: Main" in result
 
+def test_get_ast_summary_c_real(tmp_path):
+    code = """
+void hello(char *name) {
+    printf("Hello %s", name);
+}
+
+struct User {
+    char *name;
+};
+"""
+    f = tmp_path / "sample.c"
+    f.write_text(code)
+
+    result = get_ast_summary(str(f), "c")
+
+    assert "Function definition: hello" in result
+    assert "Struct specifier: User" in result
+
+def test_get_ast_summary_cpp_real(tmp_path):
+    code = """
+class Greeter {
+public:
+    void greet(std::string name) {
+        std::cout << "Hello " << name << std::endl;
+    }
+};
+"""
+    f = tmp_path / "sample.cpp"
+    f.write_text(code)
+
+    result = get_ast_summary(str(f), "cpp")
+
+    assert "Class specifier: Greeter" in result
+    assert "Function definition: greet" in result
+
+def test_get_ast_summary_java_real(tmp_path):
+    code = """
+public class Greeter {
+    public void greet(String name) {
+        System.out.println("Hello " + name);
+    }
+}
+"""
+    f = tmp_path / "sample.java"
+    f.write_text(code)
+
+    result = get_ast_summary(str(f), "java")
+
+    assert "Class declaration: Greeter" in result
+    assert "Method declaration: greet" in result
+
+def test_get_ast_summary_ruby_real(tmp_path):
+    code = """
+class Greeter
+  def greet(name)
+    puts "Hello #{name}"
+  end
+end
+"""
+    f = tmp_path / "sample.rb"
+    f.write_text(code)
+
+    result = get_ast_summary(str(f), "ruby")
+
+    assert "Class: Greeter" in result
+    assert "Method: greet" in result
+
+def test_get_ast_summary_rust_real(tmp_path):
+    code = """
+fn greet(name: &str) {
+    println!("Hello {}", name);
+}
+
+struct User {
+    name: String
+}
+"""
+    f = tmp_path / "sample.rs"
+    f.write_text(code)
+
+    result = get_ast_summary(str(f), "rust")
+
+    assert "Function item: greet" in result
+    assert "Struct item: User" in result
+
+def test_get_ast_summary_php_real(tmp_path):
+    code = """
+<?php
+function greet($name) {
+    echo "Hello $name";
+}
+
+class Greeter {
+    public function hello($name) {
+        echo "Hi $name";
+    }
+}
+?>
+"""
+    f = tmp_path / "sample.php"
+    f.write_text(code)
+
+    result = get_ast_summary(str(f), "php")
+
+    assert "Function definition: greet" in result
+    assert "Method declaration: hello" in result
+    assert "Class declaration: Greeter" in result
+
 def test_get_ast_summary_unsupported_lang():
     result = get_ast_summary("test.py", "unsupported")
     assert "not supported" in result
