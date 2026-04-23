@@ -4,9 +4,13 @@ from trashdig.utils import is_binary_available
 
 from .base import _run_sandboxed, artifact_tool, get_config
 
+EXIT_TIMEOUT = 124
+
 
 @artifact_tool(max_chars=8000)
-def semgrep_scan(path: str | None = None, config: str = "p/security-audit", tool_context: Any = None) -> str:
+def semgrep_scan(
+    path: str | None = None, config: str = "p/security-audit", tool_context: Any = None
+) -> str:
     """Scans the codebase for security patterns using semgrep.
 
     Args:
@@ -27,6 +31,6 @@ def semgrep_scan(path: str | None = None, config: str = "p/security-audit", tool
 
     # Run semgrep with a timeout to avoid hanging
     result = _run_sandboxed(cmd, timeout=120, network=True, workspace_dir=path)
-    if result.returncode == 124:  # noqa: PLR2004
+    if result.returncode == EXIT_TIMEOUT:
         return result.stderr
     return result.stdout if result.stdout else result.stderr

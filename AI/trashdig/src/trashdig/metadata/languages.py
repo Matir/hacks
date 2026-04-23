@@ -1,5 +1,11 @@
 from dataclasses import dataclass, field
 
+import tree_sitter
+import tree_sitter_c_sharp
+import tree_sitter_go
+import tree_sitter_javascript
+import tree_sitter_python
+
 
 @dataclass
 class LanguageMetadata:
@@ -107,3 +113,41 @@ _METADATA_MAP = {
 def get_language_metadata(lang: str) -> LanguageMetadata | None:
     """Returns the metadata for the given language string."""
     return _METADATA_MAP.get(lang.lower())
+
+
+_LANGUAGE_CACHE: dict[str, tree_sitter.Language] = {}
+
+
+def get_ts_language(lang: str | LanguageMetadata) -> tree_sitter.Language | None:
+    """Gets the tree-sitter language object for the given language string or metadata."""
+    # Canonicalize the name using metadata aliases
+    lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
+    meta = get_language_metadata(lang_name)
+    if not meta:
+        return None
+
+    canonical_name = meta.name
+    if canonical_name in _LANGUAGE_CACHE:
+        return _LANGUAGE_CACHE[canonical_name]
+
+    ts_lang = None
+    if canonical_name == "python":
+        ts_lang = tree_sitter.Language(tree_sitter_python.language())
+    elif canonical_name == "go":
+        ts_lang = tree_sitter.Language(tree_sitter_go.language())
+    elif canonical_name == "javascript":
+        ts_lang = tree_sitter.Language(tree_sitter_javascript.language())
+    elif canonical_name == "csharp":
+        ts_lang = tree_sitter.Language(tree_sitter_c_sharp.language())
+
+    if ts_lang:
+        _LANGUAGE_CACHE[canonical_name] = ts_lang
+    return ts_lang
+
+
+def make_parser(lang: str | LanguageMetadata) -> tree_sitter.Parser | None:
+    """Creates a tree-sitter parser with a cached Language for the given language."""
+    ts_lang = get_ts_language(lang)
+    if ts_lang is None:
+        return None
+    return tree_sitter.Parser(ts_lang)

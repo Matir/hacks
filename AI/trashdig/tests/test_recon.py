@@ -18,7 +18,6 @@ def mock_config():
     config.get_agent_config.return_value = MagicMock(model="test-model", provider="google")
     return config
 
-@pytest.mark.anyio
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_stack_scout_run(mock_run, mock_config):
     agent = StackScoutAgent(name="stack_scout", model="test-model")
@@ -40,7 +39,6 @@ async def test_stack_scout_run(mock_run, mock_config):
     assert data["is_web_app"] is True
     assert "src/main.py" in data["mapping"]
 
-@pytest.mark.anyio
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_web_route_mapper_run(mock_run, mock_config):
     agent = WebRouteMapperAgent(name="web_route_mapper", model="test-model")

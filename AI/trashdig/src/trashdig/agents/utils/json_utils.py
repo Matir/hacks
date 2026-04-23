@@ -23,7 +23,7 @@ def parse_json_response(text: str) -> dict[str, Any]:
     # 1. Try direct parsing
     try:
         return json.loads(text.strip())
-    except Exception:  # noqa: S110
+    except json.JSONDecodeError:
         pass
 
     # 2. Try stripping markdown block markers
@@ -34,7 +34,7 @@ def parse_json_response(text: str) -> dict[str, Any]:
         cleaned = re.sub(r"\n?```$", "", cleaned)
         try:
             return json.loads(cleaned.strip())
-        except Exception:  # noqa: S110
+        except json.JSONDecodeError:
             pass
 
     # 3. Try to find anything between { and }
@@ -46,7 +46,7 @@ def parse_json_response(text: str) -> dict[str, Any]:
             if isinstance(data, list):
                 return {"items": data}
             return data
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         logger.debug("Failed to parse JSON using regex markers: %s", text)
 
     return {}

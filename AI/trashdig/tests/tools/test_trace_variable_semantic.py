@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from trashdig.tools.trace_variable_semantic import trace_variable_semantic
 
 
-@patch("trashdig.tools.base._get_ts_language")
+@patch("trashdig.metadata.languages.get_ts_language")
 @patch("tree_sitter.Parser")
 def test_trace_variable_semantic(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()

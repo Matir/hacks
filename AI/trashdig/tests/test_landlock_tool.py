@@ -131,14 +131,14 @@ class TestToolTimeoutError:
 
 class TestInitSandboxMpContext:
     def test_updates_context(self):
-        lt = _get_lt_module()
+        from trashdig.sandbox.landlock_tool import SandboxProvider  # noqa: PLC0415
         init_sandbox_mp_context("spawn")
-        assert lt._mp_context.get_start_method() == "spawn"  # type: ignore[union-attr]
+        assert SandboxProvider.mp_context.get_start_method() == "spawn"
 
     def test_updates_sys_path_snapshot(self):
-        lt = _get_lt_module()
+        from trashdig.sandbox.landlock_tool import SandboxProvider  # noqa: PLC0415
         init_sandbox_mp_context("spawn")
-        assert lt._sys_path_snapshot == list(sys.path)  # type: ignore[union-attr]
+        assert SandboxProvider.sys_path_snapshot == list(sys.path)
 
     def test_restores_spawn_for_remaining_tests(self):
         """Leave the context as 'spawn' so subsequent subprocess tests work."""
@@ -271,3 +271,71 @@ class TestChildEnvironment:
             # The fallback sends str(generator), which contains "generator"
             assert isinstance(result, str)
             assert "generator" in result
+
+    @patch("platform.system", return_value="Linux")
+    @patch("trashdig.sandbox.landlock_tool._apply_landlock_rules")
+    @patch("multiprocessing.connection.Connection")
+    def test_child_main_calls_apply_rules_on_linux(self, mock_conn, mock_apply, mock_sys):
+        """Verify that _child_main calls _apply_landlock_rules on Linux."""
+        from trashdig.sandbox.landlock_tool import _child_main  # noqa: PLC0415
+
+        func = MagicMock(return_value="ok")
+        _child_main(
+            mock_conn,
+            func,
+            (),
+            {},
+            "/tmp",
+            [],
+            False,
+            [],
+            True
+        )
+        mock_apply.assert_called_once_with("/tmp", [], False, [])
+        mock_conn.send.assert_called_with(("ok", "ok"))
+
+    @patch("os.path.exists", return_value=True)
+    @patch("sys.prefix", "/py")
+    @patch("sys.exec_prefix", "/py")
+    def test_apply_landlock_rules(self, mock_exists):
+        """Verify that _apply_landlock_rules correctly configures the Ruleset."""
+        from trashdig.sandbox.landlock_tool import _apply_landlock_rules  # noqa: PLC0415
+
+        mock_landlock = MagicMock()
+        mock_ruleset = MagicMock()
+        mock_landlock.Ruleset.return_value = mock_ruleset
+        mock_landlock.FSAccess.all.return_value = 0xFFFF
+
+        with patch.dict("sys.modules", {"landlock": mock_landlock}):
+            _apply_landlock_rules("/ws", ["/extra"], True, ["/path"])
+
+            # Verify allow calls (at least for workspace and extra)
+            assert mock_ruleset.allow.called
+            mock_ruleset.apply.assert_called_once()
+
+    @patch("platform.system", return_value="Linux")
+    @patch("multiprocessing.connection.Connection")
+    def test_child_main_landlock_import_error(self, mock_conn, mock_sys):
+        """Verify that _child_main handles Landlock ImportError correctly."""
+        from trashdig.sandbox.landlock_tool import _child_main  # noqa: PLC0415
+
+        # Ensure landlock is NOT in sys.modules and will raise ImportError
+        with patch.dict("sys.modules", {"landlock": None}):
+            func = MagicMock()
+            func.__name__ = "mock_tool"
+            func.return_value = "ok"
+
+            # Case 1: require_sandbox = True (should send error)
+            _child_main(mock_conn, func, (), {}, "/tmp", [], False, [], True)
+
+            # Find the error call. _send_error calls conn.send(('err', exc, tb))
+            mock_conn.send.assert_called()
+            args = mock_conn.send.call_args[0][0]
+            assert args[0] == "err"
+            # It might be ImportError or RuntimeError wrapping the string
+            assert "landlock" in str(args[1])
+
+            # Case 2: require_sandbox = False (should warning and continue)
+            mock_conn.send.reset_mock()
+            _child_main(mock_conn, func, (), {}, "/tmp", [], False, [], False)
+            mock_conn.send.assert_called_with(("ok", "ok"))

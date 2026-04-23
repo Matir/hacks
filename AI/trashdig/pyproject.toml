@@ -39,7 +39,15 @@ trashdig = "trashdig.main:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/trashdig"]
 
+[tool.mypy]
+
+[[tool.mypy.overrides]]
+# landlock ships no type stubs and no py.typed marker; suppress the warning.
+ignore_missing_imports = true
+module = "landlock.*"
+
 [tool.pytest]
+anyio_mode = "auto"
 filterwarnings = [
   "error",
   "ignore::DeprecationWarning:google.genai.types",
@@ -48,13 +56,6 @@ filterwarnings = [
 ]
 minversion = "9.0"
 pythonpath = ["src"]
-
-[tool.mypy]
-
-[[tool.mypy.overrides]]
-# landlock ships no type stubs and no py.typed marker; suppress the warning.
-ignore_missing_imports = true
-module = "landlock.*"
 
 [tool.ruff]
 line-length = 100

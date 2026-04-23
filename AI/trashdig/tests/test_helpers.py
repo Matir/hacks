@@ -30,22 +30,24 @@ def test_describe_provider_auth_google(monkeypatch):
     # Mocking os.path.exists for well_known ADC
     with patch("os.path.exists", return_value=False):
         lines = describe_provider_auth("google", None)
-        assert any("no explicit source detected" in l for l in lines)
+        assert any("no explicit source detected" in ln for ln in lines)
 
     # Test with API key
     mock_cfg = MagicMock()
     mock_cfg.api_key = "secret"
     lines = describe_provider_auth("google", mock_cfg)
-    assert any("API key from config.toml" in l for l in lines)
+    assert any("API key from config.toml" in ln for ln in lines)
+
 
 def test_describe_provider_auth_generic(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     lines = describe_provider_auth("openai", None)
-    assert any("no API key found" in l for l in lines)
+    assert any("no API key found" in ln for ln in lines)
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-...")
     lines = describe_provider_auth("openai", None)
-    assert any("API key from OPENAI_API_KEY" in l for l in lines)
+    assert any("API key from OPENAI_API_KEY" in ln for ln in lines)
+
 
 def test_log_auth_info():
     mock_config = MagicMock()
@@ -106,7 +108,6 @@ def test_load_prompt(tmp_path):
         with pytest.raises(FileNotFoundError):
             load_prompt("missing.md")
 
-@pytest.mark.anyio
 async def test_run_agent():
     mock_agent = MagicMock()
     mock_agent.name = "test_agent"

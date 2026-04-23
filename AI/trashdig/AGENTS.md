@@ -113,7 +113,7 @@ src/trashdig/agents/
 
 These rules are foundational. Adhere to them for all modifications:
 
-1.  **Verification**: Every task completion MUST be verified by running the project's full validation suite (e.g., `mise run check`). All linting, type checks, and tests MUST pass before a change is considered finished.
+1.  **Verification**: Every task completion MUST be verified by running the project's full validation suite: `mise run check`. This command executes linting, type checks, and all tests. All checks MUST pass before a change is considered finished.
 2.  **Testing**: Always provide unit tests in the `tests/` directory. All code should be written alongside corresponding tests. Whenever features are added, both the test suite and coverage must be checked; coverage metrics should generally trend upwards.
 3.  **Typing**: Strict type hints are mandatory. Every function and method MUST have complete type annotations for all parameters and return values. The codebase must remain `pyright`/`mypy` clean, even with strict rules like `disallow-untyped-defs` enabled.
 4.  **Environment**: Use `uv` for dependencies and `mise` for task orchestration.

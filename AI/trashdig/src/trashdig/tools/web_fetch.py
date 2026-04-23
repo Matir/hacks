@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 
 from .base import artifact_tool
 
+HTTP_OK = 200
+
 
 @artifact_tool(max_chars=8000)
 async def web_fetch(url: str) -> str:
@@ -17,8 +19,10 @@ async def web_fetch(url: str) -> str:
         The text content of the page (cleaned of HTML tags).
     """
     try:
-        async with aiohttp.ClientSession() as session, session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-            if response.status != 200:  # noqa: PLR2004
+        async with aiohttp.ClientSession() as session, session.get(
+            url, timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            if response.status != HTTP_OK:
                 return f"Error: Failed to fetch page, status code {response.status}"
 
             html = await response.text()

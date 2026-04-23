@@ -1,13 +1,10 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from trashdig.agents.hunter import HunterAgent, create_hunter_agent
 from trashdig.config import AgentConfig
 
 
-@pytest.mark.anyio
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_hunter_run(mock_run):
     text_response = json.dumps({

@@ -55,7 +55,6 @@ def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_cre
 
     assert isinstance(coord.session_id, str)
 
-@pytest.mark.anyio
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
@@ -84,7 +83,6 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
     assert res == {"file.py": {"summary": "test"}}
     assert mock_run_agent.called
 
-@pytest.mark.anyio
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
@@ -116,7 +114,6 @@ async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val
     assert len(findings) == 1
     assert findings[0].title == "SQLi"
 
-@pytest.mark.anyio
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)

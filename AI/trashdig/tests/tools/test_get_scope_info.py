@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from trashdig.tools.get_scope_info import get_scope_info
 
 
-@patch("trashdig.tools.base._get_ts_language")
+@patch("trashdig.metadata.languages.get_ts_language")
 @patch("tree_sitter.Parser")
 def test_get_scope_info(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()

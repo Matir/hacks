@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from trashdig.tools.get_ast_summary import get_ast_summary
 
 
-@patch("trashdig.tools.base._get_ts_language")
+@patch("trashdig.metadata.languages.get_ts_language")
 @patch("tree_sitter.Parser")
 def test_get_ast_summary(mock_parser_class, mock_get_lang):
     mock_lang = MagicMock()
@@ -80,7 +80,8 @@ def test_get_ast_summary_js_arrow(mock_parser_make, mock_metadata, mock_ts_lang)
 def test_get_ast_summary_no_definitions():
     """Test get_ast_summary with a file containing no classes or functions."""
     with patch("builtins.open", MagicMock()):
-        with patch("trashdig.tools.base._get_ts_language", return_value=MagicMock()):
+        with patch("trashdig.metadata.languages.get_ts_language", return_value=MagicMock()):
+
             with patch("tree_sitter.Parser") as mock_parser_class:
                 mock_parser = mock_parser_class.return_value
                 mock_tree = mock_parser.parse.return_value

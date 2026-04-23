@@ -43,7 +43,6 @@ def mock_coordinator():
     coord._agent_by_name.return_value = agent
     return coord
 
-@pytest.mark.anyio
 async def test_callback_on_before_model(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
@@ -53,7 +52,6 @@ async def test_callback_on_before_model(mock_coordinator):
     await cb.on_before_model(ctx, req)
     assert cb._last_prompt == "Test Prompt"
 
-@pytest.mark.anyio
 async def test_callback_on_after_model(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
@@ -85,7 +83,6 @@ async def test_callback_on_after_model(mock_coordinator):
     # Check DB logging
     mock_coordinator.db.log_conversation.assert_called_once()
 
-@pytest.mark.anyio
 async def test_callback_on_model_error(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
@@ -138,7 +135,6 @@ def test_callback_agent_lifecycle(mock_coordinator):
 # Turn limit tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.anyio
 async def test_turn_limit_not_enforced_when_unset(mock_coordinator):
     """No turn limit configured → every call proceeds normally."""
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=None)
@@ -154,7 +150,6 @@ async def test_turn_limit_not_enforced_when_unset(mock_coordinator):
         assert result is None, "Expected None (no stop) when max_turns is unset"
 
 
-@pytest.mark.anyio
 async def test_turn_limit_allows_up_to_limit(mock_coordinator):
     """Calls up to max_turns are allowed; the (max_turns+1)-th is blocked."""
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=3)
@@ -176,7 +171,6 @@ async def test_turn_limit_allows_up_to_limit(mock_coordinator):
     assert "3" in result.content.parts[0].text  # limit mentioned in message
 
 
-@pytest.mark.anyio
 async def test_turn_limit_per_agent_independent(mock_coordinator):
     """Turn counters are tracked independently per agent name."""
     def _cfg_for(agent_name):
@@ -206,7 +200,6 @@ async def test_turn_limit_per_agent_independent(mock_coordinator):
     assert isinstance(result_b, LlmResponse)
 
 
-@pytest.mark.anyio
 async def test_reset_turn_counts_clears_state(mock_coordinator):
     """reset_turn_counts() lets agents run again after being blocked."""
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=1)

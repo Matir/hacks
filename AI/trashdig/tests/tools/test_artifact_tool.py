@@ -25,7 +25,6 @@ async def maybe_await(coro_or_val):
         return await coro_or_val
     return coro_or_val
 
-@pytest.mark.anyio
 async def test_artifact_tool_no_truncation():
     """Test that artifact_tool does not truncate small output."""
     @artifact_tool(max_chars=100)
@@ -36,7 +35,6 @@ async def test_artifact_tool_no_truncation():
     assert result == "small output"
     assert "[TRUNCATED]" not in result
 
-@pytest.mark.anyio
 async def test_artifact_tool_truncation(temp_artifact_dir):
     """Test that artifact_tool truncates large output and saves a legacy artifact."""
     large_content = "A" * 200
@@ -62,7 +60,6 @@ async def test_artifact_tool_truncation(temp_artifact_dir):
     with open(artifact_path, encoding="utf-8") as f:
         assert f.read() == large_content
 
-@pytest.mark.anyio
 async def test_artifact_tool_adk_api(temp_artifact_dir):
     """Test that artifact_tool uses ADK API when tool_context is provided."""
     large_content = "C" * 300
@@ -85,7 +82,6 @@ async def test_artifact_tool_adk_api(temp_artifact_dir):
     assert args[0].startswith("adk_tool_")
     assert args[1].text == large_content
 
-@pytest.mark.anyio
 async def test_artifact_tool_non_string_result():
     """Test that artifact_tool handles non-string results gracefully."""
     @artifact_tool(max_chars=10)
@@ -103,7 +99,6 @@ def test_init_artifact_manager(tmp_path):
     assert get_artifact_service() == service
     assert os.path.isdir(os.path.join(str(data_dir), "artifacts"))
 
-@pytest.mark.anyio
 async def test_artifact_tool_stable_filename(temp_artifact_dir):
     """Test that the same content produces the same artifact filename (hash stability)."""
     content = "Stable content for hashing"
@@ -120,7 +115,6 @@ async def test_artifact_tool_stable_filename(temp_artifact_dir):
 
     assert path_a == path_b
 
-@pytest.mark.anyio
 async def test_artifact_tool_async(temp_artifact_dir):
     """Test that artifact_tool correctly handles async functions."""
     large_content = "B" * 150

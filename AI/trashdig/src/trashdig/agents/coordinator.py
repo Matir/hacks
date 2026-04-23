@@ -349,7 +349,7 @@ class Coordinator(LlmAgent):
         if self.on_stats_event:
             self.on_stats_event()
 
-    def _log_conversation(
+    def _log_conversation(  # noqa: PLR0913
         self,
         agent_name: str,
         prompt: str,

@@ -8,7 +8,7 @@ import pytest
 
 from trashdig.config import Config
 from trashdig.metadata.languages import PYTHON_METADATA
-from trashdig.tools.base import _make_parser
+from trashdig.metadata.languages import make_parser as _make_parser
 from trashdig.tools.trace_taint_cross_file import (
     _extract_callee_name,
     _find_calls_passing_variable,

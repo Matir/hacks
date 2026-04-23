@@ -4,6 +4,8 @@ from trashdig.sandbox.landlock_tool import landlock_tool
 
 from .base import _run_sandboxed, artifact_tool, get_config
 
+EXIT_COMMAND_NOT_FOUND = 127
+
 
 @artifact_tool(max_chars=4000)
 @landlock_tool()
@@ -34,7 +36,7 @@ def ripgrep_search(
     result = _run_sandboxed(cmd, network=False, workspace_dir=path)
 
     # rg exit codes: 0 = matches found, 1 = no matches (not an error), 2 = error
-    if result.returncode == 127:  # noqa: PLR2004
+    if result.returncode == EXIT_COMMAND_NOT_FOUND:
         return result.stderr
     if result.returncode == 1:
         return ""

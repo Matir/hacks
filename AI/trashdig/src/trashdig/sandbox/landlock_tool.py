@@ -37,20 +37,20 @@ from trashdig.config import get_config
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Module-level multiprocessing context.
-#
-# Initialised with ``forkserver`` as the default; replaced by
-# :func:`init_sandbox_mp_context` at application startup.  Using a module-
-# level context object (rather than ``multiprocessing.set_start_method``)
-# avoids touching the global default and lets tests override the method to
-# ``spawn`` without needing a live forkserver.
-# ---------------------------------------------------------------------------
-_mp_context: Any = multiprocessing.get_context("forkserver")
+class SandboxProvider:
+    """Class-level provider for global multiprocessing state."""
+    # Module-level multiprocessing context.
+    #
+    # Initialised with ``forkserver`` as the default; replaced by
+    # :func:`init_sandbox_mp_context` at application startup.  Using a module-
+    # level context object (rather than ``multiprocessing.set_start_method``)
+    # avoids touching the global default and lets tests override the method to
+    # ``spawn`` without needing a live forkserver.
+    mp_context: Any = multiprocessing.get_context("forkserver")
 
-# Snapshot of ``sys.path`` at context-init time.  Passed to every child so
-# that Landlock can allow the paths needed for Python imports.
-_sys_path_snapshot: list[str] = list(sys.path)
+    # Snapshot of ``sys.path`` at context-init time.  Passed to every child so
+    # that Landlock can allow the paths needed for Python imports.
+    sys_path_snapshot: list[str] = list(sys.path)
 
 
 # ---------------------------------------------------------------------------
@@ -109,9 +109,8 @@ def init_sandbox_mp_context(method: str = "forkserver") -> None:
     Args:
         method: One of ``'forkserver'``, ``'spawn'``, or ``'fork'``.
     """
-    global _mp_context, _sys_path_snapshot  # noqa: PLW0603
-    _mp_context = multiprocessing.get_context(method)
-    _sys_path_snapshot = list(sys.path)
+    SandboxProvider.mp_context = multiprocessing.get_context(method)
+    SandboxProvider.sys_path_snapshot = list(sys.path)
 
 
 # ---------------------------------------------------------------------------
@@ -379,8 +378,8 @@ def landlock_tool(
                 k: v for k, v in kwargs.items() if k not in ("tool_context", "ctx")
             }
 
-            parent_conn, child_conn = _mp_context.Pipe(duplex=False)
-            child = _mp_context.Process(
+            parent_conn, child_conn = SandboxProvider.mp_context.Pipe(duplex=False)
+            child = SandboxProvider.mp_context.Process(
                 target=_child_main,
                 args=(
                     child_conn,
@@ -390,7 +389,7 @@ def landlock_tool(
                     workspace_dir,
                     resolved_extra,
                     write,
-                    _sys_path_snapshot,
+                    SandboxProvider.sys_path_snapshot,
                     require_sandbox,
                 ),
                 daemon=True,

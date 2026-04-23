@@ -48,7 +48,10 @@ class CostTracker:
         # Try remote first to get latest
         try:
             logger.info("Fetching latest LLM pricing from LiteLLM...")
-            with urllib.request.urlopen(self.PRICING_URL, timeout=10) as response:
+            if not self.PRICING_URL.startswith("https://"):
+                raise ValueError(f"Insecure pricing URL scheme: {self.PRICING_URL}")
+
+            with urllib.request.urlopen(self.PRICING_URL, timeout=10) as response:  # noqa: S310
                 remote_data = json.loads(response.read().decode("utf-8"))
                 self.rates = remote_data
                 # Cache it

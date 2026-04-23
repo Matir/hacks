@@ -93,12 +93,15 @@ class RateLimiter:
             self._refill()
             self._tpm_tokens -= float(tokens)
 
-# Global instance
-_global_rate_limiter: RateLimiter | None = None
+class RateLimiterProvider:
+    """Class-level provider for the global RateLimiter instance."""
+    instance: RateLimiter | None = None
+
 
 def get_rate_limiter() -> RateLimiter | None:
     """Returns the global RateLimiter instance."""
-    return _global_rate_limiter
+    return RateLimiterProvider.instance
+
 
 def init_rate_limiter(rpm_limit: int | None = None, tpm_limit: int | None = None) -> None:
     """Initializes the global RateLimiter instance.
@@ -107,5 +110,6 @@ def init_rate_limiter(rpm_limit: int | None = None, tpm_limit: int | None = None
         rpm_limit: Requests per minute limit.
         tpm_limit: Tokens per minute limit.
     """
-    global _global_rate_limiter  # noqa: PLW0603
-    _global_rate_limiter = RateLimiter(rpm_limit, tpm_limit) if rpm_limit or tpm_limit else None
+    RateLimiterProvider.instance = (
+        RateLimiter(rpm_limit, tpm_limit) if rpm_limit or tpm_limit else None
+    )

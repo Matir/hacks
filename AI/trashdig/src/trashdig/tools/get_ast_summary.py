@@ -1,10 +1,44 @@
 from typing import Any
 
 import trashdig.config as _config_module
-from trashdig.metadata.languages import get_language_metadata
+from trashdig.metadata.languages import (
+    get_language_metadata,
+)
+from trashdig.metadata.languages import (
+    get_ts_language as _get_ts_language,
+)
+from trashdig.metadata.languages import make_parser as _make_parser
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import _get_ts_language, _make_parser, artifact_tool
+from .base import artifact_tool
+
+
+def _get_node_name(node: Any) -> str:
+    """Extract name from a definition node."""
+    name_node = node.child_by_field_name("name")
+    if not name_node:
+        for field in ("declarator", "identifier"):
+            name_node = node.child_by_field_name(field)
+            if name_node:
+                break
+    return name_node.text.decode("utf-8") if name_node else "anonymous"
+
+
+def _is_js_arrow_func(node: Any, language: str) -> tuple[bool, str]:
+    """Check if node is a JS arrow function definition."""
+    if language not in ("javascript", "typescript", "js", "ts"):
+        return False, "anonymous"
+    if node.type != "lexical_declaration":
+        return False, "anonymous"
+
+    for child in node.children:
+        if child.type == "variable_declarator":
+            val = child.child_by_field_name("value")
+            if val and val.type == "arrow_function":
+                name_node = child.child_by_field_name("name")
+                name = name_node.text.decode("utf-8") if name_node else "anonymous"
+                return True, name
+    return False, "anonymous"
 
 
 @artifact_tool(max_chars=5000)
@@ -32,47 +66,27 @@ def get_ast_summary(file_path: str, language: str = "python", tool_context: Any 
             content = f.read()
 
         parser = _make_parser(language)
-        assert parser is not None  # ts_lang already verified non-None above
+        if parser is None:
+            return f"Error: Could not create parser for {language}"
         tree = parser.parse(content)
 
         summary: list[str] = []
 
         def walk(node: Any, depth: int = 0) -> None:
             indent = "  " * depth
-            is_definition = False
+            is_def = False
             name = "anonymous"
             display_type = node.type.replace("_", " ").capitalize()
 
             if node.type in metadata.definition_types:
-                is_definition = True
-                name_node = node.child_by_field_name("name")
-                if not name_node:
-                    # In some languages/nodes, name might be a different field
-                    # e.g. Go 'declarator', C# 'identifier'
-                    for field in ("declarator", "identifier"):
-                        name_node = node.child_by_field_name(field)
-                        if name_node:
-                            break
-                if name_node:
-                    name = name_node.text.decode("utf-8")
+                is_def = True
+                name = _get_node_name(node)
+            else:
+                is_def, name = _is_js_arrow_func(node, language)
+                if is_def:
+                    display_type = "Arrow function"
 
-            # JavaScript arrow functions: const foo = () => {}
-            elif (
-                language in ("javascript", "typescript", "js", "ts")
-                and node.type == "lexical_declaration"
-            ):
-                # Look for variable_declarator with arrow_function
-                for child in node.children:
-                    if child.type == "variable_declarator":
-                        name_node = child.child_by_field_name("name")
-                        value_node = child.child_by_field_name("value")
-                        if value_node and value_node.type == "arrow_function":
-                            is_definition = True
-                            display_type = "Arrow function"
-                            if name_node:
-                                name = name_node.text.decode("utf-8")
-
-            if is_definition:
+            if is_def:
                 summary.append(f"{indent}{display_type}: {name}")
                 # Walk children with increased depth
                 for child in node.children:

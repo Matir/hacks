@@ -34,7 +34,6 @@ def mock_coordinator():
         mock_inst.session_id = "test-session"
         yield mock_inst
 
-@pytest.mark.anyio
 async def test_app_initialization(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:
@@ -42,7 +41,6 @@ async def test_app_initialization(mock_config, mock_coordinator):
         assert app.query_one("#status_body", Static)
         assert app.query_one(RichLog)
 
-@pytest.mark.anyio
 async def test_app_help_command(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:
@@ -55,7 +53,6 @@ async def test_app_help_command(mock_config, mock_coordinator):
         await pilot.pause()
         assert repl
 
-@pytest.mark.anyio
 async def test_app_quit_binding(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:
@@ -63,7 +60,6 @@ async def test_app_quit_binding(mock_config, mock_coordinator):
         await pilot.press("q")
         assert mock_coordinator.db.close_scan_session.called
 
-@pytest.mark.anyio
 async def test_app_refresh_status(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:

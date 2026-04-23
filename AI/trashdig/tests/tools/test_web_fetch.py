@@ -1,11 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from trashdig.tools.web_fetch import web_fetch
 
 
-@pytest.mark.anyio
 @patch("aiohttp.ClientSession.get")
 async def test_web_fetch(mock_get):
     mock_response = MagicMock()

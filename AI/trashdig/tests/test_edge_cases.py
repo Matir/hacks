@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
 from google.adk.agents import LlmAgent
 
 from trashdig.agents.coordinator import Coordinator
@@ -16,7 +15,6 @@ def create_mock_agent(name="dummy"):
         description="description"
     )
 
-@pytest.mark.anyio
 async def test_stack_scout_malformed_json():
     """Test StackScoutAgent handles malformed JSON response from LLM."""
     with patch("trashdig.agents.recon.load_prompt", autospec=True, return_value="instruction"):
@@ -28,7 +26,6 @@ async def test_stack_scout_malformed_json():
             # In actual usage in Coordinator, it handles the text
             assert await mock_run(agent, "Analyze", "session", MagicMock()) == "This is not JSON"
 
-@pytest.mark.anyio
 async def test_coordinator_init_validation(tmp_path):
     """Test Coordinator initialization with mocks passing Pydantic validation."""
     mock_config = MagicMock(spec=Config)

@@ -1,9 +1,15 @@
 from typing import Any
 
-from trashdig.metadata.languages import get_language_metadata
+from trashdig.metadata.languages import (
+    get_language_metadata,
+)
+from trashdig.metadata.languages import (
+    get_ts_language as _get_ts_language,
+)
+from trashdig.metadata.languages import make_parser as _make_parser
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import _get_ts_language, _make_parser, artifact_tool, get_config
+from .base import artifact_tool, get_config
 
 
 @artifact_tool(max_chars=5000)
@@ -30,7 +36,8 @@ def trace_variable_semantic(variable_name: str, file_path: str, language: str = 
             content = f.read()
 
         parser = _make_parser(language)
-        assert parser is not None  # ts_lang already verified non-None above
+        if parser is None:
+            return f"Error: Could not create parser for {language}"
         tree = parser.parse(content)
 
         usages: list[str] = []

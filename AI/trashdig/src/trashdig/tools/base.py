@@ -7,13 +7,9 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-import tree_sitter
-import tree_sitter_c_sharp
-import tree_sitter_go
-import tree_sitter_javascript
-import tree_sitter_python
 from google.adk.artifacts import BaseArtifactService, FileArtifactService
 from google.adk.tools import ToolContext
+from google.genai import types as genai_types
 
 from trashdig.config import get_config
 from trashdig.sandbox import get_sandbox
@@ -81,55 +77,23 @@ def _run_sandboxed(
         )
 
 
-def _get_ts_language(lang: Any) -> Any:
-    """Gets the tree-sitter language object for the given language string or metadata."""
-    lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
-
-    if lang_name == "python":
-        return tree_sitter.Language(tree_sitter_python.language())
-    if lang_name == "go":
-        return tree_sitter.Language(tree_sitter_go.language())
-    if lang_name in ("javascript", "typescript", "js", "ts"):
-        return tree_sitter.Language(tree_sitter_javascript.language())
-    if lang_name in ("csharp", "cs"):
-        return tree_sitter.Language(tree_sitter_c_sharp.language())
-    return None
-
-
-# Language objects are read-only after construction and safe to share across
-# threads. Parser objects are NOT thread-safe (mutable C state), so we cache
-# only the Language and construct a new Parser per call.
-_LANGUAGE_CACHE: dict[str, tree_sitter.Language] = {}
-
-
-def _make_parser(lang: Any) -> tree_sitter.Parser | None:
-    """Creates a tree-sitter parser with a cached Language for the given language."""
-    lang_name = lang.name if hasattr(lang, "name") else str(lang).lower()
-    if lang_name not in _LANGUAGE_CACHE:
-        ts_lang = _get_ts_language(lang)
-        if ts_lang is None:
-            return None
-        _LANGUAGE_CACHE[lang_name] = ts_lang
-    return tree_sitter.Parser(_LANGUAGE_CACHE[lang_name])
-
-
-_artifact_service: BaseArtifactService | None = None
+class _ArtifactProvider:
+    """Class-level provider for the global artifact service."""
+    instance: BaseArtifactService | None = None
 
 
 def init_artifact_manager(data_dir: str) -> BaseArtifactService:
     """Initializes and returns an artifact service, storing it as the singleton."""
-    global _artifact_service  # noqa: PLW0603
     artifacts_dir = os.path.join(data_dir, "artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
-    _artifact_service = FileArtifactService(artifacts_dir)
-    return _artifact_service
+    _ArtifactProvider.instance = FileArtifactService(artifacts_dir)
+    return _ArtifactProvider.instance
 
 
 def get_artifact_service() -> BaseArtifactService:
     """Returns the artifact service instance configured for the project."""
-    global _artifact_service  # noqa: PLW0602
-    if _artifact_service is not None:
-        return _artifact_service
+    if _ArtifactProvider.instance is not None:
+        return _ArtifactProvider.instance
     config = get_config()
     return FileArtifactService(config.data_dir)
 
@@ -164,8 +128,6 @@ async def _process_tool_result_async(
     func_name: str, result: str, max_chars: int, ctx: ToolContext
 ) -> str:
     """Modern asynchronous tool result processing using ADK Artifacts."""
-    from google.genai import types as genai_types  # noqa: PLC0415
-
     if len(result) <= max_chars:
         return result
 

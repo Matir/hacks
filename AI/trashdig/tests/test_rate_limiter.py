@@ -6,7 +6,6 @@ import pytest
 from trashdig.services.rate_limiter import RateLimiter
 
 
-@pytest.mark.anyio
 async def test_rpm_limit():
     # Limit to 600 RPM = 10 requests per second.
     # Refill rate is 10 tokens per second.
@@ -23,7 +22,6 @@ async def test_rpm_limit():
 
     assert end - start >= 0.05
 
-@pytest.mark.anyio
 async def test_tpm_limit():
     # Limit to 6000 TPM = 100 tokens per second.
     limiter = RateLimiter(tpm_limit=6000)
@@ -41,7 +39,6 @@ async def test_tpm_limit():
 
     assert end - start >= 0.9
 
-@pytest.mark.anyio
 async def test_no_limit():
     limiter = RateLimiter(rpm_limit=None, tpm_limit=None)
 
@@ -53,7 +50,6 @@ async def test_no_limit():
     # Should be very fast
     assert end - start < 0.1
 
-@pytest.mark.anyio
 async def test_concurrent_requests():
     # 600 RPM = 10 req/sec.
     limiter = RateLimiter(rpm_limit=600)
@@ -73,7 +69,6 @@ async def test_concurrent_requests():
 
     assert end - start >= 0.15
 
-@pytest.mark.anyio
 async def test_low_rpm_limit():
     # 1 RPM = 1 token per 60 seconds.
     limiter = RateLimiter(rpm_limit=1)
@@ -95,7 +90,6 @@ async def test_low_rpm_limit():
     else:
         pytest.fail("Should have timed out waiting for RPM token")
 
-@pytest.mark.anyio
 async def test_tpm_negative_tokens():
     # 6000 TPM = 100 tokens per second.
     limiter = RateLimiter(tpm_limit=6000)
@@ -115,7 +109,6 @@ def test_tpm_initial_tokens_zero():
     assert limiter._tpm_tokens == 0.0
 
 
-@pytest.mark.anyio
 async def test_tpm_first_request_proceeds_immediately():
     # With _tpm_tokens at 0, the first request should not wait.
     limiter = RateLimiter(tpm_limit=6000)

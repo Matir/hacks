@@ -97,7 +97,7 @@
 - [ ] **[MEDIUM]** Interactive finding viewer (Markdown rendering).
 - [ ] **[LOW]** "Agent Ask" mechanism for structured questioning (Phase 4).
 - [ ] **[MEDIUM]** Progress Tracking: Add real-time progress bars or a task status dashboard.
-- [x] **[LOW]** Command History Persistence: Save REPL history between sessions.
+- [ ] **[LOW]** Command History Persistence: Save REPL history between sessions.
 
 ## ADK Feature Gaps (not yet tracked)
 
@@ -165,8 +165,8 @@
 - [x] **[MEDIUM]** Improve `get_ast_summary` and `get_scope_info`: support nested definitions, JS arrow functions, and local variable assignments.
 - [x] **[MEDIUM]** Decouple language-specific logic: move hardcoded node types and skips (like `self`/`cls`) from tools to a configuration or metadata structure.
 - [x] **[MEDIUM]** Advanced Taint Analysis: Add support for variable aliasing (data flow through assignments).
-- [ ] **[MEDIUM]** Broaden AST Support: Expand `tree-sitter` node coverage (e.g., arrow functions, expressions) and language support.
-- [ ] **[LOW]** Optimize `tree-sitter` initialization: Move library imports out of hot paths and validate binary dependencies at startup.
+- [x] **[MEDIUM]** Broaden AST Support: Expand `tree-sitter` node coverage (e.g., arrow functions, expressions) and language support.
+- [x] **[LOW]** Optimize `tree-sitter` initialization: Move library imports out of hot paths and validate binary dependencies at startup.
 
 ### Language Expansion (tree-sitter)
 
@@ -262,3 +262,6 @@ Each item requires: (1) adding the grammar package to `pyproject.toml`, (2) addi
 - [x] **[MEDIUM]** Standardize Task/Hypothesis IDs: Resolve naming inconsistency between `id` and `task_id` across database schema, types, and tools.
 - [x] **[LOW]** Enforce Python import standards: Consistent grouping (stdlib, 3rd party, trashdig), alphabetical sorting, and top-level placement via Ruff/isort.
 - [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.
+- [ ] **[MEDIUM]** Add a VulnDB for vulnerability information retrieval.
+- [ ] **[MEDIUM]** Add deterministic checks for the verifier.
+- [ ] **[MEDIUM]** Use long term MemoryService for findings, conversation history, memory across sessions.

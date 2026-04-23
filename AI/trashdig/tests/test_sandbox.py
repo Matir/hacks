@@ -1,4 +1,3 @@
-import sys
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
@@ -25,42 +24,73 @@ def test_null_sandbox():
             check=False
         )
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Minijail only on Linux")
-def test_minijail_sandbox_init():
+@patch("sys.platform", "linux")
+@patch("os.path.exists", return_value=True)
+def test_minijail_sandbox_init(mock_exists):
     set_binary_stub("minijail0", True)
-    sandbox = MinijailSandbox(workspace_dir="/tmp/test")
-    assert sandbox.minijail_path == "/stub/bin/minijail0"
+    try:
+        sandbox = MinijailSandbox(workspace_dir="/tmp/test")
+        assert sandbox.minijail_path == "/stub/bin/minijail0"
+    finally:
+        clear_binary_stubs()
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Minijail only on Linux")
+@patch("sys.platform", "linux")
 @patch("subprocess.run", autospec=True)
 @patch("os.path.exists", autospec=True)
 def test_minijail_sandbox_run(mock_exists, mock_run):
     set_binary_stub("minijail0", True)
-    mock_exists.return_value = True
+    # Mock exists for both the binary and the allowlist paths
+    mock_exists.side_effect = lambda p: True
     mock_run.return_value = MagicMock(stdout="sandboxed", returncode=0)
 
-    sandbox = MinijailSandbox(workspace_dir="/tmp/test", network=False)
-    result = sandbox.run(["ls", "-la"])
+    try:
+        sandbox = MinijailSandbox(workspace_dir="/tmp/test", network=False)
+        result = sandbox.run(["ls", "-la"])
 
-    assert result.stdout == "sandboxed"
-    mock_run.assert_called_once()
-    args = mock_run.call_args[0][0]
+        assert result.stdout == "sandboxed"
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
 
-    assert "/stub/bin/minijail0" in args
-    assert "-v" in args
-    assert "-d" in args
-    assert "-p" in args
-    assert "-r" in args
-    assert "-e" in args # Network disabled
-    assert "-U" in args
-    assert "-b" in args
-    # Check workspace mount
-    assert "/tmp/test,/tmp/test,1" in args
-    # Check some default allowlist mount
-    assert "/bin,/bin,0" in args
-    assert "--" in args
-    assert "ls" in args
-    assert "-la" in args
+        assert "/stub/bin/minijail0" in args
+        assert "-v" in args
+        assert "-d" in args
+        assert "-p" in args
+        assert "-r" in args
+        assert "-e" in args # Network disabled
+        assert "-U" in args
+        assert "-b" in args
+        # Check workspace mount
+        assert "/tmp/test,/tmp/test,1" in args
+        # Check some default allowlist mount
+        assert "/bin,/bin,0" in args
+        assert "--" in args
+        assert "ls" in args
+        assert "-la" in args
+    finally:
+        clear_binary_stubs()
+
+@patch("sys.platform", "darwin")
+@patch("subprocess.run", autospec=True)
+def test_bx_sandbox_run(mock_run):
+    set_binary_stub("bx", True)
+    mock_run.return_value = MagicMock(stdout="bx_sandboxed", returncode=0)
+
+    try:
+        sandbox = BxSandbox(workspace_dir="/tmp/test", network=False, allowlist=["/usr/local/bin"])
+        result = sandbox.run(["id"])
+
+        assert result.stdout == "bx_sandboxed"
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+
+        assert "/stub/bin/bx" in args
+        assert "exec" in args
+        assert "/tmp/test" in args
+        assert "/usr/local/bin" in args
+        assert "--" in args
+        assert "id" in args
+    finally:
+        clear_binary_stubs()
 
 @patch("sys.platform", "darwin")
 def test_get_sandbox_macos_bx_available():

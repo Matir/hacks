@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-import trashdig.tools.base
+import trashdig.metadata.languages
 from trashdig.config import Config
 
 
@@ -16,9 +16,9 @@ def clear_language_cache():
     with TypeError when tree_sitter.Parser receives a MagicMock instead of a
     real Language object.
     """
-    trashdig.tools.base._LANGUAGE_CACHE.clear()
+    trashdig.metadata.languages._LANGUAGE_CACHE.clear()
     yield
-    trashdig.tools.base._LANGUAGE_CACHE.clear()
+    trashdig.metadata.languages._LANGUAGE_CACHE.clear()
 
 
 @pytest.fixture(autouse=True)

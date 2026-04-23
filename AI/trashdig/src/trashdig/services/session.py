@@ -2,7 +2,10 @@
 
 from google.adk.sessions.sqlite_session_service import SqliteSessionService
 
-_session_service: SqliteSessionService | None = None
+
+class SessionProvider:
+    """Class-level provider for the global SessionService instance."""
+    instance: SqliteSessionService | None = None
 
 
 def init_session_service(db_path: str) -> SqliteSessionService:
@@ -14,9 +17,8 @@ def init_session_service(db_path: str) -> SqliteSessionService:
     Returns:
         The initialised SqliteSessionService.
     """
-    global _session_service  # noqa: PLW0603
-    _session_service = SqliteSessionService(db_path=db_path)
-    return _session_service
+    SessionProvider.instance = SqliteSessionService(db_path=db_path)
+    return SessionProvider.instance
 
 
 def get_session_service() -> SqliteSessionService:
@@ -25,8 +27,8 @@ def get_session_service() -> SqliteSessionService:
     Raises:
         RuntimeError: If the service has not been initialised.
     """
-    if _session_service is None:
+    if SessionProvider.instance is None:
         raise RuntimeError(
             "SessionService not initialised. Call init_session_service() first."
         )
-    return _session_service
+    return SessionProvider.instance

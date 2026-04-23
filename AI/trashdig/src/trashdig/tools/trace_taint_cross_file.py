@@ -3,10 +3,15 @@ import re
 from contextlib import suppress
 from typing import Any
 
-from trashdig.metadata.languages import get_language_metadata
+from trashdig.metadata.languages import (
+    get_language_metadata,
+)
+from trashdig.metadata.languages import (
+    make_parser as _make_parser,
+)
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import _make_parser, artifact_tool, get_config
+from .base import artifact_tool, get_config
 from .ripgrep_search import ripgrep_search
 
 
@@ -91,21 +96,12 @@ def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:
     return []
 
 
-def _resolve_import(
+def _resolve_import(  # noqa: C901
     symbol_name: str,
     file_content: bytes,
     language: str = "python",
 ) -> str | None:
-    """Attempt to resolve which module/file a symbol is imported from.
-
-    Args:
-        symbol_name: The name of the symbol to resolve.
-        file_content: Raw bytes of the file where symbol is used.
-        language: Programming language.
-
-    Returns:
-        The likely module name or file path prefix, or None.
-    """
+    """Attempt to resolve which module/file a symbol is imported from."""
     if language != "python":
         return None  # TODO: Implement for other languages
 
@@ -114,38 +110,33 @@ def _resolve_import(
         return None
     tree = parser.parse(file_content)
 
-    # Search for:
-    # 1. from X import symbol_name
-    # 2. import symbol_name (less likely for functions)
-    # 3. import X as symbol_name
+    def _match_dotted_name(node: Any) -> bool:
+        return node.type == "dotted_name" and node.text.decode("utf-8") == symbol_name
 
-    def walk(node: Any) -> str | None:
+    def _match_aliased_import(node: Any) -> str | None:
+        name = node.child_by_field_name("name")
+        alias = node.child_by_field_name("alias")
+        if alias and alias.text.decode("utf-8") == symbol_name:
+            return name.text.decode("utf-8") if name else None
+        if not alias and name and name.text.decode("utf-8") == symbol_name:
+            return "MATCH"
+        return None
+
+    def walk(node: Any) -> str | None:  # noqa: C901
         if node.type == "import_from_statement":
-            # node structure: from module_name import name1, name2
             module_node = node.child_by_field_name("module_name")
             if module_node:
                 module_name = module_node.text.decode("utf-8")
-                # Check if symbol_name is in the imported names
                 for child in node.children:
-                    if child.type == "dotted_name" and child.text.decode("utf-8") == symbol_name:
+                    if _match_dotted_name(child) or _match_aliased_import(child):
                         return module_name
-                    if child.type == "aliased_import":
-                        name = child.child_by_field_name("name")
-                        alias = child.child_by_field_name("alias")
-                        if alias and alias.text.decode("utf-8") == symbol_name:
-                            return module_name
-                        if not alias and name and name.text.decode("utf-8") == symbol_name:
-                            return module_name
-
-        if node.type == "import_statement":
+        elif node.type == "import_statement":
             for child in node.children:
-                if child.type == "dotted_name" and child.text.decode("utf-8") == symbol_name:
+                if _match_dotted_name(child):
                     return symbol_name
-                if child.type == "aliased_import":
-                    alias = child.child_by_field_name("alias")
-                    if alias and alias.text.decode("utf-8") == symbol_name:
-                        name = child.child_by_field_name("name")
-                        return name.text.decode("utf-8") if name else None
+                res = _match_aliased_import(child)
+                if res:
+                    return res if res != "MATCH" else symbol_name
 
         for child in node.children:
             res = walk(child)
@@ -361,7 +352,7 @@ def _resolve_param_name(
     return None
 
 
-def _find_assignment(
+def _find_assignment(  # noqa: C901
     variable_name: str,
     file_content: bytes,
     metadata: Any,
@@ -372,32 +363,28 @@ def _find_assignment(
         return None
     tree = parser.parse(file_content)
 
+    def _get_call_callee(node: Any) -> str | None:
+        if node and node.type in ("call", "call_expression"):
+            callee = node.child_by_field_name("function")
+            return callee.text.decode("utf-8") if callee else None
+        return None
+
     # Search for: variable_name = Value(...)
-    def walk(node: Any) -> str | None:
+    def walk(node: Any) -> str | None:  # noqa: C901
         if node.type in metadata.assignment_types:
             left = node.child_by_field_name("left")
             right = node.child_by_field_name("right")
-            # For some languages, name might be a child declarator
             if not left and node.type in ("variable_declaration", "lexical_declaration"):
                 for child in node.children:
                     if child.type == "variable_declarator":
                         name_node = child.child_by_field_name("name")
                         val_node = child.child_by_field_name("value")
-                        if (
-                            name_node
-                            and name_node.text.decode("utf-8") == variable_name
-                            and val_node
-                        ) and val_node.type in ("call", "call_expression"):
-                            callee = val_node.child_by_field_name("function")
-                            if callee:
-                                return callee.text.decode("utf-8")
+                        if name_node and name_node.text.decode("utf-8") == variable_name:
+                            return _get_call_callee(val_node)
 
-            if left and left.text.decode("utf-8") == variable_name and right:
-                if right.type in ("call", "call_expression"):
-                    # Extract callee of the assignment (e.g. 'Database' in 'db = Database()')
-                    callee = right.child_by_field_name("function")
-                    if callee:
-                        return callee.text.decode("utf-8")
+            if left and left.text.decode("utf-8") == variable_name:
+                return _get_call_callee(right)
+
         for child in node.children:
             res = walk(child)
             if res:
@@ -405,6 +392,40 @@ def _find_assignment(
         return None
 
     return walk(tree.root_node)
+
+
+def _resolve_callee_files(
+    callee: str,
+    callee_node: Any,
+    file_content: bytes,
+    project_root: str,
+    metadata: Any,
+) -> tuple[list[str], str | None]:
+    """Resolve which files likely define a callee."""
+    path = _get_full_callee_path(callee_node, metadata)
+    obj_name = path[0] if len(path) > 1 else None
+
+    if obj_name:
+        imported_module = _resolve_import(obj_name, file_content, metadata.name)
+        if not imported_module:
+            assigned_from = _find_assignment(obj_name, file_content, metadata)
+            if assigned_from:
+                imported_module = _resolve_import(assigned_from, file_content, metadata.name)
+
+        if imported_module:
+            m_path = _module_to_file_path(imported_module, project_root)
+            if m_path:
+                return [m_path], obj_name
+            return [], imported_module  # Library module
+
+    # Check if function itself is imported
+    imported_module = _resolve_import(callee, file_content, metadata.name)
+    if imported_module:
+        m_path = _module_to_file_path(imported_module, project_root)
+        if m_path:
+            return [m_path], None
+
+    return _find_function_files(callee, project_root, metadata), None
 
 
 def _process_tainted_calls(  # noqa: PLR0913
@@ -423,7 +444,6 @@ def _process_tainted_calls(  # noqa: PLR0913
     found_sink = False
 
     for callee, arg_idx, line_no, callee_node in calls:
-        # Check if it's a known direct sink
         if callee in metadata.sinks:
             report_lines.append(
                 f"{indent}  *** SINK *** Line {line_no}: '{var}' passed to '{callee}()' "
@@ -432,97 +452,35 @@ def _process_tainted_calls(  # noqa: PLR0913
             found_sink = True
             continue
 
-        # Check for method sinks (e.g. conn.execute)
         is_method_sink_candidate = callee in metadata.method_sinks
-
         report_lines.append(
             f"{indent}  CALL Line {line_no}: '{var}' → '{callee}()' (arg {arg_idx}) — following..."
         )
 
-        # --- ENHANCED RESOLUTION ---
-        callee_files: list[str] = []
+        callee_files, obj_context = _resolve_callee_files(
+            callee, callee_node, file_content, project_root, metadata
+        )
 
-        # 1. Check if it's an attribute call (obj.method)
-        path = _get_full_callee_path(callee_node, metadata)
-        obj_name = None
-        if len(path) > 1:
-            obj_name = path[0]
-            # Try to see where obj_name comes from
-            # a) Is it an imported module name?
-            imported_module = _resolve_import(obj_name, file_content, metadata.name)
-            if not imported_module:
-                # b) Is it a local variable assigned from an imported class?
-                assigned_from = _find_assignment(obj_name, file_content, metadata)
-                if assigned_from:
-                    imported_module = _resolve_import(assigned_from, file_content, metadata.name)
-
-            if imported_module:
-                m_path = _module_to_file_path(imported_module, project_root)
-                if m_path:
-                    callee_files = [m_path]
-                # It's an imported module but not in project (e.g. stdlib)
-                # If it's a known method sink, treat as sink
-                elif is_method_sink_candidate:
-                    report_lines.append(
-                        f"{indent}  *** SINK (Library) *** Line {line_no}: '{var}' passed to '{callee}()' "
-                        f"on library object '{obj_name}' (module '{imported_module}')"
-                    )
-                    found_sink = True
-                    continue
-
-        # 2. Check if the function itself is imported
-        if not callee_files:
-            imported_module = _resolve_import(callee, file_content, metadata.name)
-            if imported_module:
-                m_path = _module_to_file_path(imported_module, project_root)
-                if m_path:
-                    callee_files = [m_path]
-
-        # 3. Fallback to global search
-        if not callee_files:
-            callee_files = _find_function_files(callee, project_root, metadata)
-
-        # 4. Final heuristic for method sinks:
-        # If it's a method sink (like .execute) and we still have NO files OR multiple files
-        # but none were resolved via imports, it might be a library sink (sqlite3.execute).
         if is_method_sink_candidate and not callee_files:
-            report_lines.append(
-                f"{indent}  *** SINK (Method) *** Line {line_no}: '{var}' passed to '{callee}()' "
-                f"on object '{obj_name}' — potential library sink"
-            )
+            msg = f"on library object '{obj_context}'" if obj_context else "— potential library sink"
+            report_lines.append(f"{indent}  *** SINK (Method) *** Line {line_no}: '{var}' passed to '{callee}()' {msg}")
             found_sink = True
             continue
 
         if not callee_files:
-            report_lines.append(
-                f"{indent}    [definition of '{callee}' not found in project — "
-                f"may be an external library call]"
-            )
+            report_lines.append(f"{indent}    [definition of '{callee}' not found in project — may be external]")
             continue
 
         if len(callee_files) > 1:
-            report_lines.append(
-                f"{indent}    [Warning: multiple definitions for '{callee}' found. Following first match in {callee_files[0]}]"
-            )
+            report_lines.append(f"{indent}    [Warning: multiple matches for '{callee}'. Following first in {callee_files[0]}]")
 
-        callee_file = callee_files[0]
-        abs_callee_file = os.path.join(project_root, callee_file)
-        param_name = _resolve_param_name(callee, arg_idx, abs_callee_file, metadata)
+        abs_file = os.path.join(project_root, callee_files[0])
+        param_name = _resolve_param_name(callee, arg_idx, abs_file, metadata)
         if param_name:
-            _trace_recursive(
-                param_name,
-                callee_file,
-                depth + 1,
-                max_depth,
-                visited,
-                report_lines,
-                project_root,
-                metadata,
-            )
+            _trace_recursive(param_name, callee_files[0], depth + 1, max_depth, visited, report_lines, project_root, metadata)
         else:
-            report_lines.append(
-                f"{indent}    [could not resolve param at index {arg_idx} in {callee}]"
-            )
+            report_lines.append(f"{indent}    [could not resolve param {arg_idx} in {callee}]")
+
     return found_sink
 
 

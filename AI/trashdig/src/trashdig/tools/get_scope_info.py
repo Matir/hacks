@@ -1,9 +1,15 @@
 from typing import Any
 
-from trashdig.metadata.languages import get_language_metadata
+from trashdig.metadata.languages import (
+    get_language_metadata,
+)
+from trashdig.metadata.languages import (
+    get_ts_language as _get_ts_language,
+)
+from trashdig.metadata.languages import make_parser as _make_parser
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import _get_ts_language, _make_parser, get_config
+from .base import get_config
 
 
 def _find_enclosing_scopes(node: Any, target_line: int, metadata: Any) -> list[Any]:
@@ -23,28 +29,32 @@ def _find_enclosing_scopes(node: Any, target_line: int, metadata: Any) -> list[A
     return scopes
 
 
+def _extract_params_from_node(p: Any, metadata: Any) -> list[str]:
+    """Helper to extract names from a parameter node."""
+    params = []
+    if p.type == "identifier":
+        name = p.text.decode("utf-8")
+        if name not in metadata.skip_symbols:
+            params.append(name)
+    elif p.type in metadata.parameter_types:
+        for child in p.children:
+            if child.type == "identifier":
+                name = child.text.decode("utf-8")
+                if name not in metadata.skip_symbols:
+                    params.append(name)
+                break
+    return params
+
+
 def _extract_params(func_node: Any, metadata: Any) -> list[str]:
     """Extract parameter names from a function node."""
     params: list[str] = []
 
-    # Standard parameters field
     params_node = func_node.child_by_field_name("parameters")
     if params_node:
         for p in params_node.children:
-            if p.type == "identifier":
-                name = p.text.decode("utf-8")
-                if name not in metadata.skip_symbols:
-                    params.append(name)
-            elif p.type in metadata.parameter_types:
-                # Recursive check for identifier in these types
-                for child in p.children:
-                    if child.type == "identifier":
-                        name = child.text.decode("utf-8")
-                        if name not in metadata.skip_symbols:
-                            params.append(name)
-                        break
+            params.extend(_extract_params_from_node(p, metadata))
 
-    # Language-specific special cases
     if not params and metadata.name == "javascript" and func_node.type == "arrow_function":
         p = func_node.child_by_field_name("parameter")
         if p and p.type == "identifier":
@@ -53,41 +63,38 @@ def _extract_params(func_node: Any, metadata: Any) -> list[str]:
     return params
 
 
-def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -> list[str]:
+def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -> list[str]:  # noqa: C901
     """Extract variables defined within a scope up to a target line."""
     vars_found: list[str] = []
 
-    def walk(node: Any) -> None:
+    def _handle_decl(node: Any) -> None:
+        """Helper for JS/C# multiple declarators."""
+        for child in node.children:
+            if child.type == "variable_declarator":
+                name_node = child.child_by_field_name("name")
+                if name_node and name_node.type == "identifier":
+                    name = name_node.text.decode("utf-8")
+                    if name not in vars_found:
+                        vars_found.append(name)
+
+    def _handle_assignment(node: Any) -> None:
+        left = node.child_by_field_name("left")
+        if not left and node.type == "variable_declaration":
+            _handle_decl(node)
+        elif left and left.type == "identifier":
+            name = left.text.decode("utf-8")
+            if name not in vars_found and name not in metadata.skip_symbols:
+                vars_found.append(name)
+        elif node.type in {"lexical_declaration", "variable_declaration"}:
+            _handle_decl(node)
+
+    def walk(node: Any) -> None:  # noqa: C901
         # Stop if we passed the target line
         if node.start_point[0] > target_line:
             return
 
         if node.type in metadata.assignment_types:
-            # Python/JS/Go assignment
-            left = node.child_by_field_name("left")
-            if not left and node.type == "variable_declaration":
-                # JS/C# decls might have multiple declarators
-                for child in node.children:
-                    if child.type == "variable_declarator":
-                        name_node = child.child_by_field_name("name")
-                        if name_node and name_node.type == "identifier":
-                            name = name_node.text.decode("utf-8")
-                            if name not in vars_found:
-                                vars_found.append(name)
-
-            if left and left.type == "identifier":
-                name = left.text.decode("utf-8")
-                if name not in vars_found and name not in metadata.skip_symbols:
-                    vars_found.append(name)
-            elif node.type in {"lexical_declaration", "variable_declaration"}:
-                # Handle JS declarators explicitly
-                for child in node.children:
-                    if child.type == "variable_declarator":
-                        name_node = child.child_by_field_name("name")
-                        if name_node and name_node.type == "identifier":
-                            name = name_node.text.decode("utf-8")
-                            if name not in vars_found:
-                                vars_found.append(name)
+            _handle_assignment(node)
 
         # Skip walking into nested scopes (they have their own local variables)
         if node != scope_node and node.type in metadata.scope_types:
@@ -123,7 +130,8 @@ def get_scope_info(file_path: str, line_number: int, language: str = "python") -
             content = f.read()
 
         parser = _make_parser(language)
-        assert parser is not None  # ts_lang already verified non-None above
+        if parser is None:
+            return f"Error: Could not create parser for {language}"
         tree = parser.parse(content)
 
         target_line = line_number - 1

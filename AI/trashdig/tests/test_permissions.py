@@ -53,7 +53,6 @@ def test_wrap_tool_sync_denied():
     assert "Permission denied" in result
     mock_confirm.assert_called_once()
 
-@pytest.mark.anyio
 async def test_wrap_tool_async():
     async def async_tool(name: str):
         return f"Hello {name}"
@@ -66,7 +65,6 @@ async def test_wrap_tool_async():
     result = await wrapped_tool.func("world")
     assert result == "Hello world"
 
-@pytest.mark.anyio
 async def test_wrap_tool_async_denied():
     async def async_tool(command: str):
         return f"Running {command}"
@@ -109,7 +107,6 @@ def test_tool_decorator_sync():
     assert my_tool(10) == 10
     assert my_tool() == 1
 
-@pytest.mark.anyio
 async def test_tool_decorator_async():
     pm = PermissionManager()
 
