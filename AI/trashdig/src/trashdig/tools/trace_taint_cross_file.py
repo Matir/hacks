@@ -77,7 +77,7 @@ def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:
                 "attribute_expression",
             ):
                 path.extend(_get_full_callee_path(obj, metadata))
-            elif obj.type == "call" or obj.type == "call_expression":
+            elif obj.type in {"call", "call_expression"}:
                 # For call().method, we might want to know the call's callee
                 inner_callee_node = obj.child_by_field_name("function")
                 if inner_callee_node:
@@ -387,11 +387,10 @@ def _find_assignment(
                             name_node
                             and name_node.text.decode("utf-8") == variable_name
                             and val_node
-                        ):
-                            if val_node.type in ("call", "call_expression"):
-                                callee = val_node.child_by_field_name("function")
-                                if callee:
-                                    return callee.text.decode("utf-8")
+                        ) and val_node.type in ("call", "call_expression"):
+                            callee = val_node.child_by_field_name("function")
+                            if callee:
+                                return callee.text.decode("utf-8")
 
             if left and left.text.decode("utf-8") == variable_name and right:
                 if right.type in ("call", "call_expression"):

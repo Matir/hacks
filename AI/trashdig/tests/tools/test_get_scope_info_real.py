@@ -11,7 +11,7 @@ from trashdig.tools.get_scope_info import get_scope_info
 def mock_workspace(tmp_path):
     c = MagicMock(spec=Config)
     c.workspace_root = str(tmp_path)
-    c.resolve_workspace_path.side_effect = lambda x: os.path.abspath(x)
+    c.resolve_workspace_path.side_effect = os.path.abspath
 
     with patch("trashdig.config.get_config", return_value=c), \
          patch("trashdig.tools.get_scope_info.get_config", return_value=c):
@@ -23,12 +23,12 @@ global_var = 1
 
 def outer_func(param1):
     local_var = 2
-    
+
     def inner_func(param2):
         inner_var = 3
         # TARGET LINE
         pass
-    
+
     inner_func(local_var)
 """
     f = tmp_path / "sample.py"

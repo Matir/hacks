@@ -11,7 +11,7 @@ from trashdig.tools.trace_variable_semantic import trace_variable_semantic
 def mock_workspace(tmp_path):
     c = MagicMock(spec=Config)
     c.workspace_root = str(tmp_path)
-    c.resolve_workspace_path.side_effect = lambda x: os.path.abspath(x)
+    c.resolve_workspace_path.side_effect = os.path.abspath
 
     with patch("trashdig.config.get_config", return_value=c), \
          patch("trashdig.tools.trace_variable_semantic.get_config", return_value=c):

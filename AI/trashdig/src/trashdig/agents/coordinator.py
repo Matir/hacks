@@ -4,8 +4,9 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from google.adk.agents import LlmAgent, LoopAgent
+from google.adk.agents import BaseAgent, LlmAgent, LoopAgent
 from google.adk.artifacts import BaseArtifactService
+from google.adk.runners import Runner
 from google.adk.sessions import BaseSessionService
 from google.adk.tools import AgentTool, FunctionTool
 from pydantic import PrivateAttr
@@ -250,7 +251,32 @@ class Coordinator(LlmAgent):
         return self._cost_tracker.total_cost
 
     @property
-    def hunter(self) -> LlmAgent:
+    def input_tokens(self) -> int:
+        """Returns the total input tokens used."""
+        return self._cost_tracker.total_input_tokens
+
+    @property
+    def output_tokens(self) -> int:
+        """Returns the total output tokens used."""
+        return self._cost_tracker.total_output_tokens
+
+    @property
+    def total_messages(self) -> int:
+        """Returns the total number of LLM messages."""
+        return self._cost_tracker.total_messages
+
+    @property
+    def task_queue(self) -> list[Any]:
+        """Returns the current task queue (stub for TUI compatibility)."""
+        return []
+
+    @property
+    def completed_tasks(self) -> list[Any]:
+        """Returns the completed tasks (stub for TUI compatibility)."""
+        return []
+
+    @property
+    def hunter(self) -> BaseAgent:
         """Returns the Hunter agent instance."""
         # Find it in sub_agents or sub_agents of sub_agents
         for sa in self.sub_agents:
@@ -259,7 +285,7 @@ class Coordinator(LlmAgent):
         raise RuntimeError("Hunter agent not found in Coordinator sub-agents.")
 
     @property
-    def stack_scout(self) -> LlmAgent:
+    def stack_scout(self) -> BaseAgent:
         """Returns the StackScout agent instance."""
         for sa in self.sub_agents:
             if sa.name == "stack_scout":
@@ -267,7 +293,7 @@ class Coordinator(LlmAgent):
         raise RuntimeError("StackScout agent not found in Coordinator sub-agents.")
 
     @property
-    def web_route_mapper(self) -> LlmAgent:
+    def web_route_mapper(self) -> BaseAgent:
         """Returns the WebRouteMapper agent instance."""
         for sa in self.sub_agents:
             if sa.name == "web_route_mapper":
@@ -275,7 +301,7 @@ class Coordinator(LlmAgent):
         raise RuntimeError("WebRouteMapper agent not found in Coordinator sub-agents.")
 
     @property
-    def hunter_loop(self) -> LoopAgent:
+    def hunter_loop(self) -> BaseAgent:
         """Returns the Hunter LoopAgent instance."""
         for sa in self.sub_agents:
             if sa.name == "hunter_loop":
@@ -283,7 +309,7 @@ class Coordinator(LlmAgent):
         raise RuntimeError("Hunter loop agent not found in Coordinator sub-agents.")
 
     @property
-    def skeptic(self) -> LlmAgent:
+    def skeptic(self) -> BaseAgent:
         """Returns the Skeptic agent instance."""
         for sa in self.sub_agents:
             if sa.name == "skeptic":
@@ -291,7 +317,7 @@ class Coordinator(LlmAgent):
         raise RuntimeError("Skeptic agent not found in Coordinator sub-agents.")
 
     @property
-    def validator(self) -> LlmAgent:
+    def validator(self) -> BaseAgent:
         """Returns the Validator agent instance."""
         for sa in self.sub_agents:
             if sa.name == "validator":
@@ -385,12 +411,17 @@ class Coordinator(LlmAgent):
         # Phase 2: Hypothesis-driven hunting loop using ADK LoopAgent
         self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop...")
 
-        async for _ in self.hunter_loop.run_async(
-            session_id=f"{self._scan_session_id}:hunt_loop",
-            user_id="default_user",
+        runner = Runner(
+            agent=self.hunter_loop,
+            app_name="hunter_loop",
             session_service=self._session_service,
             artifact_service=self._artifact_service,
-            history_summarizer=self._summarizer
+            auto_create_session=True,
+        )
+
+        async for _ in runner.run_async(
+            user_id="default_user",
+            session_id=f"{self._scan_session_id}:hunt_loop",
         ):
             pass
 
@@ -652,7 +683,7 @@ class Coordinator(LlmAgent):
         self.log(f"Verification complete: [bold]{finding.verification_status}[/bold]")
         return {"status": finding.verification_status, "poc_code": finding.poc}
 
-    def _agent_by_name(self, name: str) -> LlmAgent:
+    def _agent_by_name(self, name: str) -> BaseAgent:
         """Finds a sub-agent by name."""
         if name == "coordinator":
             return self

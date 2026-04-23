@@ -40,7 +40,7 @@ def test_toolset_from_config_stdio():
         transport="stdio",
         command="cmd"
     )
-    with patch("trashdig.tools.mcp_toolsets.McpToolset") as mock_toolset, \
+    with patch("trashdig.tools.mcp_toolsets.McpToolset"), \
          patch("trashdig.tools.mcp_toolsets.StdioConnectionParams") as mock_params:
         result = _toolset_from_config(srv)
         assert result is not None
@@ -52,7 +52,7 @@ def test_toolset_from_config_sse():
         transport="sse",
         url="http://url"
     )
-    with patch("trashdig.tools.mcp_toolsets.McpToolset") as mock_toolset, \
+    with patch("trashdig.tools.mcp_toolsets.McpToolset"), \
          patch("trashdig.tools.mcp_toolsets.SseConnectionParams") as mock_params:
         result = _toolset_from_config(srv)
         assert result is not None
@@ -64,7 +64,7 @@ def test_toolset_from_config_http():
         transport="http",
         url="http://url"
     )
-    with patch("trashdig.tools.mcp_toolsets.McpToolset") as mock_toolset, \
+    with patch("trashdig.tools.mcp_toolsets.McpToolset"), \
          patch("trashdig.tools.mcp_toolsets.StreamableHTTPConnectionParams") as mock_params:
         result = _toolset_from_config(srv)
         assert result is not None

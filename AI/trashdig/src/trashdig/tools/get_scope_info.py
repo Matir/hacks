@@ -79,7 +79,7 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
                 name = left.text.decode("utf-8")
                 if name not in vars_found and name not in metadata.skip_symbols:
                     vars_found.append(name)
-            elif node.type == "lexical_declaration" or node.type == "variable_declaration":
+            elif node.type in {"lexical_declaration", "variable_declaration"}:
                 # Handle JS declarators explicitly
                 for child in node.children:
                     if child.type == "variable_declarator":

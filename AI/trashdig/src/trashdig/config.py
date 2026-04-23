@@ -96,13 +96,15 @@ class Config:
     @property
     def data_dir(self) -> str:
         """Returns the directory for TrashDig artifacts and state."""
-        path = self.data.get("data_dir", ".trashdig")
+        db_cfg = self.data.get("database", {})
+        path = db_cfg.get("data_dir", self.data.get("data_dir", ".trashdig"))
         return self.resolve_workspace_path(path)
 
     @property
     def db_path(self) -> str:
         """Returns the path to the project SQLite database."""
-        path = self.data.get("db_path", "{datadir}/trashdig.db")
+        db_cfg = self.data.get("database", {})
+        path = db_cfg.get("path", db_cfg.get("db_path", "{datadir}/trashdig.db"))
         return self.resolve_workspace_path(path)
 
     def resolve_workspace_path(self, path_template: str) -> str:

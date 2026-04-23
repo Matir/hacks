@@ -11,7 +11,7 @@ from trashdig.tools.get_ast_summary import get_ast_summary
 def mock_workspace(tmp_path):
     c = MagicMock(spec=Config)
     c.workspace_root = str(tmp_path)
-    c.resolve_workspace_path.side_effect = lambda x: os.path.abspath(x)
+    c.resolve_workspace_path.side_effect = os.path.abspath
 
     with patch("trashdig.config.get_config", return_value=c), \
          patch("trashdig.tools.get_ast_summary._config_module.get_config", return_value=c):
@@ -25,7 +25,7 @@ def hello(name: str):
 class Greeter:
     def __init__(self, greeting="Hi"):
         self.greeting = greeting
-    
+
     def greet(self, name):
         print(f"{self.greeting} {name}")
 """

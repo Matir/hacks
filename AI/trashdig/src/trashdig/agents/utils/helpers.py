@@ -233,7 +233,6 @@ async def run_agent(  # noqa: PLR0913
         session_service=session_service,
         artifact_service=artifact_service,
         auto_create_session=True,
-        history_summarizer=summarizer,
     )
 
     content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])
