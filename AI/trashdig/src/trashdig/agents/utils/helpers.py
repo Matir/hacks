@@ -92,19 +92,46 @@ def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig 
 
 
 def log_auth_info(config: "Config", logger: logging.Logger) -> None:
-    """Log authentication information for every provider referenced by agents."""
-    referenced: dict[str, ProviderConfig] = {}
+    """Log model and authentication information for every provider referenced by agents."""
+    referenced: dict[str, set[str]] = {}
+    
+    # Track which models use which provider
     for agent_cfg in config.agents.values():
         if agent_cfg.provider not in referenced:
-            referenced[agent_cfg.provider] = config.get_provider_config(agent_cfg.provider)
+            referenced[agent_cfg.provider] = set()
+        referenced[agent_cfg.provider].add(agent_cfg.model)
 
     if not referenced:
         default_provider = config.default_provider
-        referenced[default_provider] = config.get_provider_config(default_provider)
+        referenced[default_provider] = {config.default_model}
 
-    for prov_name, prov_cfg in referenced.items():
+    for prov_name, models in referenced.items():
+        prov_cfg = config.get_provider_config(prov_name)
         for line in describe_provider_auth(prov_name, prov_cfg):
             logger.info(line)
+        logger.info(f"  models: {', '.join(sorted(models))}")
+
+
+def print_model_info(config: "Config") -> None:
+    """Print model and authentication information to the console."""
+    from rich.console import Console
+    console = Console()
+    
+    referenced: dict[str, set[str]] = {}
+    for agent_cfg in config.agents.values():
+        if agent_cfg.provider not in referenced:
+            referenced[agent_cfg.provider] = set()
+        referenced[agent_cfg.provider].add(agent_cfg.model)
+
+    if not referenced:
+        default_provider = config.default_provider
+        referenced[default_provider] = {config.default_model}
+
+    for prov_name, models in referenced.items():
+        prov_cfg = config.get_provider_config(prov_name)
+        for line in describe_provider_auth(prov_name, prov_cfg):
+            console.print(f"[bold blue]{line}[/bold blue]")
+        console.print(f"  [dim]models:[/dim] [green]{', '.join(sorted(models))}[/green]")
 
 
 def load_prompt(file_name: str) -> str:

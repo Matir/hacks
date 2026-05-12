@@ -29,6 +29,7 @@ from trashdig.agents.utils.helpers import (
     google_provider_extras,
     load_prompt,
     log_auth_info,
+    print_model_info,
     read_file_content,
     run_agent,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "google_provider_extras",
     "load_prompt",
     "log_auth_info",
+    "print_model_info",
     "parse_json_response",
     "read_file_content",
     "run_agent",

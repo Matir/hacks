@@ -1,92 +1,1078 @@
 [
   {
-    "id": "CWE-89",
-    "title": "SQL Injection",
-    "category": "Injection",
-    "severity": "Critical",
+    "id": "CWE-22",
+    "title": "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
+    "category": "Broken Access Control",
+    "severity": "High",
     "tags": [
-      "sql",
-      "injection",
-      "database",
-      "data-manipulation"
+      "path traversal",
+      "directory traversal",
+      "file inclusion",
+      "access control",
+      "input validation"
     ],
     "active_patterns": [
       {
-        "name": "SQL Injection - String Concatenation",
-        "pattern": "$_GET[\"x\"]",
+        "name": "Path Traversal - Simple Concatenation",
+        "pattern": "$BASE_DIR + $USER_INPUT",
+        "languages": [
+          "python",
+          "javascript",
+          "php"
+        ]
+      },
+      {
+        "name": "Path Traversal - os.path.join without validation",
+        "pattern": "os.path.join($BASE_DIR, $USER_INPUT)",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "Path Traversal - java.io.File constructor with user input",
+        "pattern": "new java.io.File($BASE_DIR, $USER_INPUT)",
+        "languages": [
+          "java"
+        ]
+      },
+      {
+        "name": "Path Traversal - PHP include/require with user-controlled path",
+        "pattern": "include($USER_INPUT)",
         "languages": [
           "php"
         ]
       },
       {
-        "name": "SQL Injection - OR 1=1",
-        "pattern": "OR 1=1",
-        "languages": [
-          "sql"
-        ]
-      },
-      {
-        "name": "SQL Injection - unsanitized parameter in SQL query",
-        "pattern": "mysql_query(\"$VAR\")",
+        "name": "Path Traversal - PHP include/require with user-controlled path (require_once)",
+        "pattern": "require_once($USER_INPUT)",
         "languages": [
           "php"
         ]
       },
       {
-        "name": "SQL Injection - parameterized query missing",
-        "pattern": "db.query(\"SELECT * FROM users WHERE username = '\" + username + \"'\")",
+        "name": "Path Traversal - PHP include/require with user-controlled path (include_once)",
+        "pattern": "include_once($USER_INPUT)",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "Path Traversal - PHP include/require with user-controlled path (require)",
+        "pattern": "require($USER_INPUT)",
+        "languages": [
+          "php"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_22.md"
+  },
+  {
+    "id": "CWE-285",
+    "title": "Improper Authorization",
+    "category": "Broken Access Control",
+    "severity": "High",
+    "tags": [
+      "authorization",
+      "access control",
+      "privilege escalation",
+      "bypass"
+    ],
+    "active_patterns": [
+      {
+        "name": "Authorization Bypass - Missing check",
+        "pattern": "if (request.user.is_authenticated):\n  do_something_sensitive()",
+        "languages": [
+          "python"
+        ],
+        "description": "Detects if sensitive function called without explicit authorization check."
+      },
+      {
+        "name": "Authorization Bypass - Simple Role Check",
+        "pattern": "if (user_role == 'guest'):\n  return permission_denied()\n do_something_sensitive()",
+        "languages": [
+          "python",
+          "javascript",
+          "java"
+        ],
+        "description": "Detects if authorization implemented incorrectly through basic role check."
+      }
+    ],
+    "content_path": "content/cwe_285.md"
+  },
+  {
+    "id": "CWE-611",
+    "title": "Improper Restriction of XML External Entity Reference",
+    "category": "Software and Data Integrity Failures",
+    "severity": "High",
+    "tags": [
+      "XML",
+      "XXE",
+      "External Entity",
+      "Data Leakage",
+      "Remote Code Execution"
+    ],
+    "active_patterns": [
+      {
+        "name": "XXE - Unsafe XML Parsing (Java)",
+        "pattern": "SAXParserFactory factory = SAXParserFactory.newInstance();\nfactory.setFeature(\"http://xml.org/sax/features/external-general-entities\", false);\nfactory.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\nXMLReader reader = factory.newSAXParser().getXMLReader();\nreader.setContentHandler($HANDLER);",
+        "languages": [
+          "java"
+        ],
+        "message": "This code appears to be parsing XML without disabling external entities, which can lead to XXE vulnerabilities. Ensure external entities are disabled."
+      },
+      {
+        "name": "XXE - Unsafe XML Parsing (Python)",
+        "pattern": "import xml.etree.ElementTree as ET\n...\nroot = ET.fromstring($XML_DATA)",
+        "languages": [
+          "python"
+        ],
+        "message": "This code is parsing XML without explicitly disabling external entity processing.  Consider using `defusedxml` or explicitly disabling external entities."
+      },
+      {
+        "name": "XXE - Unsafe XML Parsing (PHP)",
+        "pattern": "$xml = simplexml_load_string($xmlString, 'SimpleXMLElement', LIBXML_NOENT);",
+        "languages": [
+          "php"
+        ],
+        "message": "Using LIBXML_NOENT is highly discouraged as it enables external entities and can lead to XXE attacks. Avoid using this flag."
+      }
+    ],
+    "content_path": "content/cwe_611.md"
+  },
+  {
+    "id": "CWE-312",
+    "title": "Cleartext Storage of Sensitive Information",
+    "category": "Cryptographic Failures",
+    "severity": "High",
+    "tags": [
+      "storage",
+      "cryptography",
+      "PII",
+      "credentials",
+      "data-protection"
+    ],
+    "active_patterns": [
+      {
+        "name": "javascript-localstorage-sensitive-data",
+        "languages": [
+          "javascript",
+          "typescript"
+        ],
+        "pattern": "localStorage.setItem($KEY, $VALUE)"
+      },
+      {
+        "name": "python-cleartext-file-write",
+        "languages": [
+          "python"
+        ],
+        "pattern": "with open($FILE, 'w') as $F:\n    $F.write(..., $SECRET, ...)"
+      },
+      {
+        "name": "android-shared-prefs-cleartext",
+        "languages": [
+          "java"
+        ],
+        "pattern": "$PREFS.edit().putString($KEY, $VALUE).apply()"
+      }
+    ],
+    "content_path": "content/cwe_312.md"
+  },
+  {
+    "id": "CWE-79",
+    "title": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+    "category": "Injection",
+    "severity": "High",
+    "tags": [
+      "XSS",
+      "Reflected XSS",
+      "Stored XSS",
+      "DOM XSS",
+      "Web Security",
+      "OWASP Top 10"
+    ],
+    "active_patterns": [
+      {
+        "name": "js-assignment-to-innerhtml",
+        "pattern": "$EL.innerHTML = $SINK",
         "languages": [
           "javascript"
         ]
       },
       {
-        "name": "SQL Injection - format string injection",
-        "pattern": "db.execute(f\"SELECT * FROM products WHERE id = {product_id}\")",
+        "name": "php-reflected-xss-echo",
+        "pattern": "echo $_GET[$VAR]",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "python-flask-render-template-string",
+        "pattern": "flask.render_template_string(\"...\" + $VAR, ...)",
         "languages": [
           "python"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_79.md"
+  },
+  {
+    "id": "CWE-89",
+    "title": "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')",
+    "category": "Injection",
+    "severity": "Critical",
+    "tags": [
+      "SQLi",
+      "Injection",
+      "Database",
+      "Persistence",
+      "OWASP-A03:2021"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-psycopg2-format-string-sqli",
+        "pattern": "$CUR.execute(f\"...{$VAR}...\")",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "java-jdbc-statement-concatenation",
+        "pattern": "$STMT.executeQuery(\"SELECT * FROM \" + $TABLE + \" WHERE \" + $VAR)",
+        "languages": [
+          "java"
+        ]
+      },
+      {
+        "name": "nodejs-mysql-query-concat",
+        "pattern": "db.query(\"SELECT * FROM users WHERE id = \" + $REQ.body.$VAR)",
+        "languages": [
+          "javascript"
         ]
       }
     ],
     "content_path": "content/cwe_89.md"
   },
   {
-    "id": "CWE-79",
-    "title": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
-    "category": "Injection",
-    "severity": "Medium",
+    "id": "CWE-352",
+    "title": "Cross-Site Request Forgery (CSRF)",
+    "category": "Broken Access Control",
+    "severity": "High",
     "tags": [
-      "xss",
-      "web",
-      "injection",
-      "client-side"
+      "CSRF",
+      "XSRF",
+      "Session Management",
+      "OWASP Top 10",
+      "Web Security"
     ],
     "active_patterns": [
       {
-        "name": "Reflected XSS - GET Parameter into HTML",
-        "pattern": "<?php echo $_GET['...']; ?>",
+        "name": "django-csrf-exempt-decorator",
+        "pattern": "@csrf_exempt",
         "languages": [
-          "php"
-        ]
-      },
-      {
-        "name": "Stored XSS - Unescaped User Input",
-        "pattern": "<div>$USER_INPUT</div>",
-        "languages": [
-          "html",
-          "php",
-          "javascript",
           "python"
         ]
       },
       {
-        "name": "DOM XSS - Sink in JavaScript",
-        "pattern": "element.innerHTML = someVariable;",
+        "name": "spring-security-csrf-disabled",
+        "pattern": ".csrf().disable()",
+        "languages": [
+          "java"
+        ]
+      },
+      {
+        "name": "express-csurf-not-used",
+        "pattern": "app.use(session(...));\n... \n// focus: absence of csurf()",
         "languages": [
           "javascript"
         ]
       }
     ],
-    "content_path": "content/cwe_79.md"
+    "content_path": "content/cwe_352.md"
+  },
+  {
+    "id": "CWE-862",
+    "title": "Missing Authorization",
+    "category": "Broken Access Control",
+    "severity": "High",
+    "tags": [
+      "authorization",
+      "access control",
+      "privilege escalation",
+      "security",
+      "OWASP A01:2021"
+    ],
+    "active_patterns": [
+      {
+        "name": "spring-controller-missing-authorization",
+        "languages": [
+          "java"
+        ],
+        "pattern": "rules:\n  - id: spring-missing-preauthorize\n    patterns:\n      - pattern: |\n          @RestController\n          class $CLASS {\n            ...\n            @RequestMapping(...)\n            public $TYPE $FUNC(...) { ... }\n          }\n      - pattern-not: |\n          @RestController\n          class $CLASS {\n            ...\n            @PreAuthorize(...)\n            @RequestMapping(...)\n            public $TYPE $FUNC(...) { ... }\n          }\n    message: Potential missing authorization check on Spring controller method.\n    severity: WARNING"
+      },
+      {
+        "name": "flask-missing-login-required",
+        "languages": [
+          "python"
+        ],
+        "pattern": "rules:\n  - id: flask-missing-auth-decorator\n    patterns:\n      - pattern: |\n          @app.route($ROUTE, ...)\n          def $FUNC(...):\n            ...\n      - pattern-not: |\n          @app.route($ROUTE, ...)\n          @login_required\n          def $FUNC(...):\n            ...\n    message: Flask route potentially missing @login_required or authorization check.\n    severity: WARNING"
+      }
+    ],
+    "content_path": "content/cwe_862.md"
+  },
+  {
+    "id": "CWE-787",
+    "title": "Out-of-bounds Write",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Critical",
+    "tags": [
+      "buffer overflow",
+      "memory safety",
+      "rce",
+      "c",
+      "cpp",
+      "stack-overflow",
+      "heap-overflow"
+    ],
+    "active_patterns": [
+      {
+        "name": "dangerous-strcpy-usage",
+        "pattern": "pattern: strcpy($DEST, $SRC)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "dangerous-sprintf-usage",
+        "pattern": "pattern: sprintf($DEST, $FORMAT, ...)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "potential-memcpy-overflow",
+        "pattern": "pattern: memcpy($DEST, $SRC, $LEN)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_787.md"
+  },
+  {
+    "id": "CWE-416",
+    "title": "Use After Free",
+    "category": "Software and Data Integrity Failures",
+    "severity": "High",
+    "tags": [
+      "memory-safety",
+      "uaf",
+      "pointer-dereference",
+      "c",
+      "cpp",
+      "memory-corruption"
+    ],
+    "active_patterns": [
+      {
+        "name": "c-use-after-free",
+        "languages": [
+          "c",
+          "cpp"
+        ],
+        "pattern": "free($PTR);\n...\n$PTR"
+      },
+      {
+        "name": "cpp-use-after-delete",
+        "languages": [
+          "cpp"
+        ],
+        "pattern": "delete $PTR;\n...\n$PTR"
+      }
+    ],
+    "content_path": "content/cwe_416.md"
+  },
+  {
+    "id": "CWE-125",
+    "title": "Out-of-bounds Read",
+    "category": "Software and Data Integrity Failures",
+    "severity": "High",
+    "tags": [
+      "memory-safety",
+      "buffer-overflow",
+      "out-of-bounds",
+      "information-disclosure",
+      "c-cpp"
+    ],
+    "active_patterns": [
+      {
+        "name": "potential-oob-read-index",
+        "pattern": "$METHOD(..., $TYPE* $BUF, int $IDX, ...) {\n  ...\n  return $BUF[$IDX];\n}",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "off-by-one-loop-oob",
+        "pattern": "for (int $I = 0; $I <= $LEN; $I++) {\n  ... $BUF[$I] ...\n}",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_125.md"
+  },
+  {
+    "id": "CWE-117",
+    "title": "Improper Output Neutralization for Logs",
+    "category": "Security Logging and Monitoring Failures",
+    "severity": "Medium",
+    "tags": [
+      "log-injection",
+      "log-forging",
+      "crlf-injection",
+      "monitoring-evasion"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-log-injection",
+        "languages": [
+          "python"
+        ],
+        "pattern": "import logging\n...\nlogging.$LEVEL(f\"...{...}...\")"
+      },
+      {
+        "name": "java-log-injection",
+        "languages": [
+          "java"
+        ],
+        "pattern": "org.slf4j.Logger $L;\n...\n$L.$METHOD(..., $INPUT, ...);"
+      },
+      {
+        "name": "go-log-injection",
+        "languages": [
+          "go"
+        ],
+        "pattern": "log.Printf(\"...%s...\", $INPUT)"
+      }
+    ],
+    "content_path": "content/cwe_117.md"
+  },
+  {
+    "id": "CWE-915",
+    "title": "Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+    "category": "Software and Data Integrity Failures",
+    "severity": "High",
+    "tags": [
+      "mass assignment",
+      "overposting",
+      "object injection",
+      "api security",
+      "data binding"
+    ],
+    "active_patterns": [
+      {
+        "name": "javascript-mass-assignment-assign",
+        "pattern": "Object.assign($TARGET, req.body)",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "name": "javascript-mass-assignment-spread",
+        "pattern": "{...$TARGET, ...req.body}",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "name": "ruby-rails-permit-all",
+        "pattern": "params.permit!",
+        "languages": [
+          "ruby"
+        ]
+      },
+      {
+        "name": "python-pydantic-extra-allow",
+        "pattern": "class $CLASS(BaseModel):\n    class Config:\n        extra = 'allow'",
+        "languages": [
+          "python"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_915.md"
+  },
+  {
+    "id": "CWE-94",
+    "title": "Improper Control of Generation of Code ('Code Injection')",
+    "category": "Injection",
+    "severity": "Critical",
+    "tags": [
+      "Remote Code Execution",
+      "RCE",
+      "Eval",
+      "Injection",
+      "Dynamic Code Execution"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-eval-injection",
+        "pattern": "eval($ARG)",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "javascript-eval-injection",
+        "pattern": "eval($ARG)",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "name": "php-eval-injection",
+        "pattern": "eval(...);",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "python-exec-injection",
+        "pattern": "exec($ARG)",
+        "languages": [
+          "python"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_94.md"
+  },
+  {
+    "id": "CWE-120",
+    "title": "Buffer Copy without Checking Size of Input",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Critical",
+    "tags": [
+      "buffer-overflow",
+      "memory-safety",
+      "C",
+      "C++",
+      "RCE",
+      "stack-smashing"
+    ],
+    "active_patterns": [
+      {
+        "name": "use-of-gets",
+        "pattern": "gets(...)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "unchecked-strcpy",
+        "pattern": "strcpy($DEST, $SRC)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "unchecked-sprintf",
+        "pattern": "sprintf($DEST, $FORMAT, ...)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "unchecked-strcat",
+        "pattern": "strcat($DEST, $SRC)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_120.md"
+  },
+  {
+    "id": "CWE-78",
+    "title": "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+    "category": "Injection",
+    "severity": "Critical",
+    "tags": [
+      "command-injection",
+      "shell-injection",
+      "rce",
+      "injection",
+      "backdoor"
+    ],
+    "active_patterns": [
+      {
+        "name": "python_subprocess_shell_true",
+        "pattern": "subprocess.run(..., shell=True, ...)",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "nodejs_child_process_exec",
+        "pattern": "child_process.exec($CMD, ...)",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "name": "java_runtime_exec",
+        "pattern": "java.lang.Runtime.getRuntime().exec($CMD)",
+        "languages": [
+          "java"
+        ]
+      },
+      {
+        "name": "php_shell_exec",
+        "pattern": "shell_exec($CMD)",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "ruby_kernel_exec",
+        "pattern": "Kernel.system($CMD)",
+        "languages": [
+          "ruby"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_78.md"
+  },
+  {
+    "id": "CWE-434",
+    "title": "Unrestricted Upload of File with Dangerous Type",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Critical",
+    "tags": [
+      "file-upload",
+      "remote-code-execution",
+      "rce",
+      "webshell",
+      "malware-distribution"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-flask-unvalidated-file-save",
+        "languages": [
+          "python"
+        ],
+        "pattern": "- pattern: |\n    $FILE = request.files[...]\n    ...\n    $FILE.save(..., $FILE.filename, ...)\n  message: \"Detected a file save using the original user-supplied filename. This can lead to path traversal or RCE if the extension is not validated.\""
+      },
+      {
+        "name": "php-unvalidated-move-uploaded-file",
+        "languages": [
+          "php"
+        ],
+        "pattern": "- pattern: move_uploaded_file($_FILES[$VAR]['tmp_name'], ... . $_FILES[$VAR]['name'])\n  message: \"Detected move_uploaded_file using the original filename without apparent validation.\""
+      },
+      {
+        "name": "nodejs-multer-diskstorage-no-filter",
+        "languages": [
+          "javascript"
+        ],
+        "pattern": "- pattern: |\n    multer.diskStorage({\n      filename: function ($REQ, $FILE, $CB) {\n        $CB(null, $FILE.originalname);\n      }\n    })\n  message: \"Multer diskStorage implementation uses original filename without validation.\""
+      }
+    ],
+    "content_path": "content/cwe_434.md"
+  },
+  {
+    "id": "CWE-476",
+    "title": "NULL Pointer Dereference",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Medium",
+    "tags": [
+      "Memory Safety",
+      "NULL Pointer",
+      "DoS",
+      "Crash",
+      "Runtime Error"
+    ],
+    "active_patterns": [
+      {
+        "name": "c-malloc-unchecked-dereference",
+        "pattern": "$P = malloc(...); ... *$P = $V;",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "java-null-check-logic-error",
+        "pattern": "if ($OBJ == null) { ... } $OBJ.$METHOD();",
+        "languages": [
+          "java"
+        ]
+      },
+      {
+        "name": "python-attribute-access-after-none-check",
+        "pattern": "if $X is None: ... $X.$ATTR",
+        "languages": [
+          "python"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_476.md"
+  },
+  {
+    "id": "CWE-121",
+    "title": "Stack-based Buffer Overflow",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Critical",
+    "tags": [
+      "buffer-overflow",
+      "memory-corruption",
+      "stack",
+      "rce",
+      "binary-safety"
+    ],
+    "active_patterns": [
+      {
+        "name": "dangerous-strcpy",
+        "pattern": "strcpy($DEST, $SRC)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "dangerous-gets",
+        "pattern": "gets(...)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "unsafe-sprintf",
+        "pattern": "sprintf($DEST, $FORMAT, ...)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "unsafe-scanf",
+        "pattern": "scanf(\"%s\", $VAR)",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_121.md"
+  },
+  {
+    "id": "CWE-502",
+    "title": "Deserialization of Untrusted Data",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Critical",
+    "tags": [
+      "deserialization",
+      "remote-code-execution",
+      "object-injection",
+      "untrusted-data",
+      "gadget-chains"
+    ],
+    "active_patterns": [
+      {
+        "name": "java_deserialization_readobject",
+        "pattern": "$OIS.readObject()",
+        "languages": [
+          "java"
+        ]
+      },
+      {
+        "name": "python_pickle_loads",
+        "pattern": "pickle.loads(...)",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "php_unserialize",
+        "pattern": "unserialize(...)",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "nodejs_node_serialize",
+        "pattern": "require('node-serialize').unserialize(...)",
+        "languages": [
+          "javascript"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_502.md"
+  },
+  {
+    "id": "CWE-122",
+    "title": "Heap-based Buffer Overflow",
+    "category": "Software and Data Integrity Failures",
+    "severity": "Critical",
+    "tags": [
+      "buffer overflow",
+      "heap",
+      "memory corruption",
+      "C",
+      "C++",
+      "RCE"
+    ],
+    "active_patterns": [
+      {
+        "name": "heap_strcpy_overflow",
+        "pattern": "pattern: |\n  $PTR = ($TYPE *)malloc($SIZE);\n  ...\n  strcpy($PTR, $SRC);\nlanguages: [c, cpp]",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "heap_memcpy_unbounded",
+        "pattern": "pattern: |\n  $PTR = malloc($SIZE);\n  ...\n  memcpy($PTR, $SRC, $LEN);\nlanguages: [c, cpp]",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "name": "heap_gets_usage",
+        "pattern": "pattern: |\n  $PTR = malloc(...);\n  ...\n  gets($PTR);\nlanguages: [c, cpp]",
+        "languages": [
+          "c",
+          "cpp"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_122.md"
+  },
+  {
+    "id": "CWE-863",
+    "title": "Incorrect Authorization",
+    "category": "Broken Access Control",
+    "severity": "High",
+    "tags": [
+      "authorization",
+      "access-control",
+      "privilege-escalation",
+      "RBAC",
+      "ABAC",
+      "IDOR"
+    ],
+    "active_patterns": [
+      {
+        "name": "spring-missing-authorization-annotation",
+        "languages": [
+          "java"
+        ],
+        "pattern": "pattern-either:\n  - pattern: |\n      @RestController\n      class $CLASS {\n        ...\n        @PostMapping(...)\n        public $RET $METHOD(...) { ... }\n      }\n  - pattern: |\n      @Controller\n      class $CLASS {\n        ...\n        @RequestMapping(...)\n        public $RET $METHOD(...) { ... }\n      }\npattern-not-inside: |\n  @PreAuthorize(...)\n  ...\npattern-not-inside: |\n  @Secured(...)\n  ..."
+      },
+      {
+        "name": "express-missing-auth-middleware",
+        "languages": [
+          "javascript"
+        ],
+        "pattern": "pattern: |\n  app.$METHOD('$PATH', (req, res) => {\n    ...\n  })\npattern-not: |\n  app.$METHOD('$PATH', $AUTH_MW, (req, res) => {\n    ...\n  })"
+      }
+    ],
+    "content_path": "content/cwe_863.md"
+  },
+  {
+    "id": "CWE-20",
+    "title": "Improper Input Validation",
+    "category": "Software and Data Integrity Failures",
+    "severity": "High",
+    "tags": [
+      "input-validation",
+      "untrusted-source",
+      "data-integrity",
+      "sanitization"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-unvalidated-input-in-eval",
+        "pattern": "eval(request.$W.get(...))",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "nodejs-unvalidated-path-traversal",
+        "pattern": "fs.readFile(req.query.$VAR, ...)",
+        "languages": [
+          "javascript"
+        ]
+      },
+      {
+        "name": "generic-shell-injection-unvalidated",
+        "pattern": "os.system($USER_INPUT)",
+        "languages": [
+          "python"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_20.md"
+  },
+  {
+    "id": "CWE-77",
+    "title": "Improper Neutralization of Special Elements used in a Command ('Command Injection')",
+    "category": "Injection",
+    "severity": "Critical",
+    "tags": [
+      "Command Injection",
+      "RCE",
+      "OS Commands",
+      "Neutralization",
+      "Shell"
+    ],
+    "active_patterns": [
+      {
+        "name": "python_subprocess_shell_true",
+        "pattern": "subprocess.run(..., shell=True, ...)",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "node_child_process_exec",
+        "pattern": "child_process.exec($CMD, ...)",
+        "languages": [
+          "javascript"
+        ]
+      },
+      {
+        "name": "php_system_call",
+        "pattern": "system($INPUT)",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "ruby_backticks_interpolation",
+        "pattern": "`${$INPUT}`",
+        "languages": [
+          "ruby"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_77.md"
+  },
+  {
+    "id": "CWE-200",
+    "title": "Exposure of Sensitive Information to an Unauthorized Actor",
+    "category": "Broken Access Control",
+    "severity": "Medium",
+    "tags": [
+      "information-leakage",
+      "pii",
+      "stack-trace",
+      "credentials",
+      "metadata"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-flask-debug-enabled",
+        "languages": [
+          "python"
+        ],
+        "pattern": "app.run(..., debug=True, ...)"
+      },
+      {
+        "name": "express-expose-stack-trace",
+        "languages": [
+          "javascript"
+        ],
+        "pattern": "res.status($CODE).send($ERR.stack)"
+      },
+      {
+        "name": "java-print-stack-trace",
+        "languages": [
+          "java"
+        ],
+        "pattern": "$EX.printStackTrace()"
+      }
+    ],
+    "content_path": "content/cwe_200.md"
+  },
+  {
+    "id": "CWE-284",
+    "title": "Improper Access Control",
+    "category": "Broken Access Control",
+    "severity": "High",
+    "tags": [
+      "Authorization",
+      "Access Control",
+      "RBAC",
+      "IDOR",
+      "Privilege Escalation",
+      "Horizontal Privilege Escalation",
+      "Vertical Privilege Escalation"
+    ],
+    "active_patterns": [
+      {
+        "name": "flask-missing-auth-decorator",
+        "languages": [
+          "python"
+        ],
+        "pattern": "rules:\n  - id: flask-missing-auth-decorator\n    patterns:\n      - pattern-inside: |\n          @app.route(...)\n          def $FUNC(...):\n            ...\n      - pattern-not-inside: |\n          @app.route(...)\n          @login_required\n          def $FUNC(...):\n            ...\n    message: Flask route may be missing authentication/authorization decorators.\n    severity: WARNING"
+      },
+      {
+        "name": "generic-idor-database-query",
+        "languages": [
+          "python",
+          "javascript",
+          "go"
+        ],
+        "pattern": "rules:\n  - id: generic-idor-database-query\n    patterns:\n      - pattern-either:\n        - pattern: $DB.query(\"SELECT * FROM users WHERE id = \" + $REQ.params.id)\n        - pattern: $DB.execute(\"UPDATE orders SET status = ... WHERE id = ?\", [$ID])\n    message: Potential Insecure Direct Object Reference (IDOR). Ensure the user has permission to access the resource associated with this ID.\n    severity: ERROR"
+      }
+    ],
+    "content_path": "content/cwe_284.md"
+  },
+  {
+    "id": "CWE-306",
+    "title": "Missing Authentication for Critical Function",
+    "category": "Identification and Authentication Failures",
+    "severity": "Critical",
+    "tags": [
+      "authentication",
+      "broken-access-control",
+      "missing-auth",
+      "unauthorized-access",
+      "privilege-escalation"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-flask-missing-auth-decorator",
+        "pattern": "rules:\n  - id: flask-missing-auth-decorator\n    languages: [python]\n    message: Found a potential administrative route without a login_required decorator.\n    severity: ERROR\n    patterns:\n      - pattern-either:\n          - pattern: | \n              @app.route(\"/admin/...\")\n              def $FUNC(...):\n                  ...\n          - pattern: | \n              @app.route(\"/api/v1/delete/...\")\n              def $FUNC(...):\n                  ...\n      - pattern-not:\n          - pattern: |\n              @app.route(...)\n              @login_required\n              def $FUNC(...):\n                  ...",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "express-unprotected-admin-route",
+        "pattern": "rules:\n  - id: express-unprotected-admin-route\n    languages: [javascript, typescript]\n    message: Express route handler for sensitive path appears to lack authentication middleware.\n    severity: ERROR\n    patterns:\n      - pattern-either:\n          - pattern: app.post('/admin/+', (req, res) => { ... })\n          - pattern: app.delete('/api/+', (req, res) => { ... })\n      - pattern-not:\n          - pattern: app.post('/admin/+', $AUTH_MIDDLEWARE, (req, res) => { ... })\n          - pattern: app.delete('/api/+', $AUTH_MIDDLEWARE, (req, res) => { ... })",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_306.md"
   },
   {
     "id": "CWE-918",
@@ -95,35 +1081,116 @@
     "severity": "High",
     "tags": [
       "SSRF",
-      "Server-Side Request",
       "Request Forgery",
-      "URL Injection",
-      "Internal Network",
-      "External Interaction"
+      "Network Security",
+      "Cloud Metadata",
+      "OOB"
     ],
     "active_patterns": [
       {
-        "name": "Unvalidated URL Parameter",
-        "pattern": "$url = $_GET['url'];\n$response = file_get_contents($url);",
-        "languages": [
-          "php"
-        ]
-      },
-      {
-        "name": "Unvalidated URL Parameter (Python)",
-        "pattern": "import requests\nurl = request.args.get('url')\nresponse = requests.get(url)",
+        "name": "python-requests-ssrf",
+        "pattern": "requests.get($URL, ...)",
         "languages": [
           "python"
         ]
       },
       {
-        "name": "Unvalidated URL Parameter (Java)",
-        "pattern": "URL url = new URL(request.getParameter(\"url\"));\nInputStream in = url.openStream();",
+        "name": "node-axios-ssrf",
+        "pattern": "axios.get($URL, ...)",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "name": "go-http-ssrf",
+        "pattern": "http.Get($URL)",
+        "languages": [
+          "go"
+        ]
+      },
+      {
+        "name": "java-url-ssrf",
+        "pattern": "new URL($URL).openConnection()",
         "languages": [
           "java"
         ]
       }
     ],
     "content_path": "content/cwe_918.md"
+  },
+  {
+    "id": "CWE-770",
+    "title": "Allocation of Resources Without Limits or Throttling",
+    "category": "Insecure Design",
+    "severity": "High",
+    "tags": [
+      "Denial of Service",
+      "Resource Exhaustion",
+      "Availability",
+      "Memory Management",
+      "Throttling"
+    ],
+    "active_patterns": [
+      {
+        "name": "unbounded-memory-allocation-go",
+        "languages": [
+          "go"
+        ],
+        "pattern": "func $F(..., $LEN int, ...) {\n  ...\n  $VAR := make([]$TYPE, $LEN)\n  ...\n}"
+      },
+      {
+        "name": "unbounded-read-python",
+        "languages": [
+          "python"
+        ],
+        "pattern": "$DATA = $FOO.read($USER_INPUT)"
+      },
+      {
+        "name": "unbounded-list-multiplication-python",
+        "languages": [
+          "python"
+        ],
+        "pattern": "$VAR = [$EL] * $USER_INPUT"
+      }
+    ],
+    "content_path": "content/cwe_770.md"
+  },
+  {
+    "id": "CWE-639",
+    "title": "Authorization Bypass Through User-Controlled Key",
+    "category": "Broken Access Control",
+    "severity": "High",
+    "tags": [
+      "IDOR",
+      "Insecure Direct Object Reference",
+      "Authorization",
+      "Access Control",
+      "Broken Access Control"
+    ],
+    "active_patterns": [
+      {
+        "name": "python-flask-idor-check",
+        "languages": [
+          "python"
+        ],
+        "pattern": "request.args.get($KEY)\n...\n$MODEL.query.filter_by(id=$KEY).first()"
+      },
+      {
+        "name": "express-js-idor-check",
+        "languages": [
+          "javascript"
+        ],
+        "pattern": "req.params.$ID\n...\n$DB.collection($COL).findOne({ _id: $ID })"
+      },
+      {
+        "name": "django-idor-vulnerability",
+        "languages": [
+          "python"
+        ],
+        "pattern": "$MODEL.objects.get(id=request.POST.get($ID))"
+      }
+    ],
+    "content_path": "content/cwe_639.md"
   }
 ]

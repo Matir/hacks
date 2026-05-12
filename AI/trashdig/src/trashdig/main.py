@@ -141,6 +141,9 @@ def main() -> None:  # noqa: PLR0915
     if is_batch:
         console = Console()
         console.print("[bold blue]TrashDig:[/bold blue] running in batch mode...")
+        
+        from trashdig.agents.utils.helpers import print_model_info
+        print_model_info(config)
 
         coordinator = Coordinator(
             config, project_path=config.workspace_root, artifact_service=art_service

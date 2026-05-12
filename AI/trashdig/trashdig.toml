@@ -1,7 +1,7 @@
 # TrashDig Configuration
 
 # Global model defaults
-model = "gemini-2.0-flash"
+model = "gemini-3-flash-preview"
 provider = "google"
 require_sandbox = false
 

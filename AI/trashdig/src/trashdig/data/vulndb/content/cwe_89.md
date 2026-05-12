@@ -1,123 +1,79 @@
 ## Description
+SQL Injection (SQLi) occurs when an application receives untrusted data and includes it in a database query without proper sanitization or parameterization. Because SQL queries are constructed as strings, an attacker can provide input that includes SQL syntax (e.g., `' OR '1'='1`), effectively altering the query's logic. This allows the attacker to "break out" of the intended data field and execute arbitrary commands against the database.
 
-SQL Injection (SQLI) is a code injection technique that exploits security vulnerabilities in an application's software. These vulnerabilities occur when user-supplied input is improperly filtered for string literal escape characters embedded in SQL statements or when user input is not strongly typed and thereby unexpectedly executed. SQLI allows an attacker to interfere with the queries that an application makes to its database. An attacker can view data that they are normally unable to retrieve, they can modify or delete this data, cause authentication bypass, execute arbitrary OS commands on the database server, or they can escalate their privileges to administrative level.
-
-SQL Injection is one of the most prevalent web application vulnerabilities, due to the widespread use of SQL databases, coupled with programming practices that fail to adequately sanitize user input.
+SQLi vulnerabilities generally fall into three categories:
+1.  **In-band SQLi (Classic):** The attacker uses the same communication channel to launch the attack and gather results (e.g., Error-based or Union-based).
+2.  **Inferential SQLi (Blind):** The attacker observes the application's response (e.g., generic error pages or time delays) to reconstruct the database structure.
+3.  **Out-of-band SQLi:** The attacker triggers the database to make a request to an external server they control (e.g., DNS or HTTP requests).
 
 ## Impact
-
-Successful SQL Injection attacks can have devastating consequences, including:
-
-*   **Data Breach:** Unauthorized access to sensitive data, such as user credentials, financial records, and proprietary information.
-*   **Data Manipulation:** Modifying or deleting data, leading to data corruption, financial loss, or reputational damage.
-*   **Authentication Bypass:** Circumventing authentication mechanisms to gain unauthorized access to application functionality.
-*   **Remote Code Execution:** In some cases, attackers can execute arbitrary code on the database server, leading to complete system compromise.
-*   **Denial of Service:** Disrupting the availability of the application or database server.
+The impact of SQL Injection is often catastrophic, as it grants attackers direct access to the application's most sensitive data. Potential consequences include:
+*   **Confidentiality:** Unauthorized viewing of user data, credentials, and intellectual property.
+*   **Integrity:** Unauthorized modification or deletion of records, leading to data corruption or financial fraud.
+*   **Availability:** Dropping tables or overwhelming the database with complex queries to cause a Denial of Service (DoS).
+*   **Authentication Bypass:** Logging in as administrative users without knowing their passwords.
+*   **Remote Code Execution (RCE):** In some configurations (e.g., MSSQL `xp_cmdshell`), an attacker can transition from database access to full operating system compromise.
 
 ## Remediation
+The primary defense against SQL Injection is ensuring that user input is never treated as executable code.
 
-Preventing SQL Injection requires a multi-layered approach:
+### 1. Use Parameterized Queries (Prepared Statements)
+This is the most effective defense. Prepared statements ensure that the database treats the user input strictly as data, not as part of the SQL command.
 
-1.  **Input Validation:** Always validate user input to ensure it conforms to expected formats and lengths. Reject any input that does not meet the validation criteria. This includes whitelist validation rather than blacklist validation.
+### 2. Use Object-Relational Mapping (ORM)
+Modern ORMs (like Django ORM, Hibernate, or Entity Framework) use parameterized queries by default. However, developers must avoid using "raw" query functions provided by these ORMs with unsanitized input.
 
-2.  **Parameterized Queries (Prepared Statements):** The most effective way to prevent SQL Injection is to use parameterized queries (also known as prepared statements). Parameterized queries separate the SQL code from the data, preventing the database from interpreting user-supplied input as part of the SQL command.
+### 3. Input Validation
+Implement strict allow-lists for user input. If a field expects an integer, ensure it is an integer before passing it to any database logic.
 
-    *   **Example (PHP):**
-
-        ```php
-        // Vulnerable code
-        $username = $_POST['username'];
-        $query = "SELECT * FROM users WHERE username = '$username'";
-        $result = mysqli_query($conn, $query);
-
-        // Secure code using prepared statements
-        $username = $_POST['username'];
-        $stmt = $conn->prepare("SELECT * FROM users WHERE username = ?");
-        $stmt->bind_param("s", $username); // 's' indicates a string parameter
-        $stmt->execute();
-        $result = $stmt->get_result();
-        ```
-
-    *   **Example (Python):**
-
-        ```python
-        # Vulnerable code
-        username = request.form['username']
-        query = "SELECT * FROM users WHERE username = '%s'" % username
-        cursor.execute(query)
-
-        # Secure code using prepared statements
-        username = request.form['username']
-        query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(query, (username,))
-        ```
-
-    *   **Example (Java):**
-
-        ```java
-        // Vulnerable code
-        String username = request.getParameter("username");
-        String query = "SELECT * FROM users WHERE username = '" + username + "'";
-        Statement statement = connection.createStatement();
-        ResultSet resultSet = statement.executeQuery(query);
-
-        // Secure code using prepared statements
-        String username = request.getParameter("username");
-        String query = "SELECT * FROM users WHERE username = ?";
-        PreparedStatement preparedStatement = connection.prepareStatement(query);
-        preparedStatement.setString(1, username);
-        ResultSet resultSet = preparedStatement.executeQuery();
-        ```
-
-3.  **Escaping User-Supplied Data:** If parameterized queries are not feasible, carefully escape user-supplied data before including it in SQL queries. Use the database's built-in escaping functions (e.g., `mysqli_real_escape_string` in PHP, `quote_identifier` in Python's `psycopg2`). However, this approach is less secure than parameterized queries and should be avoided if possible.  Escaping should be the last line of defense, not the first.
-
-4.  **Principle of Least Privilege:** Configure database user accounts with the minimum necessary privileges. Avoid using the `root` or `administrator` account for application database connections.
-
-5.  **Web Application Firewall (WAF):** Deploy a WAF to filter out malicious SQL Injection attempts. A WAF can detect and block common SQL Injection patterns.
-
-6.  **Regular Security Audits:** Conduct regular security audits and penetration testing to identify and address SQL Injection vulnerabilities in your applications.
-
-7.  **Keep Software Up-to-Date:** Regularly update your database management system (DBMS) and application frameworks to patch known vulnerabilities.
+### 4. Principle of Least Privilege
+Configure the database user account used by the application to have only the minimum permissions required. For example, the application user should not have `DROP TABLE` or `GRANT` permissions.
 
 ## Examples
 
-**Vulnerable Code (PHP):**
+### Vulnerable Code (Python)
+In this example, the developer uses an f-string to build a query, allowing an attacker to manipulate the string structure.
+```python
+import sqlite3
 
-```php
-<?php
-  $id = $_GET['id'];
-  $query = "SELECT * FROM products WHERE id = " . $id;
-  $result = mysql_query($query); // Vulnerable to SQL injection
-?>
+def get_user_profile(user_id):
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    # VULNERABLE: Direct string interpolation
+    query = f"SELECT username, email FROM users WHERE id = '{user_id}'"
+    cursor.execute(query)
+    return cursor.fetchone()
+
+# Attacker input for user_id: '1' OR '1'='1'
 ```
 
-**Vulnerable Code (Java):**
+### Secure Code (Python)
+The secure version uses placeholders (`?`) and passes the input as a separate tuple, which the database driver handles safely.
+```python
+import sqlite3
 
+def get_user_profile(user_id):
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    # SECURE: Using parameterized queries
+    query = "SELECT username, email FROM users WHERE id = ?"
+    cursor.execute(query, (user_id,))
+    return cursor.fetchone()
+```
+
+### Vulnerable Code (Java/JDBC)
 ```java
-String productId = request.getParameter("productId");
-String query = "SELECT * FROM products WHERE product_id = '" + productId + "'";
+String customerName = request.getParameter("customerName");
+String query = "SELECT account_balance FROM accounts WHERE customer_name = '" + customerName + "'";
 Statement statement = connection.createStatement();
-ResultSet rs = statement.executeQuery(query);
+ResultSet rs = statement.executeQuery(query); // VULNERABLE
 ```
 
-**Secure Code (PHP):**
-
-```php
-<?php
-  $id = $_GET['id'];
-  $stmt = $pdo->prepare("SELECT * FROM products WHERE id = :id");
-  $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-  $stmt->execute();
-  $result = $stmt->fetchAll();
-?>
-```
-
-**Secure Code (Java):**
-
+### Secure Code (Java/JDBC)
 ```java
-String productId = request.getParameter("productId");
-String query = "SELECT * FROM products WHERE product_id = ?";
-PreparedStatement preparedStatement = connection.prepareStatement(query);
-preparedStatement.setString(1, productId);
-ResultSet rs = preparedStatement.executeQuery();
+String customerName = request.getParameter("customerName");
+String query = "SELECT account_balance FROM accounts WHERE customer_name = ?";
+PreparedStatement pstmt = connection.prepareStatement(query);
+pstmt.setString(1, customerName); // SECURE: Data is bound to a parameter
+ResultSet rs = pstmt.executeQuery();
 ```
