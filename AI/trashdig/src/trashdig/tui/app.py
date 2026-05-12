@@ -17,6 +17,8 @@ from trashdig.agents.utils.helpers import get_project_structure, log_auth_info
 from trashdig.config import Config
 from trashdig.findings import Finding
 from trashdig.tools import get_artifact_service
+from trashdig.tui.screens.ask import AskModal
+from trashdig.tui.screens.findings import FindingsScreen
 
 if TYPE_CHECKING:
     from trashdig.agents.coordinator import Coordinator
@@ -321,6 +323,7 @@ class TrashDigApp(App):
         Binding("q", "quit", "Quit"),
         Binding("f5", "scan", "Scan"),
         Binding("f6", "prioritize", "Prioritize"),
+        Binding("v", "view_findings", "Findings"),
         Binding("ctrl+l", "clear_log", "Clear Log"),
     ]
     DEFAULT_CSS = """
@@ -336,6 +339,27 @@ class TrashDigApp(App):
     }
     #repl_log {
         overflow-x: hidden;
+    }
+    .code_block {
+        background: $boost;
+        border: solid $accent;
+        padding: 1 2;
+        margin: 1 0;
+    }
+    .detail_header {
+        background: $accent;
+        color: $text;
+        text-style: bold;
+        padding: 1 2;
+        margin-bottom: 1;
+    }
+    #action_buttons {
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+    #action_buttons Button {
+        margin: 0 1;
     }
     """
 
@@ -357,7 +381,12 @@ class TrashDigApp(App):
 
         art_service = get_artifact_service()
 
-        self.coordinator = Coordinator(self.config, project_path=workspace_root, artifact_service=art_service)
+        self.coordinator = Coordinator(
+            self.config,
+            project_path=workspace_root,
+            on_ask=self._on_ask,
+            artifact_service=art_service,
+        )
         self.coordinator.on_task_event = lambda msg: self.call_from_thread(self._on_coordinator_log, msg)
         self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)
         self.prioritized_targets: list[str] = []
@@ -374,6 +403,16 @@ class TrashDigApp(App):
 
     def _on_coordinator_log(self, message: str) -> None:
         self.log_message("info", message)
+
+    async def _on_ask(self, question: str) -> str:
+        """Handles a question from an agent by showing a modal.
+
+        Args:
+            question: The question to ask.
+        """
+        self.log_message("info", f"[bold red]Interaction Required:[/bold red] {question}")
+        result = await self.push_screen_wait(AskModal(question))
+        return cast(str, result)
 
     def on_worker_state_changed(self, event: Any) -> None:
         """Catch worker failures and surface them in the console and log."""
@@ -547,6 +586,10 @@ class TrashDigApp(App):
     def action_clear_log(self) -> None:
         """Clears the REPL console log."""
         self.query_one("#repl_log", RichLog).clear()
+
+    def action_view_findings(self) -> None:
+        """Opens the findings browser screen."""
+        self.push_screen(FindingsScreen())
 
 
 if __name__ == "__main__":

@@ -138,8 +138,9 @@ def get_project_structure(root_path: str | None = None) -> list[str]:
     Args:
         root_path: The directory to walk. Defaults to Config workspace_root.
     """
+    cfg = get_config()
     if root_path is None:
-        root_path = get_config().workspace_root
+        root_path = cfg.workspace_root
 
     files: list[str] = []
     gitignore_path = os.path.join(root_path, ".gitignore")
@@ -148,7 +149,7 @@ def get_project_structure(root_path: str | None = None) -> list[str]:
         with open(gitignore_path, encoding="utf-8") as f:
             spec = PathSpec.from_lines("gitignore", f.readlines())
 
-    noisy_dirs = {".git", "node_modules", "dist", "vendor", "__pycache__", ".venv", "findings", "tests"}
+    noisy_dirs = cfg.noisy_dirs
 
     for root, dirs, filenames in os.walk(root_path):
         dirs[:] = [d for d in dirs if d not in noisy_dirs]

@@ -1,0 +1,129 @@
+[
+  {
+    "id": "CWE-89",
+    "title": "SQL Injection",
+    "category": "Injection",
+    "severity": "Critical",
+    "tags": [
+      "sql",
+      "injection",
+      "database",
+      "data-manipulation"
+    ],
+    "active_patterns": [
+      {
+        "name": "SQL Injection - String Concatenation",
+        "pattern": "$_GET[\"x\"]",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "SQL Injection - OR 1=1",
+        "pattern": "OR 1=1",
+        "languages": [
+          "sql"
+        ]
+      },
+      {
+        "name": "SQL Injection - unsanitized parameter in SQL query",
+        "pattern": "mysql_query(\"$VAR\")",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "SQL Injection - parameterized query missing",
+        "pattern": "db.query(\"SELECT * FROM users WHERE username = '\" + username + \"'\")",
+        "languages": [
+          "javascript"
+        ]
+      },
+      {
+        "name": "SQL Injection - format string injection",
+        "pattern": "db.execute(f\"SELECT * FROM products WHERE id = {product_id}\")",
+        "languages": [
+          "python"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_89.md"
+  },
+  {
+    "id": "CWE-79",
+    "title": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+    "category": "Injection",
+    "severity": "Medium",
+    "tags": [
+      "xss",
+      "web",
+      "injection",
+      "client-side"
+    ],
+    "active_patterns": [
+      {
+        "name": "Reflected XSS - GET Parameter into HTML",
+        "pattern": "<?php echo $_GET['...']; ?>",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "Stored XSS - Unescaped User Input",
+        "pattern": "<div>$USER_INPUT</div>",
+        "languages": [
+          "html",
+          "php",
+          "javascript",
+          "python"
+        ]
+      },
+      {
+        "name": "DOM XSS - Sink in JavaScript",
+        "pattern": "element.innerHTML = someVariable;",
+        "languages": [
+          "javascript"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_79.md"
+  },
+  {
+    "id": "CWE-918",
+    "title": "Server-Side Request Forgery (SSRF)",
+    "category": "Server-Side Request Forgery (SSRF)",
+    "severity": "High",
+    "tags": [
+      "SSRF",
+      "Server-Side Request",
+      "Request Forgery",
+      "URL Injection",
+      "Internal Network",
+      "External Interaction"
+    ],
+    "active_patterns": [
+      {
+        "name": "Unvalidated URL Parameter",
+        "pattern": "$url = $_GET['url'];\n$response = file_get_contents($url);",
+        "languages": [
+          "php"
+        ]
+      },
+      {
+        "name": "Unvalidated URL Parameter (Python)",
+        "pattern": "import requests\nurl = request.args.get('url')\nresponse = requests.get(url)",
+        "languages": [
+          "python"
+        ]
+      },
+      {
+        "name": "Unvalidated URL Parameter (Java)",
+        "pattern": "URL url = new URL(request.getParameter(\"url\"));\nInputStream in = url.openStream();",
+        "languages": [
+          "java"
+        ]
+      }
+    ],
+    "content_path": "content/cwe_918.md"
+  }
+]

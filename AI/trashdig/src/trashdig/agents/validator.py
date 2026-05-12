@@ -26,6 +26,7 @@ def create_validator_agent(
     config: AgentConfig | None = None,
     permission_manager: PermissionManager | None = None,
     extra_tools: list[Any] | None = None,
+    ask_user_tool: Any | None = None,
 ) -> ValidatorAgent:
     """Creates a Validator agent."""
     if config is None:
@@ -45,6 +46,9 @@ def create_validator_agent(
     ]
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
+
+    if ask_user_tool:
+        tools.append(ask_user_tool)
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)

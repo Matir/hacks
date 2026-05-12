@@ -9,6 +9,7 @@ from trashdig.services.permissions import PermissionManager
 from trashdig.tools import (
     find_files,
     list_files,
+    query_vulndb,
     read_file,
     ripgrep_search,
     web_fetch,
@@ -24,6 +25,7 @@ def create_skeptic_agent(
     config: AgentConfig | None = None,
     permission_manager: PermissionManager | None = None,
     extra_tools: list[Any] | None = None,
+    ask_user_tool: Any | None = None,
 ) -> SkepticAgent:
     """Creates a Skeptic agent."""
     if config is None:
@@ -34,6 +36,7 @@ def create_skeptic_agent(
     extras = google_provider_extras(config.provider)
     tools: list[Any] = [
         FunctionTool(ripgrep_search),
+        FunctionTool(query_vulndb),
         FunctionTool(read_file),
         FunctionTool(web_fetch),
         FunctionTool(list_files),
@@ -41,6 +44,9 @@ def create_skeptic_agent(
     ]
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
+
+    if ask_user_tool:
+        tools.append(ask_user_tool)
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)

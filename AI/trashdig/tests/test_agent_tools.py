@@ -86,6 +86,7 @@ How to extend this file
   both missing tools and newly attached tools that were not declared.
 """
 
+import inspect
 import sys
 import unittest
 from collections.abc import Callable
@@ -137,6 +138,7 @@ _PROVIDER_STUB = {"google_search_tool": None, "generate_content_config": None}
 # ---------------------------------------------------------------------------
 
 ALL_TOOLS: frozenset[str] = frozenset({
+    "ask_user",
     "bash_tool",
     "container_bash_tool",
     "detect_frameworks",
@@ -151,6 +153,7 @@ ALL_TOOLS: frozenset[str] = frozenset({
     "get_symbol_definition",
     "list_files",
     "query_cwe_database",
+    "query_vulndb",
     "read_file",
     "ripgrep_search",
     "save_findings",
@@ -207,11 +210,19 @@ def _capture_tools(module_path: str, create_fn: Callable, **kwargs: object) -> l
     def fake_init(*args: object, **kw: object) -> None:
         captured.update(kw)
 
+    mock_ask = patch("google.adk.tools.FunctionTool").start()
+    mock_ask.name = "ask_user"
+
     with (
         patch(f"{module_path}.load_prompt", return_value="instruction"),
         patch(f"{module_path}.google_provider_extras", return_value=_PROVIDER_STUB),
         patch("google.adk.agents.LlmAgent.__init__", side_effect=fake_init),
     ):
+        # We need to detect if the factory takes ask_user_tool
+        sig = inspect.signature(create_fn)
+        if "ask_user_tool" in sig.parameters:
+            # By default, pass the mock ask tool so it's captured in EXPECTED_TOOLS
+            kwargs.setdefault("ask_user_tool", mock_ask)
         create_fn(**kwargs)
 
     return captured.get("tools", [])
@@ -338,6 +349,7 @@ class TestCodeInvestigatorTools(AgentToolsMixin, unittest.TestCase):
         "get_scope_info",
         "get_symbol_definition",
         "list_files",
+        "query_vulndb",
         "read_file",
         "ripgrep_search",
         "trace_taint_cross_file",
@@ -359,7 +371,7 @@ class TestStackScoutTools(AgentToolsMixin, unittest.TestCase):
         "get_project_structure",
         "get_scope_info",
         "list_files",
-        "query_cwe_database",
+        "query_vulndb",
         "ripgrep_search",
         "web_fetch",
     ]
@@ -385,6 +397,7 @@ class TestHunterTools(AgentToolsMixin, unittest.TestCase):
     MODULE = "trashdig.agents.hunter"
     FACTORY = create_hunter_agent
     EXPECTED_TOOLS = [
+        "ask_user",
         "detect_language",
         "find_files",
         "find_references",
@@ -392,7 +405,7 @@ class TestHunterTools(AgentToolsMixin, unittest.TestCase):
         "get_scope_info",
         "get_symbol_definition",
         "list_files",
-        "query_cwe_database",
+        "query_vulndb",
         "read_file",
         "ripgrep_search",
         "semgrep_scan",
@@ -401,6 +414,16 @@ class TestHunterTools(AgentToolsMixin, unittest.TestCase):
         "web_fetch",
     ]
 
+    def test_no_ask_user_tool_when_none(self) -> None:
+        """ask_user tool should NOT be present if ask_user_tool=None is passed."""
+        factory = type(self).FACTORY
+        if factory is None:
+            self.fail("FACTORY is not defined")
+        config = AgentConfig(model="test-model", provider="google")
+        tools = _capture_tools(self.MODULE, factory, config=config, ask_user_tool=None)
+        names = {_get_tool_name(t) for t in tools}
+        self.assertNotIn("ask_user", names)
+
 
 class TestSkepticTools(AgentToolsMixin, unittest.TestCase):
     """Skeptic should have tools listed in README under S column."""
@@ -408,8 +431,10 @@ class TestSkepticTools(AgentToolsMixin, unittest.TestCase):
     MODULE = "trashdig.agents.skeptic"
     FACTORY = create_skeptic_agent
     EXPECTED_TOOLS = [
+        "ask_user",
         "find_files",
         "list_files",
+        "query_vulndb",
         "read_file",
         "ripgrep_search",
         "web_fetch",
@@ -422,6 +447,7 @@ class TestValidatorTools(AgentToolsMixin, unittest.TestCase):
     MODULE = "trashdig.agents.validator"
     FACTORY = create_validator_agent
     EXPECTED_TOOLS = [
+        "ask_user",
         "bash_tool",
         "container_bash_tool",
         "find_files",

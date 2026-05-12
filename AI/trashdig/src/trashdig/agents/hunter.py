@@ -15,7 +15,7 @@ from trashdig.tools import (
     get_scope_info,
     get_symbol_definition,
     list_files,
-    query_cwe_database,
+    query_vulndb,
     read_file,
     ripgrep_search,
     semgrep_scan,
@@ -34,6 +34,7 @@ def create_hunter_agent(
     config: AgentConfig | None = None,
     permission_manager: PermissionManager | None = None,
     extra_tools: list[Any] | None = None,
+    ask_user_tool: Any | None = None,
 ) -> HunterAgent:
     """Creates a Hunter agent.
 
@@ -41,6 +42,7 @@ def create_hunter_agent(
         config: Optional agent configuration.
         permission_manager: Optional permission manager.
         extra_tools: Additional toolsets (e.g. McpToolset instances) to append.
+        ask_user_tool: Optional tool for interactive user questioning.
 
     Returns:
         A configured HunterAgent instance.
@@ -55,7 +57,7 @@ def create_hunter_agent(
         FunctionTool(ripgrep_search),
         FunctionTool(semgrep_scan),
         FunctionTool(get_ast_summary),
-        FunctionTool(query_cwe_database),
+        FunctionTool(query_vulndb),
         FunctionTool(get_symbol_definition),
         FunctionTool(find_references),
         FunctionTool(get_scope_info),
@@ -70,6 +72,9 @@ def create_hunter_agent(
     ]
     if extras["google_search_tool"] is not None:
         tools.append(extras["google_search_tool"])
+
+    if ask_user_tool:
+        tools.append(ask_user_tool)
 
     if permission_manager:
         tools = permission_manager.wrap_tools(tools)

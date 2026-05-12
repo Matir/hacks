@@ -19,7 +19,7 @@ from trashdig.tools import (
     get_project_structure,
     get_scope_info,
     list_files,
-    query_cwe_database,
+    query_vulndb,
     ripgrep_search,
     web_fetch,
 )
@@ -65,7 +65,7 @@ def create_stack_scout_agent(
     tools: list[Any] = [
         FunctionTool(ripgrep_search),
         FunctionTool(get_ast_summary),
-        FunctionTool(query_cwe_database),
+        FunctionTool(query_vulndb),
         FunctionTool(find_references),
         FunctionTool(get_scope_info),
         FunctionTool(web_fetch),

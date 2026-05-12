@@ -94,8 +94,8 @@
 ## TUI & Collaborative Steering
 - [x] Functional REPL with history and autocomplete.
 - [x] **[MEDIUM]** Real-time streaming of agent logs to the REPL.
-- [ ] **[MEDIUM]** Interactive finding viewer (Markdown rendering).
-- [ ] **[LOW]** "Agent Ask" mechanism for structured questioning (Phase 4).
+- [x] **[MEDIUM]** Interactive finding viewer (Markdown rendering).
+- [x] **[LOW]** "Agent Ask" mechanism for structured questioning (Phase 4).
 - [ ] **[MEDIUM]** Progress Tracking: Add real-time progress bars or a task status dashboard.
 - [ ] **[LOW]** Command History Persistence: Save REPL history between sessions.
 
@@ -193,11 +193,11 @@ Each item requires: (1) adding the grammar package to `pyproject.toml`, (2) addi
 - [x] **[MEDIUM]** Capture LLM Prompts: Update `TrashDigCallback` to record the actual prompt sent to the model in the database.
 - [x] **[MEDIUM]** Configurable Cost Tracking: Refactor `CostTracker` to use configurable or dynamically fetched rates (via LiteLLM JSON).
 - [x] **[MEDIUM]** Recursive Agent Search: Update `Coordinator._agent_by_name` to find nested agents for callback accounting.
-- [ ] **[LOW]** Configurable `noisy_dirs`: Move the hardcoded list in `get_project_structure` to `trashdig.toml`.
+- [x] **[LOW]** Configurable `noisy_dirs`: Move the hardcoded list in `get_project_structure` to `trashdig.toml`.
 - [ ] **[LOW]** Consolidate `Coordinator` logic: Reduce redundancy between `run_full_scan` and TUI-specific methods (`run_recon`, `run_hunter`).
 - [x] **[MEDIUM]** Standardize Task/Hypothesis IDs: Resolve naming inconsistency between `id` and `task_id` across database schema, types, and tools.
 - [x] **[LOW]** Enforce Python import standards: Consistent grouping (stdlib, 3rd party, trashdig), alphabetical sorting, and top-level placement via Ruff/isort.
 - [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.
-- [ ] **[MEDIUM]** Add a VulnDB for vulnerability information retrieval.
+- [x] **[MEDIUM]** Add a VulnDB for vulnerability information retrieval.
 - [ ] **[MEDIUM]** Add deterministic checks for the verifier.
 - [ ] **[MEDIUM]** Use long term MemoryService for findings, conversation history, memory across sessions.

@@ -1,7 +1,8 @@
+import asyncio
 import functools
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from google.adk.agents import BaseAgent, LlmAgent, LoopAgent
@@ -37,6 +38,7 @@ from trashdig.tools import (
     save_hypotheses,
     update_hypothesis_status,
 )
+from trashdig.tools.ask_user import create_ask_user_tool
 from trashdig.tools.mcp_toolsets import build_mcp_toolsets
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,8 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     on_task_event: Any | None = None
     on_stats_event: Any | None = None
+    _on_ask: Callable[[str], Awaitable[str]] | None = PrivateAttr(default=None)
+    _ask_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
 
     # ------------------------------------------------------------------
     # All mutable state
@@ -77,6 +81,7 @@ class Coordinator(LlmAgent):
         config: Config,
         project_path: str | None = None,
         on_confirm: Callable[[str, dict[str, Any]], bool] | None = None,
+        on_ask: Callable[[str], Awaitable[str]] | None = None,
         artifact_service: BaseArtifactService | None = None,
     ):
         """Initialises the Coordinator with the given configuration."""
@@ -87,6 +92,14 @@ class Coordinator(LlmAgent):
         project_path_str = str(project_path)
 
         perm = PermissionManager(config, on_confirm=on_confirm)
+
+        ask_tool = None
+        if on_ask:
+            async def _locked_ask(question: str) -> str:
+                async with self._ask_lock:
+                    return await on_ask(question)
+
+            ask_tool = create_ask_user_tool(_locked_ask)
 
         code_investigator = create_code_investigator_agent(
             config.get_agent_config("code_investigator"),
@@ -108,18 +121,21 @@ class Coordinator(LlmAgent):
             config.get_agent_config("hunter"),
             permission_manager=perm,
             extra_tools=[investigator_tool] + build_mcp_toolsets(config, "hunter"),
+            ask_user_tool=ask_tool,
         )
 
         skeptic = create_skeptic_agent(
             config.get_agent_config("skeptic"),
             permission_manager=perm,
             extra_tools=[investigator_tool] + build_mcp_toolsets(config, "skeptic"),
+            ask_user_tool=ask_tool,
         )
 
         validator = create_validator_agent(
             config.get_agent_config("validator"),
             permission_manager=perm,
             extra_tools=build_mcp_toolsets(config, "validator"),
+            ask_user_tool=ask_tool,
         )
 
         summarizer = create_summarizer_agent(

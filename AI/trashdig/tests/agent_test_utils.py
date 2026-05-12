@@ -32,6 +32,7 @@ import trashdig.tools
 TOOLS_PKG_NON_TOOLS: frozenset[str] = frozenset({
     "artifact_tool",         # decorator applied to tool implementations
     "build_mcp_toolsets",    # factory for McpToolset instances (not an agent tool)
+    "create_ask_user_tool",  # factory for the ask_user tool
     "get_artifact_service",  # runtime singleton accessor
     "init_artifact_manager", # one-time initialisation helper
 })

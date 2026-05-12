@@ -12,6 +12,11 @@ interface = "textual"
 rpm = 15
 # tpm = 1000000
 
+[recon]
+# Directories to ignore during project discovery.
+# add_noisy_dirs = ["custom_cache", "logs"]
+# remove_noisy_dirs = ["tests"]
+
 [database]
 # Path to the data directory (internal state, cache, logs)
 # Supports tokens: {workspace}, {date}, {datetime}, {tmpdir}, {name}

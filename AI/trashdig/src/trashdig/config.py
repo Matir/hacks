@@ -21,6 +21,18 @@ def _find_project_config() -> str | None:
     return None
 
 
+DEFAULT_NOISY_DIRS: set[str] = {
+    ".git",
+    "node_modules",
+    "dist",
+    "vendor",
+    "__pycache__",
+    ".venv",
+    "findings",
+    "tests",
+}
+
+
 @dataclass
 class ProviderConfig:
     """Configuration for an LLM provider."""
@@ -99,6 +111,21 @@ class Config:
     def workspace_root(self) -> str:
         """Returns the project workspace root path."""
         return os.path.abspath(self.data.get("workspace_root", "."))
+
+    @property
+    def noisy_dirs(self) -> set[str]:
+        """Returns the set of directories to ignore during reconnaissance."""
+        recon_cfg = self.data.get("recon", {})
+        add_dirs = recon_cfg.get("add_noisy_dirs", [])
+        remove_dirs = recon_cfg.get("remove_noisy_dirs", [])
+
+        # Start with a copy of the defaults
+        final_noisy = set(DEFAULT_NOISY_DIRS)
+        final_noisy.update(add_dirs)
+        for d in remove_dirs:
+            final_noisy.discard(d)
+
+        return final_noisy
 
     @property
     def data_dir(self) -> str:

@@ -1,5 +1,6 @@
 """TrashDig tools package."""
 
+from .ask_user import create_ask_user_tool
 from .base import artifact_tool, get_artifact_service, init_artifact_manager
 from .bash_tool import bash_tool
 from .container_bash_tool import container_bash_tool
@@ -15,6 +16,7 @@ from .get_scope_info import get_scope_info
 from .get_symbol_definition import get_symbol_definition
 from .list_files import list_files
 from .query_cwe_database import query_cwe_database
+from .query_vulndb import query_vulndb
 from .read_file import read_file
 from .ripgrep_search import ripgrep_search
 from .save_findings import save_findings
@@ -27,8 +29,10 @@ from .web_fetch import web_fetch
 
 __all__ = [
     "artifact_tool",
+    "ask_user",
     "bash_tool",
     "container_bash_tool",
+    "create_ask_user_tool",
     "detect_frameworks",
     "detect_language",
     "exit_loop",
@@ -43,6 +47,7 @@ __all__ = [
     "init_artifact_manager",
     "list_files",
     "query_cwe_database",
+    "query_vulndb",
     "read_file",
     "ripgrep_search",
     "save_findings",

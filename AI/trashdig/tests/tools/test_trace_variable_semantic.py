@@ -20,6 +20,9 @@ def test_trace_variable_semantic(mock_parser_class, mock_get_lang):
     mock_node.parent.type = "assignment"
     mock_node.children = []
 
+    # Ensure child_by_field_name("left") returns the node so it's recognized as ASSIGNMENT
+    mock_node.parent.child_by_field_name.return_value = mock_node
+
     mock_tree.root_node.children = [mock_node]
 
     with patch("builtins.open", MagicMock()):
