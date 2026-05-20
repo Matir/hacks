@@ -19,7 +19,7 @@
 
 ## Markdown Features
 - [x] Integrate Syntax Highlighting (Chroma).
-- [x] Integrate Mermaid.js (client-side script injection).
+- [x] Integrate Mermaid.js (Hybrid: inlined in batch, served in server).
 - [x] Ensure GFM (Checklists, Tables) are enabled.
 
 ## Polish & Maintenance

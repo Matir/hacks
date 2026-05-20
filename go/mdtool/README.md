@@ -4,56 +4,51 @@ mdtool is a tool for rendering markdown files as HTML.
 
 ## Usage
 
-There are two modes: conversion mode and server mode. Conversion mode is a batch
-process, server mode does realtime conversions.
+mdtool supports two primary modes: batch conversion and a live server.
 
 ### Conversion Mode
 
-In conversion mode, it takes either a single file or a directory of files to
-convert.
+Batch convert one or more Markdown files to HTML.
 
+```bash
+mdtool convert [flags] <inpath> [outpath]
 ```
-mdtool [flags] <inpath> [outpath]
-```
 
-If `outpath` is omitted:
+- **inpath**: A single `.md` file or a directory containing Markdown files.
+- **outpath** (optional):
+  - If omitted:
+    - For a file, `outpath` is `inpath` with `.html` extension.
+    - For a directory, `.html` files are created alongside `.md` files in the same directory.
+  - If specified:
+    - For a file, it writes to `outpath`.
+    - For a directory, `outpath` must be a directory. It replicates the source directory structure within `outpath`.
 
-- When `inpath` is a file, the `outpath` becomes the `inpath` with `.md`
-  replaced by `.html`.
-- When `inpath` is a directory, each `.md` file is treated as above within the
-  `inpath` directory.
-
-If `outpath` is specified:
-
-- When `inpath` is a file, if `outpath` specifies a non-existent path or a path
-  to a file, it is written to that path. Directories are not created. If
-  `outpath` specifies a directory, then the base name of `inpath` is used with
-  `.html` replacing `.md`. If `.md` is missing, then `.html` is just appended.
-- When `inpath` is a directory, `outpath` must be a directory. Markdown files
-  will be created with the same directory structure, creating subdirectories as
-  necessary.
+**Flags:**
+- `-w, --watch`: Watch for changes and re-convert automatically.
+- `--css <path>`: Path to a custom CSS file to inline in the output.
+- `--no-highlight`: Disable syntax highlighting.
+- `--no-mermaid`: Disable Mermaid.js diagrams.
 
 ### Server Mode
 
-In server mode, we run a local webserver to serve a directory structure of
-markdown files.
+Run a local webserver to serve and render Markdown files on the fly.
 
+```bash
+mdtool serve [flags] [directory]
 ```
-mdtool [flags] -serve [directory]
-```
 
-By default, we bind to `127.0.0.1:7768`. If no directory is specified, we use
-the current working directory. Files ending in `.md` are rendered as HTML when
-requested. Any other files in the directory are served directly, unless the
-`-only-md` flag is passed, in which case only `.md` files will be served.
+By default, it serves the current directory and binds to `127.0.0.1:7768`.
 
-You can use the `-listen host:port` flag to change the bind address.
+**Flags:**
+- `-w, --watch`: Enable live auto-reload in the browser when files change.
+- `-l, --listen <addr>`: Change the listen address (default `127.0.0.1:7768`).
+- `--only-md`: Only serve `.md` files; hide or deny access to other file types.
+- `--css <path>`, `--no-highlight`, `--no-mermaid`: Same as conversion mode.
 
 ## Supported Markdown Features
 
-- code blocks (inline and fenced) with syntax highlighting
-- mermaid.js diagrams
-- Github-Flavored Markdown Features
-  - Checklists
-  - Tables
-- Dark Mode (automatically enabled via system media query)
+- **Syntax Highlighting**: Fenced code blocks are highlighted via Chroma.
+- **Diagrams**: Mermaid.js support for `mermaid` code blocks.
+- **GFM**: GitHub-Flavored Markdown (Checklists, Tables, etc.).
+- **Dark Mode**: Automatically respects system preferences via media queries.
+- **Live Reload**: Browser automatically refreshes when files are saved (requires `-w` in server mode).

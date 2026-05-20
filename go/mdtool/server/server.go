@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/matir/hacks/go/mdtool/converter"
@@ -47,6 +48,11 @@ func (s *Server) Serve() error {
 		go s.watchFiles()
 	}
 
+	s.Converter.EmbedAssets = false
+	http.HandleFunc("/_mdtool/mermaid.min.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		fmt.Fprint(w, converter.MermaidJS)
+	})
 	http.HandleFunc("/events", s.handleEvents)
 	http.HandleFunc("/", s.handle)
 	fmt.Printf("Starting server on %s serving %s\n", s.Listen, s.Dir)
@@ -114,6 +120,9 @@ func (s *Server) watchFiles() {
 		return nil
 	})
 
+	var timer *time.Timer
+	const delay = 100 * time.Millisecond
+
 	for {
 		select {
 		case event, ok := <-watcher.Events:
@@ -122,7 +131,12 @@ func (s *Server) watchFiles() {
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				if strings.HasSuffix(event.Name, ".md") {
-					s.notifyClients()
+					if timer != nil {
+						timer.Stop()
+					}
+					timer = time.AfterFunc(delay, func() {
+						s.notifyClients()
+					})
 				}
 			}
 		case err, ok := <-watcher.Errors:
@@ -186,7 +200,7 @@ func (s *Server) serveMarkdown(w http.ResponseWriter, path string) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.Converter.Convert(f, w); err != nil {
-		// If we already started writing, this might not work perfectly, 
+		// If we already started writing, this might not work perfectly,
 		// but Convert writes its own headers/start tags anyway.
 		fmt.Fprintf(os.Stderr, "Conversion error: %v\n", err)
 	}

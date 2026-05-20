@@ -16,6 +16,9 @@ import (
 //go:embed default.css
 var defaultCSS string
 
+//go:embed mermaid.min.js
+var MermaidJS string
+
 var pageTemplate = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 <html>
 <head>
@@ -32,10 +35,16 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!DOCTYPE html>
     {{ .Content }}
     </div>
     {{- if .Mermaid }}
-    <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true });
-    </script>
+        {{- if .EmbedAssets }}
+        <script>
+        {{ .MermaidJS }}
+        </script>
+        {{- else }}
+        <script src="/_mdtool/mermaid.min.js"></script>
+        {{- end }}
+        <script type="module">
+        mermaid.initialize({ startOnLoad: true });
+        </script>
     {{- end }}
     {{- if .Watch }}
     <script>
@@ -52,11 +61,12 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 
 // Converter holds configuration options for the conversion process.
 type Converter struct {
-	CSS       string
-	Highlight bool
-	Mermaid   bool
-	Watch     bool
-	gm        goldmark.Markdown
+	CSS         string
+	Highlight   bool
+	Mermaid     bool
+	Watch       bool
+	EmbedAssets bool
+	gm          goldmark.Markdown
 }
 
 // New returns a new Converter with the specified options.
@@ -84,10 +94,11 @@ func New(css string, highlight bool, mermaid bool) *Converter {
 	)
 
 	return &Converter{
-		CSS:       css,
-		Highlight: highlight,
-		Mermaid:   mermaid,
-		gm:        gm,
+		CSS:         css,
+		Highlight:   highlight,
+		Mermaid:     mermaid,
+		EmbedAssets: true, // Default to true for batch mode
+		gm:          gm,
 	}
 }
 
@@ -98,7 +109,7 @@ func (c *Converter) Convert(r io.Reader, w io.Writer) error {
 		return err
 	}
 
-	// Use a pipe or buffer if we want to be more efficient, 
+	// Use a pipe or buffer if we want to be more efficient,
 	// but for template execution we need the rendered content.
 	// For now, let's render to a string and use template.HTML to avoid escaping.
 	var content bytes.Buffer
@@ -107,15 +118,19 @@ func (c *Converter) Convert(r io.Reader, w io.Writer) error {
 	}
 
 	data := struct {
-		CSS     template.CSS
-		Content template.HTML
-		Mermaid bool
-		Watch   bool
+		CSS         template.CSS
+		Content     template.HTML
+		Mermaid     bool
+		MermaidJS   template.JS
+		EmbedAssets bool
+		Watch       bool
 	}{
-		CSS:     template.CSS(c.CSS),
-		Content: template.HTML(content.String()),
-		Mermaid: c.Mermaid,
-		Watch:   c.Watch,
+		CSS:         template.CSS(c.CSS),
+		Content:     template.HTML(content.String()),
+		Mermaid:     c.Mermaid,
+		MermaidJS:   template.JS(MermaidJS),
+		EmbedAssets: c.EmbedAssets,
+		Watch:       c.Watch,
 	}
 
 	return pageTemplate.Execute(w, data)
