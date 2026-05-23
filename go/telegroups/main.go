@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/zelenin/go-tdlib/client"
 )
 
 func main() {
 	dbPath := flag.String("db", "telegroups.db", "path to SQLite database")
+	since := flag.Duration("since", 0, "skip groups whose member list was fetched within this duration (e.g. 24h, 7*24h)")
 	flag.Parse()
 
 	apiIDStr := os.Getenv("TELEGRAM_API_ID")
@@ -65,7 +67,12 @@ func main() {
 	}
 	log.Printf("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
 
-	if err := enumerateGroups(tdlibClient, db); err != nil {
+	var threshold time.Time
+	if *since > 0 {
+		threshold = time.Now().Add(-*since)
+	}
+
+	if err := enumerateGroups(tdlibClient, db, threshold); err != nil {
 		log.Fatalf("enumerateGroups: %v", err)
 	}
 }

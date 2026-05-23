@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/zelenin/go-tdlib/client"
 )
 
 const membersPerPage = 200
 
-func enumerateGroups(c *client.Client, db *sql.DB) error {
+func enumerateGroups(c *client.Client, db *sql.DB, threshold time.Time) error {
 	chats, err := c.GetChats(&client.GetChatsRequest{
 		ChatList: &client.ChatListMain{},
 		Limit:    1000,
@@ -34,11 +35,11 @@ func enumerateGroups(c *client.Client, db *sql.DB) error {
 
 		switch t := chat.Type.(type) {
 		case *client.ChatTypeBasicGroup:
-			if err := listBasicGroup(c, tx, chat, t.BasicGroupId); err != nil {
+			if err := listBasicGroup(c, tx, chat, t.BasicGroupId, threshold); err != nil {
 				log.Printf("basic group %q: %v", chat.Title, err)
 			}
 		case *client.ChatTypeSupergroup:
-			if err := listSupergroup(c, tx, chat, t.SupergroupId); err != nil {
+			if err := listSupergroup(c, tx, chat, t.SupergroupId, threshold); err != nil {
 				log.Printf("supergroup %q: %v", chat.Title, err)
 			}
 		}
@@ -47,7 +48,16 @@ func enumerateGroups(c *client.Client, db *sql.DB) error {
 	return tx.Commit()
 }
 
-func listBasicGroup(c *client.Client, tx *sql.Tx, chat *client.Chat, groupID int64) error {
+func listBasicGroup(c *client.Client, tx *sql.Tx, chat *client.Chat, groupID int64, threshold time.Time) error {
+	if err := upsertGroup(tx, chat.Id, chat.Title, "basic_group"); err != nil {
+		return fmt.Errorf("upsertGroup: %w", err)
+	}
+
+	if !needsMemberFetch(tx, chat.Id, threshold) {
+		fmt.Printf("\n[basic group] %s — skipping (fetched recently)\n", chat.Title)
+		return nil
+	}
+
 	info, err := c.GetBasicGroupFullInfo(&client.GetBasicGroupFullInfoRequest{
 		BasicGroupId: groupID,
 	})
@@ -55,20 +65,21 @@ func listBasicGroup(c *client.Client, tx *sql.Tx, chat *client.Chat, groupID int
 		return fmt.Errorf("GetBasicGroupFullInfo: %w", err)
 	}
 
-	if err := upsertGroup(tx, chat.Id, chat.Title, "basic_group"); err != nil {
-		return fmt.Errorf("upsertGroup: %w", err)
-	}
-
+	now := time.Now().Unix()
 	fmt.Printf("\n[basic group] %s (%d members)\n", chat.Title, len(info.Members))
 	for _, m := range info.Members {
-		if err := persistMember(c, tx, chat.Id, m); err != nil {
+		if err := persistMember(c, tx, chat.Id, m, now); err != nil {
 			log.Printf("  member error: %v", err)
 		}
+	}
+
+	if err := markGroupFetched(tx, chat.Id); err != nil {
+		log.Printf("markGroupFetched %q: %v", chat.Title, err)
 	}
 	return nil
 }
 
-func listSupergroup(c *client.Client, tx *sql.Tx, chat *client.Chat, sgID int64) error {
+func listSupergroup(c *client.Client, tx *sql.Tx, chat *client.Chat, sgID int64, threshold time.Time) error {
 	groupType := "supergroup"
 	if t, ok := chat.Type.(*client.ChatTypeSupergroup); ok && t.IsChannel {
 		groupType = "channel"
@@ -77,8 +88,14 @@ func listSupergroup(c *client.Client, tx *sql.Tx, chat *client.Chat, sgID int64)
 		return fmt.Errorf("upsertGroup: %w", err)
 	}
 
+	if !needsMemberFetch(tx, chat.Id, threshold) {
+		fmt.Printf("\n[%s] %s — skipping (fetched recently)\n", groupType, chat.Title)
+		return nil
+	}
+
 	var offset int32
 	var total int
+	now := time.Now().Unix()
 
 	fmt.Printf("\n[%s] %s\n", groupType, chat.Title)
 	for {
@@ -92,7 +109,7 @@ func listSupergroup(c *client.Client, tx *sql.Tx, chat *client.Chat, sgID int64)
 		}
 
 		for _, m := range result.Members {
-			if err := persistMember(c, tx, chat.Id, m); err != nil {
+			if err := persistMember(c, tx, chat.Id, m, now); err != nil {
 				log.Printf("  member error: %v", err)
 			}
 		}
@@ -104,13 +121,16 @@ func listSupergroup(c *client.Client, tx *sql.Tx, chat *client.Chat, sgID int64)
 		offset += int32(len(result.Members))
 	}
 	fmt.Printf("  (%d members total)\n", total)
+
+	if err := markGroupFetched(tx, chat.Id); err != nil {
+		log.Printf("markGroupFetched %q: %v", chat.Title, err)
+	}
 	return nil
 }
 
-func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMember) error {
+func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMember, lastSeenAt int64) error {
 	sender, ok := m.MemberId.(*client.MessageSenderUser)
 	if !ok {
-		// anonymous chat-sender: no user row to store
 		if cs, ok := m.MemberId.(*client.MessageSenderChat); ok {
 			fmt.Printf("  [anonymous chat id:%d]\n", cs.ChatId)
 		}
@@ -133,7 +153,7 @@ func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMem
 	if err := upsertUser(tx, user.Id, user.FirstName, user.LastName, handle); err != nil {
 		return fmt.Errorf("upsertUser %d: %w", user.Id, err)
 	}
-	if err := upsertMember(tx, chatID, user.Id); err != nil {
+	if err := upsertMember(tx, chatID, user.Id, lastSeenAt); err != nil {
 		return fmt.Errorf("upsertMember: %w", err)
 	}
 	return nil
