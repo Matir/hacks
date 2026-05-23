@@ -53,5 +53,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("GetMe error: %v", err)
 	}
-	log.Printf("authorized as: %s %s [@%s]", me.FirstName, me.LastName, me.Username)
+	log.Printf("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
+
+	if err := enumerateGroups(tdlibClient); err != nil {
+		log.Fatalf("enumerateGroups: %v", err)
+	}
 }
