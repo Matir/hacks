@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,6 +11,9 @@ import (
 )
 
 func main() {
+	dbPath := flag.String("db", "telegroups.db", "path to SQLite database")
+	flag.Parse()
+
 	apiIDStr := os.Getenv("TELEGRAM_API_ID")
 	apiHash := os.Getenv("TELEGRAM_API_HASH")
 
@@ -21,6 +25,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid TELEGRAM_API_ID: %v", err)
 	}
+
+	db, err := openDB(*dbPath)
+	if err != nil {
+		log.Fatalf("openDB: %v", err)
+	}
+	defer db.Close()
 
 	params := &client.SetTdlibParametersRequest{
 		UseTestDc:           false,
@@ -55,7 +65,7 @@ func main() {
 	}
 	log.Printf("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
 
-	if err := enumerateGroups(tdlibClient); err != nil {
+	if err := enumerateGroups(tdlibClient, db); err != nil {
 		log.Fatalf("enumerateGroups: %v", err)
 	}
 }
