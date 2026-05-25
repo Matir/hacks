@@ -74,12 +74,11 @@ func selectGroupsInteractively(chats []*client.Chat) ([]*client.Chat, error) {
 }
 
 func chatLabel(chat *client.Chat) string {
-	switch t := chat.Type.(type) {
+	switch chat.Type.(type) {
 	case *client.ChatTypeBasicGroup:
-		_ = t
 		return fmt.Sprintf("%s  [basic group]", chat.Title)
 	case *client.ChatTypeSupergroup:
-		if t.IsChannel {
+		if chat.Type.(*client.ChatTypeSupergroup).IsChannel {
 			return fmt.Sprintf("%s  [channel]", chat.Title)
 		}
 		return fmt.Sprintf("%s  [supergroup]", chat.Title)
