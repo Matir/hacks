@@ -12,9 +12,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "list" {
-		runListCmd(os.Args[2:])
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "list":
+			runListCmd(os.Args[2:])
+			return
+		case "intersect":
+			runIntersectCmd(os.Args[2:])
+			return
+		}
 	}
 
 	dbPath := flag.String("db", "telegroups.db", "path to SQLite database")
