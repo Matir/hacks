@@ -73,6 +73,13 @@ func main() {
 		log.Fatalf("loadGroupChats: %v", err)
 	}
 
+	if args := flag.Args(); len(args) > 0 {
+		chats = filterChats(chats, args)
+		if len(chats) == 0 {
+			log.Fatalf("no groups matched: %v", args)
+		}
+	}
+
 	if *selectGroups {
 		chats, err = selectGroupsInteractively(chats)
 		if err != nil {

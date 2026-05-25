@@ -2,10 +2,35 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/zelenin/go-tdlib/client"
 )
+
+// filterChats returns the subset of chats matching any of the given filters.
+// Each filter is tried as an exact int64 chat ID first, then as a
+// case-insensitive substring of the chat title.
+func filterChats(chats []*client.Chat, filters []string) []*client.Chat {
+	var result []*client.Chat
+	for _, chat := range chats {
+		for _, f := range filters {
+			if chatMatchesFilter(chat, f) {
+				result = append(result, chat)
+				break
+			}
+		}
+	}
+	return result
+}
+
+func chatMatchesFilter(chat *client.Chat, filter string) bool {
+	if id, err := strconv.ParseInt(filter, 10, 64); err == nil {
+		return chat.Id == id
+	}
+	return strings.Contains(strings.ToLower(chat.Title), strings.ToLower(filter))
+}
 
 // selectGroupsInteractively presents a multi-select TUI listing all supplied
 // group chats and returns only the ones the user picks.
