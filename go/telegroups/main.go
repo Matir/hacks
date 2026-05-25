@@ -13,7 +13,8 @@ import (
 
 func main() {
 	dbPath := flag.String("db", "telegroups.db", "path to SQLite database")
-	since := flag.Duration("since", 0, "skip groups whose member list was fetched within this duration (e.g. 24h, 7*24h)")
+	since := flag.Duration("since", 0, "skip groups whose member list was fetched within this duration (e.g. 24h)")
+	selectGroups := flag.Bool("select-groups", false, "interactively choose which groups to fetch")
 	flag.Parse()
 
 	apiIDStr := os.Getenv("TELEGRAM_API_ID")
@@ -67,12 +68,26 @@ func main() {
 	}
 	log.Printf("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
 
+	chats, err := loadGroupChats(tdlibClient)
+	if err != nil {
+		log.Fatalf("loadGroupChats: %v", err)
+	}
+
+	if *selectGroups {
+		chats, err = selectGroupsInteractively(chats)
+		if err != nil {
+			log.Fatalf("selectGroups: %v", err)
+		}
+		if len(chats) == 0 {
+			log.Println("no groups selected, exiting")
+			return
+		}
+	}
+
 	var threshold time.Time
 	if *since > 0 {
 		threshold = time.Now().Add(-*since)
 	}
 
-	if err := enumerateGroups(tdlibClient, db, threshold); err != nil {
-		log.Fatalf("enumerateGroups: %v", err)
-	}
+	enumerateGroupChats(tdlibClient, db, chats, threshold)
 }

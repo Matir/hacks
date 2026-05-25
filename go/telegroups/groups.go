@@ -28,7 +28,9 @@ func loadAllChats(c *client.Client) {
 	}
 }
 
-func enumerateGroups(c *client.Client, db *sql.DB, threshold time.Time) error {
+// loadGroupChats loads the full chat list from TDLib and returns only the
+// entries that are basic groups, supergroups, or channels.
+func loadGroupChats(c *client.Client) ([]*client.Chat, error) {
 	loadAllChats(c)
 
 	chats, err := c.GetChats(&client.GetChatsRequest{
@@ -36,9 +38,10 @@ func enumerateGroups(c *client.Client, db *sql.DB, threshold time.Time) error {
 		Limit:    10000,
 	})
 	if err != nil {
-		return fmt.Errorf("GetChats: %w", err)
+		return nil, fmt.Errorf("GetChats: %w", err)
 	}
 
+	var groups []*client.Chat
 	for _, chatID := range chats.ChatIds {
 		var chat *client.Chat
 		if err := withFloodWait(func() (e error) {
@@ -48,7 +51,17 @@ func enumerateGroups(c *client.Client, db *sql.DB, threshold time.Time) error {
 			log.Printf("GetChat %d: %v", chatID, err)
 			continue
 		}
+		switch chat.Type.(type) {
+		case *client.ChatTypeBasicGroup, *client.ChatTypeSupergroup:
+			groups = append(groups, chat)
+		}
+	}
+	return groups, nil
+}
 
+// enumerateGroupChats fetches and stores members for each chat in the list.
+func enumerateGroupChats(c *client.Client, db *sql.DB, chats []*client.Chat, threshold time.Time) {
+	for _, chat := range chats {
 		switch t := chat.Type.(type) {
 		case *client.ChatTypeBasicGroup:
 			if err := listBasicGroup(c, db, chat, t.BasicGroupId, threshold); err != nil {
@@ -60,7 +73,6 @@ func enumerateGroups(c *client.Client, db *sql.DB, threshold time.Time) error {
 			}
 		}
 	}
-	return nil
 }
 
 func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int64, threshold time.Time) error {
