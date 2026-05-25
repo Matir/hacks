@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/zelenin/go-tdlib/client"
@@ -48,7 +47,7 @@ func loadGroupChats(c *client.Client) ([]*client.Chat, error) {
 			chat, e = c.GetChat(&client.GetChatRequest{ChatId: chatID})
 			return
 		}); err != nil {
-			log.Printf("GetChat %d: %v", chatID, err)
+			logError("GetChat %d: %v", chatID, err)
 			continue
 		}
 		switch chat.Type.(type) {
@@ -65,11 +64,11 @@ func enumerateGroupChats(c *client.Client, db *sql.DB, chats []*client.Chat, thr
 		switch t := chat.Type.(type) {
 		case *client.ChatTypeBasicGroup:
 			if err := listBasicGroup(c, db, chat, t.BasicGroupId, threshold); err != nil {
-				log.Printf("basic group %q: %v", chat.Title, err)
+				logError("basic group %q: %v", chat.Title, err)
 			}
 		case *client.ChatTypeSupergroup:
 			if err := listSupergroup(c, db, chat, t.SupergroupId, threshold); err != nil {
-				log.Printf("supergroup %q: %v", chat.Title, err)
+				logError("supergroup %q: %v", chat.Title, err)
 			}
 		}
 	}
@@ -89,7 +88,7 @@ func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int
 	}
 
 	if !needsMemberFetch(tx, chat.Id, threshold) {
-		fmt.Printf("\n[basic group] %s — skipping (fetched recently)\n", chat.Title)
+		logInfo("[basic group] %s — skipping (fetched recently)", chat.Title)
 		return tx.Commit()
 	}
 
@@ -107,15 +106,15 @@ func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int
 	}
 
 	now := time.Now().Unix()
-	fmt.Printf("\n[basic group] %s (%d members)\n", chat.Title, len(info.Members))
+	logInfo("[basic group] %s (%d members)", chat.Title, len(info.Members))
 	for _, m := range info.Members {
 		if err := persistMember(c, tx, chat.Id, m, now); err != nil {
-			log.Printf("  member error: %v", err)
+			logError("  member error: %v", err)
 		}
 	}
 
 	if err := markGroupFetched(tx, chat.Id); err != nil {
-		log.Printf("markGroupFetched %q: %v", chat.Title, err)
+		logError("markGroupFetched %q: %v", chat.Title, err)
 	}
 	return tx.Commit()
 }
@@ -148,7 +147,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 	}
 
 	if !needsMemberFetch(tx, chat.Id, threshold) {
-		fmt.Printf("\n[%s] %s — skipping (fetched recently)\n", groupType, chat.Title)
+		logInfo("[%s] %s — skipping (fetched recently)", groupType, chat.Title)
 		return tx.Commit()
 	}
 
@@ -156,7 +155,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 	var total int
 	now := time.Now().Unix()
 
-	fmt.Printf("\n[%s] %s\n", groupType, chat.Title)
+	logInfo("[%s] %s", groupType, chat.Title)
 	for {
 		var result *client.ChatMembers
 		if err := withFloodWait(func() (e error) {
@@ -172,7 +171,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 
 		for _, m := range result.Members {
 			if err := persistMember(c, tx, chat.Id, m, now); err != nil {
-				log.Printf("  member error: %v", err)
+				logError("  member error: %v", err)
 			}
 		}
 		total += len(result.Members)
@@ -184,13 +183,13 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 	}
 
 	if memberCount > 0 && total == 0 {
-		log.Printf("[%s] %s: Telegram reports %d members but enumeration returned 0 — likely restricted",
+		logError("[%s] %s: Telegram reports %d members but enumeration returned 0 — likely restricted",
 			groupType, chat.Title, memberCount)
 	}
-	fmt.Printf("  (%d members total)\n", total)
+	logInfo("[%s] %s: %d members", groupType, chat.Title, total)
 
 	if err := markGroupFetched(tx, chat.Id); err != nil {
-		log.Printf("markGroupFetched %q: %v", chat.Title, err)
+		logError("markGroupFetched %q: %v", chat.Title, err)
 	}
 	return tx.Commit()
 }
@@ -199,7 +198,7 @@ func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMem
 	sender, ok := m.MemberId.(*client.MessageSenderUser)
 	if !ok {
 		if cs, ok := m.MemberId.(*client.MessageSenderChat); ok {
-			fmt.Printf("  [anonymous chat id:%d]\n", cs.ChatId)
+			logInfo("  anonymous chat id:%d", cs.ChatId)
 		}
 		return nil
 	}
@@ -209,7 +208,7 @@ func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMem
 		user, e = c.GetUser(&client.GetUserRequest{UserId: sender.UserId})
 		return
 	}); err != nil {
-		fmt.Printf("  [user %d] (error: %v)\n", sender.UserId, err)
+		logError("  GetUser %d: %v", sender.UserId, err)
 		return nil
 	}
 
@@ -218,9 +217,9 @@ func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMem
 	status := memberStatus(m.Status)
 
 	if handle != "" {
-		fmt.Printf("  %s %s @%s (id:%d, status:%s)\n", user.FirstName, user.LastName, handle, user.Id, status)
+		logInfo("  %s %s @%s (id:%d, status:%s)", user.FirstName, user.LastName, handle, user.Id, status)
 	} else {
-		fmt.Printf("  %s %s (id:%d, status:%s)\n", user.FirstName, user.LastName, user.Id, status)
+		logInfo("  %s %s (id:%d, status:%s)", user.FirstName, user.LastName, user.Id, status)
 	}
 
 	if err := upsertUser(tx, user.Id, user.FirstName, user.LastName, handle, isBot); err != nil {

@@ -15,7 +15,12 @@ func main() {
 	dbPath := flag.String("db", "telegroups.db", "path to SQLite database")
 	since := flag.Duration("since", 0, "skip groups whose member list was fetched within this duration (e.g. 24h)")
 	selectGroups := flag.Bool("select-groups", false, "interactively choose which groups to fetch")
+	quiet := flag.Bool("quiet", false, "suppress info messages; errors still shown")
+	silent := flag.Bool("silent", false, "suppress all output except fatal errors")
 	flag.Parse()
+
+	isQuiet = *quiet || *silent
+	isSilent = *silent
 
 	apiIDStr := os.Getenv("TELEGRAM_API_ID")
 	apiHash := os.Getenv("TELEGRAM_API_HASH")
@@ -66,7 +71,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("GetMe error: %v", err)
 	}
-	log.Printf("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
+	logInfo("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
 
 	chats, err := loadGroupChats(tdlibClient)
 	if err != nil {
@@ -86,7 +91,7 @@ func main() {
 			log.Fatalf("selectGroups: %v", err)
 		}
 		if len(chats) == 0 {
-			log.Println("no groups selected, exiting")
+			logInfo("no groups selected, exiting")
 			return
 		}
 	}

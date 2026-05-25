@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +22,7 @@ func withFloodWait(fn func() error) error {
 		if !ok {
 			return err
 		}
-		log.Printf("flood wait: sleeping %v", wait)
+		logInfo("flood wait: sleeping %v", wait)
 		time.Sleep(wait)
 	}
 }
