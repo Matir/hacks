@@ -12,6 +12,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "list" {
+		runListCmd(os.Args[2:])
+		return
+	}
+
 	dbPath := flag.String("db", "telegroups.db", "path to SQLite database")
 	since := flag.Duration("since", 0, "skip groups whose member list was fetched within this duration (e.g. 24h)")
 	selectGroups := flag.Bool("select-groups", false, "interactively choose which groups to fetch")
