@@ -40,8 +40,11 @@ func enumerateGroups(c *client.Client, db *sql.DB, threshold time.Time) error {
 	}
 
 	for _, chatID := range chats.ChatIds {
-		chat, err := c.GetChat(&client.GetChatRequest{ChatId: chatID})
-		if err != nil {
+		var chat *client.Chat
+		if err := withFloodWait(func() (e error) {
+			chat, e = c.GetChat(&client.GetChatRequest{ChatId: chatID})
+			return
+		}); err != nil {
 			log.Printf("GetChat %d: %v", chatID, err)
 			continue
 		}
