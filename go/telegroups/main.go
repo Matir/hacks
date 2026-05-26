@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -12,6 +13,8 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "list":
@@ -70,21 +73,26 @@ func main() {
 	authorizer := client.ClientAuthorizer(params)
 	go client.CliInteractor(authorizer)
 
-	tdlibClient, err := client.NewClient(authorizer, client.WithLogVerbosity(&client.SetLogVerbosityLevelRequest{
-		NewVerbosityLevel: 1,
-	}))
+	tdlibClient, err := client.NewClient(authorizer)
 	if err != nil {
 		log.Fatalf("NewClient error: %v", err)
 	}
-	defer tdlibClient.Stop()
+	defer tdlibClient.Close(ctx)
 
-	me, err := tdlibClient.GetMe()
+	_, err = tdlibClient.SetLogVerbosityLevel(&client.SetLogVerbosityLevelRequest{
+		NewVerbosityLevel: 1,
+	})
+	if err != nil {
+		log.Printf("SetLogVerbosityLevel error: %v", err)
+	}
+
+	me, err := tdlibClient.GetMe(ctx)
 	if err != nil {
 		log.Fatalf("GetMe error: %v", err)
 	}
 	logInfo("authorized as: %s %s (id:%d)", me.FirstName, me.LastName, me.Id)
 
-	chats, err := loadGroupChats(tdlibClient)
+	chats, err := loadGroupChats(ctx, tdlibClient)
 	if err != nil {
 		log.Fatalf("loadGroupChats: %v", err)
 	}
@@ -112,5 +120,5 @@ func main() {
 		threshold = time.Now().Add(-*since)
 	}
 
-	enumerateGroupChats(tdlibClient, db, chats, threshold)
+	enumerateGroupChats(ctx, tdlibClient, db, chats, threshold)
 }

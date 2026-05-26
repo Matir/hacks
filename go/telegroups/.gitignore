@@ -1,3 +1,5 @@
 third_party/td/
 vendor/tdlib/
 telegroups
+.env
+.antigravitycli/

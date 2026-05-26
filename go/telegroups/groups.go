@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -12,10 +13,10 @@ const membersPerPage = 200
 
 // loadAllChats pages through the main chat list until TDLib signals that
 // everything is loaded (404 error). Flood waits are handled transparently.
-func loadAllChats(c *client.Client) {
+func loadAllChats(ctx context.Context, c *client.Client) {
 	for {
 		err := withFloodWait(func() error {
-			_, e := c.LoadChats(&client.LoadChatsRequest{
+			_, e := c.LoadChats(ctx, &client.LoadChatsRequest{
 				ChatList: &client.ChatListMain{},
 				Limit:    100,
 			})
@@ -29,10 +30,10 @@ func loadAllChats(c *client.Client) {
 
 // loadGroupChats loads the full chat list from TDLib and returns only the
 // entries that are basic groups, supergroups, or channels.
-func loadGroupChats(c *client.Client) ([]*client.Chat, error) {
-	loadAllChats(c)
+func loadGroupChats(ctx context.Context, c *client.Client) ([]*client.Chat, error) {
+	loadAllChats(ctx, c)
 
-	chats, err := c.GetChats(&client.GetChatsRequest{
+	chats, err := c.GetChats(ctx, &client.GetChatsRequest{
 		ChatList: &client.ChatListMain{},
 		Limit:    10000,
 	})
@@ -44,7 +45,7 @@ func loadGroupChats(c *client.Client) ([]*client.Chat, error) {
 	for _, chatID := range chats.ChatIds {
 		var chat *client.Chat
 		if err := withFloodWait(func() (e error) {
-			chat, e = c.GetChat(&client.GetChatRequest{ChatId: chatID})
+			chat, e = c.GetChat(ctx, &client.GetChatRequest{ChatId: chatID})
 			return
 		}); err != nil {
 			logError("GetChat %d: %v", chatID, err)
@@ -59,22 +60,22 @@ func loadGroupChats(c *client.Client) ([]*client.Chat, error) {
 }
 
 // enumerateGroupChats fetches and stores members for each chat in the list.
-func enumerateGroupChats(c *client.Client, db *sql.DB, chats []*client.Chat, threshold time.Time) {
+func enumerateGroupChats(ctx context.Context, c *client.Client, db *sql.DB, chats []*client.Chat, threshold time.Time) {
 	for _, chat := range chats {
 		switch t := chat.Type.(type) {
 		case *client.ChatTypeBasicGroup:
-			if err := listBasicGroup(c, db, chat, t.BasicGroupId, threshold); err != nil {
+			if err := listBasicGroup(ctx, c, db, chat, t.BasicGroupId, threshold); err != nil {
 				logError("basic group %q: %v", chat.Title, err)
 			}
 		case *client.ChatTypeSupergroup:
-			if err := listSupergroup(c, db, chat, t.SupergroupId, threshold); err != nil {
+			if err := listSupergroup(ctx, c, db, chat, t.SupergroupId, threshold); err != nil {
 				logError("supergroup %q: %v", chat.Title, err)
 			}
 		}
 	}
 }
 
-func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int64, threshold time.Time) error {
+func listBasicGroup(ctx context.Context, c *client.Client, db *sql.DB, chat *client.Chat, groupID int64, threshold time.Time) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -94,7 +95,7 @@ func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int
 
 	var info *client.BasicGroupFullInfo
 	if err := withFloodWait(func() (e error) {
-		info, e = c.GetBasicGroupFullInfo(&client.GetBasicGroupFullInfoRequest{BasicGroupId: groupID})
+		info, e = c.GetBasicGroupFullInfo(ctx, &client.GetBasicGroupFullInfoRequest{BasicGroupId: groupID})
 		return
 	}); err != nil {
 		return fmt.Errorf("GetBasicGroupFullInfo: %w", err)
@@ -108,7 +109,7 @@ func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int
 	now := time.Now().Unix()
 	logInfo("[basic group] %s (%d members)", chat.Title, len(info.Members))
 	for _, m := range info.Members {
-		if err := persistMember(c, tx, chat.Id, m, now); err != nil {
+		if err := persistMember(ctx, c, tx, chat.Id, m, now); err != nil {
 			logError("  member error: %v", err)
 		}
 	}
@@ -119,7 +120,7 @@ func listBasicGroup(c *client.Client, db *sql.DB, chat *client.Chat, groupID int
 	return tx.Commit()
 }
 
-func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64, threshold time.Time) error {
+func listSupergroup(ctx context.Context, c *client.Client, db *sql.DB, chat *client.Chat, sgID int64, threshold time.Time) error {
 	groupType := "supergroup"
 	if t, ok := chat.Type.(*client.ChatTypeSupergroup); ok && t.IsChannel {
 		groupType = "channel"
@@ -130,7 +131,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 	var memberCount int32
 	var sg *client.Supergroup
 	if err := withFloodWait(func() (e error) {
-		sg, e = c.GetSupergroup(&client.GetSupergroupRequest{SupergroupId: sgID})
+		sg, e = c.GetSupergroup(ctx, &client.GetSupergroupRequest{SupergroupId: sgID})
 		return
 	}); err == nil {
 		memberCount = sg.MemberCount
@@ -159,7 +160,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 	for {
 		var result *client.ChatMembers
 		if err := withFloodWait(func() (e error) {
-			result, e = c.GetSupergroupMembers(&client.GetSupergroupMembersRequest{
+			result, e = c.GetSupergroupMembers(ctx, &client.GetSupergroupMembersRequest{
 				SupergroupId: sgID,
 				Offset:       offset,
 				Limit:        membersPerPage,
@@ -170,7 +171,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 		}
 
 		for _, m := range result.Members {
-			if err := persistMember(c, tx, chat.Id, m, now); err != nil {
+			if err := persistMember(ctx, c, tx, chat.Id, m, now); err != nil {
 				logError("  member error: %v", err)
 			}
 		}
@@ -194,7 +195,7 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 	return tx.Commit()
 }
 
-func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMember, lastSeenAt int64) error {
+func persistMember(ctx context.Context, c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMember, lastSeenAt int64) error {
 	sender, ok := m.MemberId.(*client.MessageSenderUser)
 	if !ok {
 		if cs, ok := m.MemberId.(*client.MessageSenderChat); ok {
@@ -205,7 +206,7 @@ func persistMember(c *client.Client, tx *sql.Tx, chatID int64, m *client.ChatMem
 
 	var user *client.User
 	if err := withFloodWait(func() (e error) {
-		user, e = c.GetUser(&client.GetUserRequest{UserId: sender.UserId})
+		user, e = c.GetUser(ctx, &client.GetUserRequest{UserId: sender.UserId})
 		return
 	}); err != nil {
 		logError("  GetUser %d: %v", sender.UserId, err)
