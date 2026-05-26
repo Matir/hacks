@@ -70,13 +70,25 @@ telegroups list [-db <path>]
 
 Displays all groups in the database with their ID, title, type, reported member count, and when members were last fetched.
 
+### List members of a group
+
+```
+telegroups members [-db <path>] <group>
+```
+
+Dumps all stored members for a single group from the database (no Telegram connection needed). Groups are identified by numeric ID or unique title substring. Outputs user ID, name, username, and membership status.
+
+```bash
+telegroups members "security research"
+```
+
 ### Find members in multiple groups
 
 ```
 telegroups intersect [-db <path>] <group> <group> [group ...]
 ```
 
-Finds users who are members of **all** specified groups. Groups are identified by numeric ID or unique title substring. Outputs user ID, name, username, and whether the account is a bot.
+Finds users who are **currently active** members of **all** specified groups (excludes users with `left` or `banned` status). Groups are identified by numeric ID or unique title substring. Outputs user ID, name, and username.
 
 ```bash
 telegroups intersect "security research" "ctf players"

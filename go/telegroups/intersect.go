@@ -119,6 +119,7 @@ func printIntersection(db *sql.DB, groupIDs []int64) error {
 		FROM users u
 		JOIN members m ON m.user_id = u.id
 		WHERE m.group_id IN (%s)
+		  AND m.status NOT IN ('left', 'banned')
 		GROUP BY u.id
 		HAVING COUNT(DISTINCT m.group_id) = ?
 		ORDER BY u.first_name COLLATE NOCASE, u.last_name COLLATE NOCASE

@@ -20,6 +20,9 @@ func main() {
 		case "intersect":
 			runIntersectCmd(os.Args[2:])
 			return
+		case "members":
+			runMembersCmd(os.Args[2:])
+			return
 		}
 	}
 

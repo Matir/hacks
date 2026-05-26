@@ -151,42 +151,38 @@ func listSupergroup(c *client.Client, db *sql.DB, chat *client.Chat, sgID int64,
 		return tx.Commit()
 	}
 
-	var offset int32
-	var total int
 	now := time.Now().Unix()
 
 	logInfo("[%s] %s", groupType, chat.Title)
-	for {
-		var result *client.ChatMembers
-		if err := withFloodWait(func() (e error) {
-			result, e = c.GetSupergroupMembers(&client.GetSupergroupMembersRequest{
-				SupergroupId: sgID,
-				Offset:       offset,
-				Limit:        membersPerPage,
-			})
-			return
-		}); err != nil {
-			return fmt.Errorf("GetSupergroupMembers offset=%d: %w", offset, err)
-		}
 
-		for _, m := range result.Members {
-			if err := persistMember(c, tx, chat.Id, m, now); err != nil {
-				logError("  member error: %v", err)
-			}
-		}
-		total += len(result.Members)
+	total, err := fetchMembersWithFilter(c, tx, chat.Id, sgID, nil, now)
+	if err != nil {
+		return fmt.Errorf("GetSupergroupMembers: %w", err)
+	}
 
-		if len(result.Members) < membersPerPage {
-			break
+	// Additional passes to catch admins, bots, restricted, and banned members
+	// that the default (recent) filter omits for large groups.
+	for _, pass := range []struct {
+		name   string
+		filter client.SupergroupMembersFilter
+	}{
+		{"admins", &client.SupergroupMembersFilterAdministrators{}},
+		{"bots", &client.SupergroupMembersFilterBots{}},
+		{"restricted", &client.SupergroupMembersFilterRestricted{}},
+		{"banned", &client.SupergroupMembersFilterBanned{}},
+	} {
+		n, ferr := fetchMembersWithFilter(c, tx, chat.Id, sgID, pass.filter, now)
+		if ferr != nil {
+			logError("[%s] %s: %s pass: %v", groupType, chat.Title, pass.name, ferr)
 		}
-		offset += int32(len(result.Members))
+		total += n
 	}
 
 	if memberCount > 0 && total == 0 {
 		logError("[%s] %s: Telegram reports %d members but enumeration returned 0 — likely restricted",
 			groupType, chat.Title, memberCount)
 	}
-	logInfo("[%s] %s: %d members", groupType, chat.Title, total)
+	logInfo("[%s] %s: %d members stored", groupType, chat.Title, total)
 
 	if err := markGroupFetched(tx, chat.Id); err != nil {
 		logError("markGroupFetched %q: %v", chat.Title, err)
@@ -260,4 +256,34 @@ func primaryUsername(u *client.Usernames) string {
 		return ""
 	}
 	return u.ActiveUsernames[0]
+}
+
+func fetchMembersWithFilter(c *client.Client, tx *sql.Tx, chatID, sgID int64, filter client.SupergroupMembersFilter, now int64) (int, error) {
+	var offset int32
+	var total int
+	for {
+		var result *client.ChatMembers
+		if err := withFloodWait(func() (e error) {
+			result, e = c.GetSupergroupMembers(&client.GetSupergroupMembersRequest{
+				SupergroupId: sgID,
+				Filter:       filter,
+				Offset:       offset,
+				Limit:        membersPerPage,
+			})
+			return
+		}); err != nil {
+			return total, fmt.Errorf("offset=%d: %w", offset, err)
+		}
+		for _, m := range result.Members {
+			if err := persistMember(c, tx, chatID, m, now); err != nil {
+				logError("  member error: %v", err)
+			}
+		}
+		total += len(result.Members)
+		if len(result.Members) < membersPerPage {
+			break
+		}
+		offset += int32(len(result.Members))
+	}
+	return total, nil
 }

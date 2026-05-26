@@ -16,6 +16,7 @@ This project is a Go CLI tool for enumerating Telegram group membership via TDLi
 - `groups.go` — core member enumeration for basic groups and supergroups/channels; member resolution via `GetUser`
 - `db.go` — SQLite schema, migrations, and all database read/write operations
 - `list.go` — `list` subcommand: display stored groups
+- `members.go` — `members` subcommand: dump stored members for a single group
 - `intersect.go` — `intersect` subcommand: find users in multiple groups
 - `select.go` — chat filtering (by ID or title substring) and interactive TUI selection
 - `retry.go` — Telegram flood-wait (429) error detection and retry-after sleep
@@ -51,8 +52,14 @@ Supergroup member fetching uses batches of 200 (`membersPerPage` in `groups.go`)
 ### Flood-Wait Handling
 All TDLib calls that may be rate-limited must be wrapped with `withFloodWait()` from `retry.go`. Do not add raw `time.Sleep` calls elsewhere for rate limiting.
 
-### Group Resolution (intersect)
-`intersect.go` resolves group references to IDs before querying. When adding new subcommands that accept group arguments, reuse this resolution logic rather than duplicating it.
+### Group Resolution (intersect / members)
+`resolveGroupID` and `resolveGroupIDs` in `intersect.go` map group references (IDs or title substrings) to exact IDs. When adding new subcommands that accept group arguments, reuse this logic rather than duplicating it.
+
+### intersect Status Filter
+`printIntersection` excludes users with `status IN ('left', 'banned')`. Only currently active members are counted toward the intersection threshold. `printMembers` intentionally shows all statuses so callers can see the full picture.
+
+### Supergroup Enumeration Passes
+`fetchMembersWithFilter` in `groups.go` paginates a single TDLib filter to completion. `listSupergroup` calls it five times: once with `nil` (recent/default members) and then separately for administrators, bots, restricted, and banned members. Because `upsertMember` uses `ON CONFLICT DO UPDATE`, duplicate hits across passes are safe and simply refresh `last_seen_at`.
 
 ### CGO Dependency
 Both `go-tdlib` and `go-sqlite3` require CGO. Do not attempt to disable CGO. Cross-compilation requires a matching TDLib build for the target platform.
