@@ -1,0 +1,39 @@
+# Configuration for Audio Transcription Pipeline
+
+[paths]
+input_dir = "input"
+output_dir = "output"
+prompt_file = "prompts/post_process.md"
+
+[preprocessing]
+enabled = true
+ffmpeg_path = "ffmpeg" # Use "ffmpeg" if it is in your system PATH, otherwise specify absolute path
+
+[transcriber]
+# Supported providers: "huggingface", "openai_compatible"
+provider = "huggingface"
+
+# For Hugging Face:
+# Dedicated Endpoint URL or Inference API URL
+endpoint_url = "https://api-inference.huggingface.co/models/ibm-granite/granite-speech-4.1-2b-plus"
+model = "ibm-granite/granite-speech-4.1-2b-plus"
+api_key_env = "HF_API_KEY"
+
+# Example for Baseten / OpenAI Compatible:
+# provider = "openai_compatible"
+# endpoint_url = "https://model-XXXXXXXX.baseten.co/v1/audio/transcriptions"
+# model = "ibm-granite/granite-speech-4.1-2b-plus"
+# api_key_env = "BASETEN_API_KEY"
+
+[post_processor]
+# Supported providers: "gemini", "openai_compatible"
+provider = "openai_compatible"
+endpoint_url = "https://openrouter.ai/api/v1"
+model = "google/gemini-2.5-pro" # Example model on OpenRouter
+api_key_env = "OPENROUTER_API_KEY"
+temperature = 0.2
+
+# Example for Gemini directly:
+# provider = "gemini"
+# model = "gemini-2.5-flash"
+# api_key_env = "GEMINI_API_KEY"
