@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from google.adk.agents import BaseAgent
     from google.adk.artifacts import BaseArtifactService
     from google.adk.sessions import BaseSessionService
+    from google.adk.sessions.session import Session
 
     from trashdig.agents.summarizer import SummarizerAgent
     from trashdig.config import Config, ProviderConfig
@@ -255,6 +256,15 @@ async def run_agent(  # noqa: PLR0913
     Returns:
         The final text response from the agent.
     """
+    if summarizer:
+        await maybe_summarize(
+            app_name=agent.name,
+            user_id=user_id,
+            session_id=session_id,
+            session_service=session_service,
+            summarizer=summarizer,
+        )
+
     runner = Runner(
         agent=agent,
         app_name=agent.name,
@@ -274,3 +284,85 @@ async def run_agent(  # noqa: PLR0913
         final_text += get_response_text(event)
 
     return final_text
+
+async def maybe_summarize(
+    app_name: str,
+    user_id: str,
+    session_id: str,
+    session_service: "BaseSessionService",
+    summarizer: "SummarizerAgent",
+    threshold: int = 15,
+) -> None:
+    """Compact conversation history if it exceeds the turn threshold.
+
+    Args:
+        app_name: The application name (usually agent name).
+        user_id: The user ID.
+        session_id: The session ID.
+        session_service: The ADK SessionService.
+        summarizer: The SummarizerAgent instance.
+        threshold: The turn count threshold to trigger summarization.
+    """
+    try:
+        session: Optional["Session"] = await session_service.get_session(
+            app_name=app_name, user_id=user_id, session_id=session_id
+        )
+        if not session or not session.events or len(session.events) < threshold:
+            return
+
+        logging.info("Summarizing session %s (turns: %d)", session_id, len(session.events))
+
+        history_text = ""
+        for event in session.events:
+            role = event.author if event.author else "unknown"
+            text = get_response_text(event)
+            if text:
+                history_text += f"{role}: {text}\n"
+
+            # Log tool calls/responses briefly
+            for fc in event.get_function_calls():
+                history_text += f"{role} calls: {fc.name}({fc.args})\n"
+            for fr in event.get_function_responses():
+                history_text += f"Tool response from {fr.name}: {fr.response}\n"
+
+        summary_prompt = (
+            "Please provide a concise technical summary of the following security research "
+            "conversation history. Preserve all key findings and hypothesis states.\n\n"
+            f"--- START HISTORY ---\n{history_text}\n--- END HISTORY ---"
+        )
+
+        # Run summarizer without callbacks to avoid recursion or TUI noise
+        summary = await run_agent(
+            summarizer,
+            summary_prompt,
+            session_id=f"summarizer:{session_id}",
+            session_service=session_service,
+            user_id=user_id,
+        )
+
+        # Replace session with the summary
+        await session_service.delete_session(app_name=app_name, user_id=user_id, session_id=session_id)
+        new_session = await session_service.create_session(
+            app_name=app_name, user_id=user_id, session_id=session_id
+        )
+
+        # Add the summary as a system-like context message
+        summary_content = genai_types.Content(
+            role="user",
+            parts=[genai_types.Part(text=(
+                "Summary of previous research history:\n\n"
+                f"{summary}\n\n"
+                "Please continue the investigation based on this summary."
+            ))]
+        )
+        # Import Event here to avoid global circular issues
+        from google.adk.events.event import Event
+        summary_event = Event(
+            author="summarizer",
+            content=summary_content,
+            invocation_id="summarization",
+        )
+        await session_service.append_event(new_session, summary_event)
+
+    except Exception as e:
+        logging.error("Failed to summarize session %s: %s", session_id, e)

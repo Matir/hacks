@@ -13,6 +13,7 @@ from google.adk.tools import AgentTool, FunctionTool
 from pydantic import PrivateAttr
 
 from trashdig.agents.code_investigator import create_code_investigator_agent
+from trashdig.agents.critic import create_critic_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.recon import (
     create_stack_scout_agent,
@@ -71,6 +72,7 @@ class Coordinator(LlmAgent):
     _findings: list[Finding] = PrivateAttr()
     _scan_results: dict[str, Any] = PrivateAttr()
     _attack_surface: list[dict[str, Any]] = PrivateAttr()
+    _logical_segments: list[dict[str, Any]] = PrivateAttr()
     _tech_stack: str = PrivateAttr()
 
     _summarizer: Any = PrivateAttr()
@@ -107,6 +109,16 @@ class Coordinator(LlmAgent):
         )
         investigator_tool = AgentTool(code_investigator)
 
+        summarizer = create_summarizer_agent(
+            config.get_agent_config("summarizer") or config.get_agent_config("hunter")
+        )
+
+        critic = create_critic_agent(
+            config.get_agent_config("critic") or config.get_agent_config("skeptic"),
+            permission_manager=perm,
+        )
+        critic_tool = AgentTool(critic)
+
         stack_scout = create_stack_scout_agent(
             config.get_agent_config("stack_scout"),
             permission_manager=perm,
@@ -120,7 +132,7 @@ class Coordinator(LlmAgent):
         hunter = create_hunter_agent(
             config.get_agent_config("hunter"),
             permission_manager=perm,
-            extra_tools=[investigator_tool] + build_mcp_toolsets(config, "hunter"),
+            extra_tools=[investigator_tool, critic_tool] + build_mcp_toolsets(config, "hunter"),
             ask_user_tool=ask_tool,
         )
 
@@ -134,12 +146,8 @@ class Coordinator(LlmAgent):
         validator = create_validator_agent(
             config.get_agent_config("validator"),
             permission_manager=perm,
-            extra_tools=build_mcp_toolsets(config, "validator"),
+            extra_tools=[critic_tool] + build_mcp_toolsets(config, "validator"),
             ask_user_tool=ask_tool,
-        )
-
-        summarizer = create_summarizer_agent(
-            config.get_agent_config("summarizer") or config.get_agent_config("hunter")
         )
 
         db_path = getattr(config, "db_path", ".trashdig/trashdig.db")
@@ -173,7 +181,7 @@ class Coordinator(LlmAgent):
             model=coordinator_cfg.model,
             instruction=load_prompt("coordinator.md"),
             description="Orchestrates the multi-phase vulnerability scanning pipeline.",
-            sub_agents=[stack_scout, web_route_mapper, hunter_loop, skeptic, validator],
+            sub_agents=[stack_scout, web_route_mapper, hunter_loop, skeptic, validator, critic],
         )
 
         # --- PrivateAttr initialisation ---
@@ -194,6 +202,7 @@ class Coordinator(LlmAgent):
         object.__setattr__(self, "_findings", [])
         object.__setattr__(self, "_scan_results", {})
         object.__setattr__(self, "_attack_surface", [])
+        object.__setattr__(self, "_logical_segments", [])
         object.__setattr__(self, "_tech_stack", "")
         object.__setattr__(self, "_summarizer", summarizer)
         object.__setattr__(self, "_llm_errors", 0)
@@ -255,6 +264,11 @@ class Coordinator(LlmAgent):
     def attack_surface(self) -> list[dict[str, Any]]:
         """Returns the list of discovered web endpoints."""
         return self._attack_surface
+
+    @property
+    def logical_segments(self) -> list[dict[str, Any]]:
+        """Returns the list of identified logical codebase segments."""
+        return self._logical_segments
 
     @property
     def tech_stack(self) -> str:
@@ -341,6 +355,14 @@ class Coordinator(LlmAgent):
         raise RuntimeError("Validator agent not found in Coordinator sub-agents.")
 
     @property
+    def critic(self) -> BaseAgent:
+        """Returns the Critic agent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "critic":
+                return sa
+        raise RuntimeError("Critic agent not found in Coordinator sub-agents.")
+
+    @property
     def state(self) -> EngineState:
         """Returns the current engine state."""
         return self._state
@@ -424,8 +446,24 @@ class Coordinator(LlmAgent):
         # Phase 1: Recon
         await self.run_recon(path)
 
-        # Phase 2: Hypothesis-driven hunting loop using ADK LoopAgent
-        self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop...")
+        # Phase 2: Initial Parallel Hunt (Wide Breath)
+        if self._logical_segments:
+            self.log(f"[bold]Coordinator:[/bold] spawning {len(self._logical_segments)} parallel hunters...")
+
+            # Use a semaphore to respect concurrency limits
+            sem = asyncio.Semaphore(self._config.data.get("max_parallel_agents", 3))
+
+            async def _limited_hunt(segment: dict[str, Any]) -> list[Finding]:
+                async with sem:
+                    files = segment.get("files", [])
+                    name = segment.get("name", "Unknown Segment")
+                    self.log(f"[bold]Coordinator:[/bold] parallel hunt starting on [cyan]{name}[/cyan] ({len(files)} files)")
+                    return await self.run_hunter(files, path)
+
+            await asyncio.gather(*[_limited_hunt(seg) for seg in self._logical_segments])
+
+        # Phase 3: Hypothesis-driven hunting loop using ADK LoopAgent (Deep Dive)
+        self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop for deep-dive hypotheses...")
 
         runner = Runner(
             agent=self.hunter_loop,
@@ -448,7 +486,7 @@ class Coordinator(LlmAgent):
             filtered = {k: v for k, v in f.items() if k in Finding.__dataclass_fields__}
             self._findings.append(Finding(**filtered))
 
-        # Phase 3: Verify all accumulated findings
+        # Phase 4: Verify all accumulated findings
         for finding in list(self._findings):
             await self.verify_finding(finding)
 
@@ -530,6 +568,7 @@ class Coordinator(LlmAgent):
         mapping: dict[str, Any] = data.get("mapping", {})
         hypotheses: list[dict[str, Any]] = data.get("hypotheses", [])
         self._tech_stack = data.get("tech_stack", "")
+        self._logical_segments = data.get("logical_segments", [])
         self._scan_results = mapping
 
         is_web_app = data.get("is_web_app", False)
@@ -674,6 +713,8 @@ class Coordinator(LlmAgent):
             # Phase 3.2: Validator
             validator_prompt = load_prompt("validator_verify.md").format(
                 title=finding.title,
+                description=finding.description,
+                vulnerable_code=finding.vulnerable_code,
                 file_path=finding.file_path,
                 tech_stack=self._tech_stack
             )

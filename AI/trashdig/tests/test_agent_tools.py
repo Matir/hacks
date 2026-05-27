@@ -98,6 +98,7 @@ from agent_test_utils import iter_agent_factories, iter_tool_callables
 
 import trashdig.tools
 from trashdig.agents.code_investigator import create_code_investigator_agent
+from trashdig.agents.critic import create_critic_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
 from trashdig.agents.skeptic import create_skeptic_agent
@@ -141,6 +142,7 @@ ALL_TOOLS: frozenset[str] = frozenset({
     "ask_user",
     "bash_tool",
     "container_bash_tool",
+    "critic",
     "detect_frameworks",
     "detect_language",
     "exit_loop",
@@ -163,6 +165,7 @@ ALL_TOOLS: frozenset[str] = frozenset({
     "trace_variable_semantic",
     "update_hypothesis_status",
     "web_fetch",
+        "critic",
 })
 
 
@@ -374,6 +377,7 @@ class TestStackScoutTools(AgentToolsMixin, unittest.TestCase):
         "query_vulndb",
         "ripgrep_search",
         "web_fetch",
+        "critic",
     ]
 
 
@@ -412,6 +416,7 @@ class TestHunterTools(AgentToolsMixin, unittest.TestCase):
         "trace_taint_cross_file",
         "trace_variable_semantic",
         "web_fetch",
+        "critic",
     ]
 
     def test_no_ask_user_tool_when_none(self) -> None:
@@ -438,6 +443,7 @@ class TestSkepticTools(AgentToolsMixin, unittest.TestCase):
         "read_file",
         "ripgrep_search",
         "web_fetch",
+        
     ]
 
 
@@ -455,6 +461,7 @@ class TestValidatorTools(AgentToolsMixin, unittest.TestCase):
         "read_file",
         "ripgrep_search",
         "web_fetch",
+        "critic",
     ]
 
 
@@ -544,3 +551,17 @@ class TestAllAgentsHaveToolTests(unittest.TestCase):
                     f"{expected_cls_name!r} exists but does not inherit from "
                     f"AgentToolsMixin",
                 )
+
+class TestCriticTools(AgentToolsMixin, unittest.TestCase):
+    """Critic should have tools listed in README under C column."""
+
+    MODULE = "trashdig.agents.critic"
+    FACTORY = create_critic_agent
+    EXPECTED_TOOLS = [
+        "find_files",
+        "list_files",
+        "query_vulndb",
+        "read_file",
+        "ripgrep_search",
+        "web_fetch",
+    ]

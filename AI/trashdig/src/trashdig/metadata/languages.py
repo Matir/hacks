@@ -41,6 +41,12 @@ class LanguageMetadata:
     identifier_types: set[str] = field(default_factory=lambda: {"identifier"})
     # Node types that represent an argument list in a call
     argument_types: set[str] = field(default_factory=lambda: {"argument_list"})
+    # Node types for function/method calls
+    call_types: set[str] = field(default_factory=lambda: {"call"})
+    # Node types for member access (e.g. obj.attr)
+    member_access_types: set[str] = field(default_factory=lambda: {"attribute"})
+    # Node types for await expressions
+    await_types: set[str] = field(default_factory=set)
 
 
 PYTHON_METADATA = LanguageMetadata(
@@ -62,6 +68,9 @@ PYTHON_METADATA = LanguageMetadata(
     skip_symbols={"self", "cls"},
     definition_patterns=[r"\bdef {name}\b", r"\basync def {name}\b"],
     attr_separators={"."},
+    call_types={"call"},
+    member_access_types={"attribute"},
+    await_types={"await"},
 )
 
 JAVASCRIPT_METADATA = LanguageMetadata(
@@ -79,6 +88,9 @@ JAVASCRIPT_METADATA = LanguageMetadata(
     method_sinks={"query", "execute", "write"},
     definition_patterns=[r"\bfunction {name}\b", r"\b{name}\s*=\s*(?:async\s+)?function", r"\b{name}\s*:\s*function"],
     attr_separators={"."},
+    call_types={"call_expression"},
+    member_access_types={"member_expression"},
+    await_types={"await_expression"},
 )
 
 GO_METADATA = LanguageMetadata(
@@ -92,6 +104,8 @@ GO_METADATA = LanguageMetadata(
     method_sinks={"Query", "Exec", "Execute"},
     definition_patterns=[r"\bfunc\s+(?:\([^)]+\)\s+)?{name}\b"],
     attr_separators={"."},
+    call_types={"call_expression"},
+    member_access_types={"selector_expression"},
 )
 
 CSHARP_METADATA = LanguageMetadata(
@@ -105,6 +119,9 @@ CSHARP_METADATA = LanguageMetadata(
     method_sinks={"Execute", "ExecuteNonQuery", "ExecuteReader", "ExecuteScalar"},
     definition_patterns=[r"\b{name}\s*\("],
     attr_separators={".", "::"},
+    call_types={"invocation_expression"},
+    member_access_types={"member_access_expression"},
+    await_types={"await_expression"},
 )
 
 C_METADATA = LanguageMetadata(
@@ -132,6 +149,8 @@ C_METADATA = LanguageMetadata(
     method_sinks=set(),
     definition_patterns=[r"\b{name}\s*\("],
     attr_separators={"."},
+    call_types={"call_expression"},
+    member_access_types={"field_expression"},
 )
 
 CPP_METADATA = LanguageMetadata(
@@ -164,6 +183,8 @@ CPP_METADATA = LanguageMetadata(
     method_sinks=set(),
     definition_patterns=[r"\b{name}\s*\("],
     attr_separators={".", "->", "::"},
+    call_types={"call_expression"},
+    member_access_types={"field_expression"},
 )
 
 JAVA_METADATA = LanguageMetadata(
@@ -190,6 +211,8 @@ JAVA_METADATA = LanguageMetadata(
     method_sinks={"execute", "executeQuery", "executeUpdate", "query"},
     definition_patterns=[r"\b{name}\s*\("],
     attr_separators={"."},
+    call_types={"method_invocation"},
+    member_access_types={"field_access"},
 )
 
 RUBY_METADATA = LanguageMetadata(
@@ -203,6 +226,7 @@ RUBY_METADATA = LanguageMetadata(
     method_sinks={"query", "execute", "send", "public_send"},
     definition_patterns=[r"\bdef\s+{name}\b"],
     attr_separators={"."},
+    call_types={"call", "method_call"},
 )
 
 RUST_METADATA = LanguageMetadata(
@@ -217,6 +241,9 @@ RUST_METADATA = LanguageMetadata(
     definition_patterns=[r"\bfn\s+{name}\b"],
     attr_separators={".", "::"},
     argument_types={"arguments"},
+    call_types={"call_expression"},
+    member_access_types={"field_expression"},
+    await_types={"await_expression"},
 )
 
 PHP_METADATA = LanguageMetadata(
@@ -250,6 +277,8 @@ PHP_METADATA = LanguageMetadata(
     attr_separators={"->", "::"},
     identifier_types={"variable_name", "name", "identifier"},
     argument_types={"arguments", "argument_list"},
+    call_types={"function_call_expression", "member_call_expression"},
+    member_access_types={"member_access_expression"},
 )
 
 _METADATA_MAP = {

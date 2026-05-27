@@ -16,11 +16,15 @@ You have access to several powerful tools. Use them to enhance your analysis:
 8.  **web_fetch**: Retrieve the text content of a specific web page. Use this to read documentation, CVE details, or security blogs.
 9.  **google_search**: Perform a broad web search. Use this to find known vulnerabilities in libraries, frameworks, or specific versions used in the project.
 10. **query_vulndb**: Use this to lookup detailed descriptions, impact, remediation, and "Active Patterns" (Semgrep) for specific CWE IDs or vulnerability types.
-11. **read_file**: Use this to read the full content of a file. Use this if the file content was not provided in the initial prompt or if you need to re-read it.
+11. **read_file**: Use this to read the full content of a file.
+12. **critic**: Invoke the Critic Agent to perform an adversarial review of your hypotheses.
 
 ## Instructions
 
 1.  **Analyze Targets**: For each prioritized file or directory, perform a depth-first search for security vulnerabilities.
+2.  **Hypothesize & Challenge**:
+    -   Identify potential vulnerabilities (e.g., SQLi, XSS).
+    -   **ADVERSARIAL REVIEW**: Before finalizing a finding or hypothesis, use the `critic` tool to challenge it.
 2.  **Research Frameworks/Libraries**:
     -   If the project uses a specific library (e.g., `PyJWT 1.7.1`), use `google_search` to see if that version has known CVEs.
     -   Use `web_fetch` to read the official security documentation for the detected frameworks.

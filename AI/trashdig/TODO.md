@@ -52,6 +52,7 @@
 - [x] Implement recursive **Hypothesis-Driven** loop (Phase 2).
 - [x] Upgrade to true AST-aware taint analysis (Phase 3).
 - [x] **[HIGH]** Enhanced Taint Analysis: Trace data flows across multiple files from entry points to sinks.
+- [x] **[MEDIUM]** Complex AST Expressions: Improve support for member access, await expressions, and nested call resolution in `trace_taint` and `get_scope_info`.
 
 ## Multi-Stage Verification Pipeline
 - [x] **[HIGH]** SkepticAgent: Adversarial Reviewer.
@@ -61,6 +62,7 @@
 - [x] **[MEDIUM]** Refine `ValidatorAgent` for PoC Generation.
     - [x] Invoked only after `SkepticAgent` approval.
     - [x] Focuses on generating and executing PoC scripts in the containerized sandbox to prove reachability and exploitability.
+- [x] **[HIGH]** Iterative PoC Refinement: Implement a feedback loop where the `ValidatorAgent` analyzes failure logs from its own PoC execution and self-corrects.
 
 ## Services & Safety Middleware
 - [x] **[HIGH]** Logic-Level Permission Middleware (`src/trashdig/services/permissions.py`).
@@ -104,11 +106,21 @@
 ### Workflow Agents
 - [x] **[MEDIUM]** Use `LoopAgent` for the hypothesis-driven hunting cycle.
     - [x] Replace the manual `asyncio` retry/loop in `Coordinator.run_loop()` with ADK's `LoopAgent` + escalation condition.
+- [x] **[HIGH]** Parallel Hunting: Split codebase into logical segments during Recon and review them with parallel Hunter sessions.
+- [ ] **[HIGH]** "Pause & Steer" Collaborative Steering:
+    - [ ] Define `EngineState.PAUSED` and `EngineState.STEERING` in `types.py`.
+    - [ ] Implement a global `asyncio.Event` or interrupt flag in `Coordinator` to signal pause.
+    - [ ] Update `TrashDigCallback.on_before_model` to check for pause state and await a resume event.
+    - [ ] Add `pause` and `resume` commands to the TUI/REPL.
+    - [ ] Add a `hint <text>` command to inject user context into the current agent session as a high-priority message.
+    - [ ] Add a `hypotheses` command to the REPL to list and manually reprioritize/delete hypotheses.
+    - [ ] Implement structured "Agent Ask" UI to allow agents to proactively request steering.
 
 ### Session & Memory
 - [x] **[MEDIUM]** Adopt a persistent `SessionService` (e.g., database-backed) to allow scan resumption across CLI invocations.
     - [x] Using `SqliteSessionService` from `google.adk.sessions.sqlite_session_service`.
     - [x] Shares `.trashdig/trashdig.db` with `ProjectDatabase` (no schema conflicts).
+- [x] **[MEDIUM]** Summarizer Wiring: Hook up the `SummarizerAgent` in the core `run_agent` helper to compact conversation history when token limits are approached.
 - [ ] **[LOW]** Evaluate ADK `MemoryService` for cross-session long-term knowledge retention.
     - [ ] Distinguish from `SessionService` (per-conversation) vs. `MemoryService` (persistent cross-session facts).
     - [ ] Assess overlap with existing `ProjectDatabase` — may be redundant.
@@ -199,5 +211,6 @@ Each item requires: (1) adding the grammar package to `pyproject.toml`, (2) addi
 - [x] **[LOW]** Enforce Python import standards: Consistent grouping (stdlib, 3rd party, trashdig), alphabetical sorting, and top-level placement via Ruff/isort.
 - [x] **[LOW]** Shared Database Connection: Refactor tools to use a singleton `ProjectDatabase` or connection pool to avoid SQLite locking issues during parallel agent execution.
 - [x] **[MEDIUM]** Add a VulnDB for vulnerability information retrieval.
+- [x] **[MEDIUM]** Critic Agent: Implement an adversarial reviewer agent and wire it as a tool for Hunter and Validator agents.
 - [ ] **[MEDIUM]** Add deterministic checks for the verifier.
 - [ ] **[MEDIUM]** Use long term MemoryService for findings, conversation history, memory across sessions.

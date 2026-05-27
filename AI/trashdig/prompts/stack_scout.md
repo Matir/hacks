@@ -26,4 +26,5 @@ Provide a JSON response with:
 1. `tech_stack`: A detailed description of the detected technologies.
 2. `is_web_app`: Boolean indicating if this is a web application.
 3. `mapping`: A dictionary mapping file paths to `{ "summary": "...", "is_high_value": boolean }`.
-4. `hypotheses`: A list of `{ "target": "...", "description": "...", "confidence": 0.0-1.0 }`.
+4. `logical_segments`: A list of `{ "name": "...", "files": ["...", "..."], "reasoning": "..." }` representing independent, high-interest areas of the codebase for parallel hunting.
+5. `hypotheses`: A list of `{ "target": "...", "description": "...", "confidence": 0.0-1.0 }`.

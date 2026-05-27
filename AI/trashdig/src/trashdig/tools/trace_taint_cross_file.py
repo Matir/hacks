@@ -31,68 +31,71 @@ def _node_contains_identifier(node: Any, name: str) -> bool:
 
 
 def _extract_callee_name(func_node: Any) -> str | None:
-    """Extract the plain function/method name from a call's callee node.
-
-    Handles simple identifiers (``fetch``) and attribute access (``cursor.execute``).
-
-    Args:
-        func_node: The first child of a tree-sitter ``call`` node.
-
-    Returns:
-        The callee name string, or ``None`` if it cannot be determined.
-    """
-    if func_node.type == "identifier":
+    """Extract the plain function/method name from a call's callee node."""
+    if func_node.type in ("identifier", "property_identifier", "field_identifier"):
         return func_node.text.decode("utf-8")
-    if func_node.type == "attribute":
-        # Last identifier child is the method name (e.g. "execute" in "cursor.execute")
+    if func_node.type in (
+        "attribute",
+        "selector_expression",
+        "member_access_expression",
+        "member_expression",
+        "attribute_expression",
+        "field_expression",
+    ):
+        # Last identifier child is usually the method name
         for child in reversed(func_node.children):
-            if child.type == "identifier":
+            if child.type in ("identifier", "property_identifier", "field_identifier"):
                 return child.text.decode("utf-8")
     return None
 
 
 def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:
     """Extract the full path of a callee (e.g. ['module', 'func'])."""
-    if func_node.type == "identifier":
+    if func_node.type in metadata.identifier_types:
         return [func_node.text.decode("utf-8")]
-    if func_node.type == "attribute" or (
-        metadata.name == "csharp" and func_node.type == "member_access_expression"
-    ):
-        # In python: (attribute object: (_) attribute: (identifier))
-        # In JS: (attribute_expression object: (_) property: (property_identifier))
-        # In Go: (selector_expression operand: (_) field: (field_identifier))
-        # This implementation is a bit Python-centric, but trying to generalize
 
-        obj = func_node.child_by_field_name("object") or func_node.child_by_field_name("operand")
+    if func_node.type in metadata.member_access_types:
+        # Field names vary by language
+        obj = (
+            func_node.child_by_field_name("object")  # Python, JS
+            or func_node.child_by_field_name("operand")  # Go
+            or func_node.child_by_field_name("expression")  # C#
+            or func_node.child_by_field_name("argument")  # C++?
+        )
         attr = (
-            func_node.child_by_field_name("attribute")
-            or func_node.child_by_field_name("property")
-            or func_node.child_by_field_name("field")
-            or func_node.child_by_field_name("name")
+            func_node.child_by_field_name("attribute")  # Python
+            or func_node.child_by_field_name("property")  # JS
+            or func_node.child_by_field_name("field")  # Go
+            or func_node.child_by_field_name("name")  # C#
         )
 
         path: list[str] = []
         if obj:
-            if obj.type == "identifier":
+            if obj.type in metadata.identifier_types:
                 path.append(obj.text.decode("utf-8"))
-            elif obj.type in (
-                "attribute",
-                "selector_expression",
-                "member_access_expression",
-                "attribute_expression",
-            ):
+            elif obj.type in metadata.member_access_types:
                 path.extend(_get_full_callee_path(obj, metadata))
-            elif obj.type in {"call", "call_expression"}:
+            elif obj.type in metadata.call_types:
                 # For call().method, we might want to know the call's callee
-                inner_callee_node = obj.child_by_field_name("function")
+                inner_callee_node = (
+                    obj.child_by_field_name("function")
+                    or obj.children[0]  # Fallback for languages without field names
+                )
                 if inner_callee_node:
                     path.extend(_get_full_callee_path(inner_callee_node, metadata))
                 path.append("()")  # Marker for call
 
-        if attr and attr.type in ("identifier", "property_identifier", "field_identifier"):
+        if attr:
             path.append(attr.text.decode("utf-8"))
 
         return path
+
+    if func_node.type in metadata.await_types:
+        # For await func(), the child is usually the call
+        for child in func_node.children:
+            if child.type in metadata.call_types or child.type in metadata.identifier_types:
+                return _get_full_callee_path(child, metadata)
+
     return []
 
 
@@ -127,9 +130,17 @@ def _resolve_import(  # noqa: C901
             module_node = node.child_by_field_name("module_name")
             if module_node:
                 module_name = module_node.text.decode("utf-8")
+                # Look for the symbol in the imported names
                 for child in node.children:
-                    if _match_dotted_name(child) or _match_aliased_import(child):
-                        return module_name
+                    if child.type == "aliased_import":
+                        name_node = child.child_by_field_name("name")
+                        alias_node = child.child_by_field_name("alias")
+                        if alias_node and alias_node.text.decode("utf-8") == symbol_name:
+                            return f"{module_name}.{name_node.text.decode('utf-8')}"
+                        if not alias_node and name_node and name_node.text.decode("utf-8") == symbol_name:
+                            return f"{module_name}.{symbol_name}"
+                    elif child.type == "dotted_name" and child.text.decode("utf-8") == symbol_name:
+                        return f"{module_name}.{symbol_name}"
         elif node.type == "import_statement":
             for child in node.children:
                 if _match_dotted_name(child):
@@ -174,20 +185,26 @@ def _find_calls_passing_variable(
         A list of ``(callee_name, arg_index, line_number, callee_node)`` tuples.
     """
     parser = _make_parser(language)
-    if parser is None:
+    metadata = get_language_metadata(language)
+    if parser is None or metadata is None:
         return []
     tree = parser.parse(content)
 
     results: list[tuple[str, int, int, Any]] = []
 
     def walk(node: Any) -> None:
-        if node.type == "call":
-            callee_node = node.children[0] if node.children else None
+        if node.type in metadata.call_types:
+            # Field names vary: 'function' (Python, JS, Go), 'expression' (C#)
+            callee_node = (
+                node.child_by_field_name("function")
+                or node.child_by_field_name("expression")
+                or (node.children[0] if node.children else None)
+            )
             callee = _extract_callee_name(callee_node) if callee_node else None
 
-            arg_list = next((c for c in node.children if c.type == "argument_list"), None)
+            arg_list = next((c for c in node.children if c.type in metadata.argument_types), None)
             if callee and arg_list:
-                actual_args = [c for c in arg_list.children if c.type not in ("(", ")", ",")]
+                actual_args = [c for c in arg_list.children if c.type not in ("(", ")", ",", "[", "]", "{", "}")]
                 for idx, arg in enumerate(actual_args):
                     if _node_contains_identifier(arg, variable_name):
                         results.append((callee, idx, node.start_point[0] + 1, callee_node))
@@ -520,6 +537,14 @@ def _trace_recursive(  # noqa: PLR0913
         calls, var, report_lines, indent, project_root, metadata, depth, max_depth, visited, content
     )
 
+    # Follow local assignments
+    tainted_assignments = _find_tainted_assignments(var, content, metadata)
+    for new_var, line_no in tainted_assignments:
+        report_lines.append(f"{indent}  ASSIGN Line {line_no}: '{var}' → '{new_var}'")
+        _trace_recursive(
+            new_var, file_path, depth, max_depth, visited, report_lines, project_root, metadata
+        )
+
     return_lines = _find_returns_variable(var, content, metadata.name)
     for line_no in return_lines:
         report_lines.append(
@@ -582,3 +607,58 @@ def trace_taint_cross_file(
         else "RESULT: No sinks reached within depth limit"
     )
     return "\n".join(report_lines)
+
+def _find_tainted_assignments(
+    variable_name: str,
+    content: bytes,
+    metadata: Any,
+) -> list[tuple[str, int]]:
+    """Find all variables that become tainted from *variable_name* via assignment.
+
+    Args:
+        variable_name: The currently tainted variable.
+        content: Raw file bytes.
+        metadata: Language metadata.
+
+    Returns:
+        A list of (new_variable_name, line_number) tuples.
+    """
+    parser = _make_parser(metadata.name)
+    if parser is None:
+        return []
+    tree = parser.parse(content)
+
+    results: list[tuple[str, int]] = []
+
+    def walk(node: Any) -> None:
+        if node.type in metadata.assignment_types:
+            left = node.child_by_field_name("left") or node.child_by_field_name("name")
+            right = node.child_by_field_name("right") or node.child_by_field_name("value")
+
+            # Handle variable_declaration (e.g. let x = y)
+            if not left and node.type in (
+                "variable_declaration",
+                "lexical_declaration",
+                "local_variable_declaration",
+            ):
+                for child in node.children:
+                    if child.type == "variable_declarator":
+                        name_node = child.child_by_field_name("name")
+                        val_node = child.child_by_field_name("value")
+                        if (
+                            name_node
+                            and val_node
+                            and _node_contains_identifier(val_node, variable_name)
+                        ):
+                            results.append(
+                                (name_node.text.decode("utf-8"), node.start_point[0] + 1)
+                            )
+
+            elif left and right and _node_contains_identifier(right, variable_name):
+                if left.type in metadata.identifier_types:
+                    results.append((left.text.decode("utf-8"), node.start_point[0] + 1))
+        for child in node.children:
+            walk(child)
+
+    walk(tree.root_node)
+    return results

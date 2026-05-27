@@ -32,13 +32,13 @@ def _find_enclosing_scopes(node: Any, target_line: int, metadata: Any) -> list[A
 def _extract_params_from_node(p: Any, metadata: Any) -> list[str]:
     """Helper to extract names from a parameter node."""
     params = []
-    if p.type == "identifier":
+    if p.type in metadata.identifier_types:
         name = p.text.decode("utf-8")
         if name not in metadata.skip_symbols:
             params.append(name)
     elif p.type in metadata.parameter_types:
         for child in p.children:
-            if child.type == "identifier":
+            if child.type in metadata.identifier_types:
                 name = child.text.decode("utf-8")
                 if name not in metadata.skip_symbols:
                     params.append(name)
@@ -87,22 +87,38 @@ def _extract_local_variables(scope_node: Any, target_line: int, metadata: Any) -
                         vars_found.append(name)
 
     def _handle_assignment(node: Any) -> None:
-        left = node.child_by_field_name("left")
-        if not left:
-            left = node.child_by_field_name("name")
-
+        left = node.child_by_field_name("left") or node.child_by_field_name("name")
         if not left and node.type in (
             "variable_declaration",
+            "lexical_declaration",
             "local_variable_declaration",
             "declaration",
         ):
             _handle_decl(node)
-        elif left and left.type == "identifier":
-            name = left.text.decode("utf-8")
-            if name not in vars_found and name not in metadata.skip_symbols:
-                vars_found.append(name)
-        elif node.type in ("lexical_declaration", "variable_declaration"):
-            _handle_decl(node)
+        elif left:
+            if left.type in metadata.identifier_types:
+                name = left.text.decode("utf-8")
+                if name not in vars_found and name not in metadata.skip_symbols:
+                    vars_found.append(name)
+            elif left.type in metadata.member_access_types:
+                # Handle obj.attr = ... by identifying obj as the root
+                obj_path = _get_member_root(left, metadata)
+                if obj_path and obj_path not in vars_found:
+                    vars_found.append(obj_path)
+
+    def _get_member_root(node: Any, metadata: Any) -> str | None:
+        """Finds the root identifier of a member access path."""
+        obj = (
+            node.child_by_field_name("object")
+            or node.child_by_field_name("operand")
+            or node.child_by_field_name("expression")
+        )
+        if obj:
+            if obj.type in metadata.identifier_types:
+                return obj.text.decode("utf-8")
+            if obj.type in metadata.member_access_types:
+                return _get_member_root(obj, metadata)
+        return None
 
     def walk(node: Any) -> None:  # noqa: C901
         # Stop if we passed the target line
