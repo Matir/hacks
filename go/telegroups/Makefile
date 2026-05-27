@@ -12,7 +12,7 @@ PWD := $(shell pwd)
 CGO_CFLAGS  := -I$(PWD)/$(VENDOR_TDLIB)/include
 CGO_LDFLAGS := -L$(PWD)/$(VENDOR_TDLIB)/lib -Wl,-rpath,$(PWD)/$(VENDOR_TDLIB)/lib
 
-.PHONY: all build tdlib clean distclean
+.PHONY: all build static tdlib clean distclean
 
 all: build
 
@@ -37,12 +37,17 @@ tdlib: $(TDLIB_BUILD)/libtdjson.so
 build: tdlib
 	CGO_CFLAGS="$(CGO_CFLAGS)" \
 	CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-	$(GO) build $(GOFLAGS) -o telegroups ./...
+	$(GO) build $(GOFLAGS) -tags libtdjson -o telegroups ./...
+
+static: tdlib
+	CGO_CFLAGS="$(CGO_CFLAGS)" \
+	CGO_LDFLAGS="-L$(PWD)/$(VENDOR_TDLIB)/lib -ltde2e -ltdutils -lssl -lcrypto -lz -ldl -lm -lstdc++" \
+	$(GO) build $(GOFLAGS) -o telegroups-static ./...
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 
 clean:
-	rm -f telegroups
+	rm -f telegroups telegroups-static
 	rm -rf $(TDLIB_BUILD) $(VENDOR_TDLIB)
 
 distclean: clean

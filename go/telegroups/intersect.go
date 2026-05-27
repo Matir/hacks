@@ -140,14 +140,14 @@ func printIntersection(db *sql.DB, groupIDs []int64) error {
 			firstName string
 			lastName  string
 			username  string
-			isBot     int
+			isBot     bool
 		)
 		if err := rows.Scan(&id, &firstName, &lastName, &username, &isBot); err != nil {
 			return fmt.Errorf("scan: %w", err)
 		}
 
 		name := strings.TrimSpace(firstName + " " + lastName)
-		if isBot != 0 {
+		if isBot {
 			name += " (bot)"
 		}
 		handle := ""

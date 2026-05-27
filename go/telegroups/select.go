@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -29,7 +30,19 @@ func chatMatchesFilter(chat *client.Chat, filter string) bool {
 	if id, err := strconv.ParseInt(filter, 10, 64); err == nil {
 		return chat.Id == id
 	}
-	return strings.Contains(strings.ToLower(chat.Title), strings.ToLower(filter))
+
+	title := strings.ToLower(chat.Title)
+	pattern := strings.ToLower(filter)
+
+	if strings.ContainsAny(pattern, "*?[") {
+		matched, err := path.Match(pattern, title)
+		if err == nil && matched {
+			return true
+		}
+		return false
+	}
+
+	return strings.Contains(title, pattern)
 }
 
 // selectGroupsInteractively presents a multi-select TUI listing all supplied

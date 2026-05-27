@@ -52,6 +52,11 @@ type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
+// queryer is satisfied by both *sql.DB and *sql.Tx.
+type queryer interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 func openDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path+"?_foreign_keys=on")
 	if err != nil {
@@ -85,12 +90,12 @@ func upsertGroup(ex execer, id int64, title, groupType string, memberCount int32
 // needsMemberFetch reports whether the group's member list should be fetched.
 // Returns true when threshold is zero (no -since flag), when the group has
 // never been fetched, or when the last fetch predates threshold.
-func needsMemberFetch(tx *sql.Tx, chatID int64, threshold time.Time) bool {
+func needsMemberFetch(q queryer, chatID int64, threshold time.Time) bool {
 	if threshold.IsZero() {
 		return true
 	}
 	var fetchedAt sql.NullInt64
-	if err := tx.QueryRow(`SELECT members_fetched_at FROM groups WHERE id = ?`, chatID).Scan(&fetchedAt); err != nil {
+	if err := q.QueryRow(`SELECT members_fetched_at FROM groups WHERE id = ?`, chatID).Scan(&fetchedAt); err != nil {
 		return true
 	}
 	if !fetchedAt.Valid {
@@ -108,10 +113,6 @@ func markGroupFetched(ex execer, chatID int64) error {
 }
 
 func upsertUser(ex execer, id int64, firstName, lastName, username string, isBot bool) error {
-	isBot01 := 0
-	if isBot {
-		isBot01 = 1
-	}
 	_, err := ex.Exec(
 		`INSERT INTO users (id, first_name, last_name, username, is_bot) VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
@@ -119,7 +120,7 @@ func upsertUser(ex execer, id int64, firstName, lastName, username string, isBot
 		     last_name=excluded.last_name,
 		     username=excluded.username,
 		     is_bot=excluded.is_bot`,
-		id, firstName, lastName, username, isBot01,
+		id, firstName, lastName, username, isBot,
 	)
 	return err
 }

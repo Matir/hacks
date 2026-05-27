@@ -28,11 +28,11 @@ func withFloodWait(fn func() error) error {
 }
 
 func floodWaitDuration(err error) (time.Duration, bool) {
-	var tdErr *client.Error
-	if !errors.As(err, &tdErr) || tdErr.Code != 429 {
+	var tdResErr client.ResponseError
+	if !errors.As(err, &tdResErr) || tdResErr.Err.Code != 429 {
 		return 0, false
 	}
-	secs := parseRetryAfter(tdErr.Message)
+	secs := parseRetryAfter(tdResErr.Err.Message)
 	return time.Duration(secs+1) * time.Second, true
 }
 
