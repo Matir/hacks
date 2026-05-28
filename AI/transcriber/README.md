@@ -7,6 +7,7 @@ A modular, robust, and stateful Python command-line pipeline to ingest audio/vid
 -   **Modular Architecture:** Swappable components for ASR transcription hosts and text LLM providers.
 -   **Native Speaker Attribution:** Pre-optimized to leverage the **IBM Granite Speech 4.1 2B Plus** model for producing speaker-tagged text directly without PyAnnote alignment.
 -   **Local Audio Preprocessing:** Integrated system `ffmpeg` utility automatically extracts audio tracks from video and downsamples media to optimal **16kHz mono WAV** files prior to upload, conserving bandwidth and reducing inference costs.
+-   **RSS / Podcast Feed Sync:** Automatically downloads new podcast episodes from any number of configured RSS feeds before processing begins. Episodes already present in the input directory are skipped, so re-running is always safe.
 -   **Resilient State Management:** Uses a `state.json` registry to track processing status (`preprocessed`, `transcribed`, `completed`) and file MD5 hashes. Runs can be interrupted and safely resumed without repeating expensive transcription calls or duplicating work.
 -   **OpenRouter & Gemini Out-of-the-Box:** Pre-configured support for OpenAI-compatible LLM routers (like OpenRouter) and direct Gemini SDK connections.
 -   **UV Environment Management:** Pre-configured using `uv` for fast package isolation and auto-managed CPython toolchains.
@@ -80,6 +81,18 @@ model = "google/gemini-2.5-pro"  # Or your model of choice on OpenRouter
 api_key_env = "OPENROUTER_API_KEY"
 temperature = 0.2
 ```
+
+#### RSS Feed Sync (optional)
+
+To automatically pull podcast episodes before each run, add one or more `[[rss.feeds]]` entries to `config.toml`:
+
+```toml
+[[rss.feeds]]
+url = "https://example.com/podcast.rss"
+# max_episodes = 10  # optional: limit to the N most recent episodes
+```
+
+Multiple feeds are supported — add additional `[[rss.feeds]]` blocks. On each run, the pipeline fetches every configured feed and downloads any episodes whose filename is not already present in `input/`. Standard podcast RSS (`<enclosure>`) and `<media:content>` formats are both handled.
 
 ---
 

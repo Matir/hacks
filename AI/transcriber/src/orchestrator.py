@@ -8,6 +8,7 @@ from src.state import StateManager
 from src.preprocessor import AudioPreprocessor
 from src.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, BaseTranscriber
 from src.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor
+from src.rss_fetcher import RSSFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,14 @@ class Orchestrator:
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.raw_transcripts_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download any new podcast episodes from configured RSS feeds
+        feeds = self.config.rss_feeds
+        if feeds:
+            fetcher = RSSFetcher(self.input_dir)
+            downloaded = fetcher.sync_feeds(feeds)
+            if downloaded:
+                logger.info(f"Downloaded {len(downloaded)} new episode(s) from RSS feeds.")
 
         files = self.find_files()
         if not files:

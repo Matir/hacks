@@ -25,6 +25,12 @@ api_key_env = "HF_API_KEY"
 # model = "ibm-granite/granite-speech-4.1-2b-plus"
 # api_key_env = "BASETEN_API_KEY"
 
+# RSS feeds to sync before processing.
+# Each entry may include an optional max_episodes limit (most recent N).
+# [[rss.feeds]]
+# url = "https://example.com/podcast.rss"
+# max_episodes = 10
+
 [post_processor]
 # Supported providers: "gemini", "openai_compatible"
 provider = "openai_compatible"

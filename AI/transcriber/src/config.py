@@ -71,3 +71,7 @@ class Config:
     def get_post_processor_api_key(self) -> str:
         env_var = self.data.get("post_processor", {}).get("api_key_env", "GEMINI_API_KEY")
         return os.environ.get(env_var, "")
+
+    @property
+    def rss_feeds(self) -> list[dict]:
+        return list(self.data.get("rss", {}).get("feeds", []))
