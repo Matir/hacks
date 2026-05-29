@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 from pathlib import Path
@@ -35,15 +36,24 @@ def setup_logging(output_dir: Path):
     root_logger.addHandler(file_handler)
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Audio Transcription & Post-Processing Pipeline")
+    parser.add_argument(
+        "-c", "--config",
+        default="config.toml",
+        help="Path to the TOML configuration file (default: config.toml)"
+    )
+    args = parser.parse_args()
+
     # 1. Load .env if present (contains keys like HF_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY)
     load_dotenv()
 
     # 2. Load Config
     try:
-        config = Config("config.toml")
+        config = Config(args.config)
     except FileNotFoundError as e:
         print(f"Error: {e}")
-        print("Please ensure 'config.toml' exists in the current directory.")
+        print(f"Please ensure '{args.config}' exists.")
         sys.exit(1)
 
     # 3. Setup Logging (requires output directory from config)
