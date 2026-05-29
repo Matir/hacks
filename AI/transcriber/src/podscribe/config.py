@@ -33,6 +33,22 @@ class Config:
         return bool(self.data.get("preprocessing", {}).get("enabled", True))
 
     @property
+    def chunking_enabled(self) -> bool:
+        return bool(self.data.get("preprocessing", {}).get("chunking_enabled", False))
+
+    @property
+    def chunk_max_duration(self) -> int:
+        return int(self.data.get("preprocessing", {}).get("chunk_max_duration", 300))
+
+    @property
+    def silence_threshold_db(self) -> int:
+        return int(self.data.get("preprocessing", {}).get("silence_threshold_db", -30))
+
+    @property
+    def silence_duration(self) -> float:
+        return float(self.data.get("preprocessing", {}).get("silence_duration", 0.5))
+
+    @property
     def ffmpeg_path(self) -> str:
         return str(self.data.get("preprocessing", {}).get("ffmpeg_path", "ffmpeg"))
 
@@ -47,6 +63,10 @@ class Config:
     @property
     def transcriber_model(self) -> str:
         return str(self.data.get("transcriber", {}).get("model", ""))
+
+    @property
+    def enable_speaker_attribution(self) -> bool:
+        return bool(self.data.get("transcriber", {}).get("enable_speaker_attribution", False))
 
     def get_transcriber_api_key(self) -> str:
         env_var = self.data.get("transcriber", {}).get("api_key_env", "HF_API_KEY")

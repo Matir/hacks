@@ -2,10 +2,10 @@ import logging
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
-from src.config import Config
-from src.orchestrator import Orchestrator
-from src.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber
-from src.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor
+from podscribe.config import Config
+from podscribe.orchestrator import Orchestrator
+from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber
+from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -63,7 +63,7 @@ def test_orchestrator_run_full_success(mock_config, tmp_path):
     # Setup mocks for components
     with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
          patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
-         patch("src.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
         # Setup transcriber mock
         mock_transcriber = MagicMock()
@@ -127,7 +127,7 @@ def test_orchestrator_run_skips_completed(mock_config, tmp_path):
     # Setup mocks
     with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
          patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
-         patch("src.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
         mock_transcriber = MagicMock()
         mock_init_t.return_value = mock_transcriber
@@ -173,7 +173,7 @@ def test_orchestrator_run_resumes_from_transcribed(mock_config, tmp_path):
     # Setup mocks
     with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
          patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
-         patch("src.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
         mock_transcriber = MagicMock()
         mock_init_t.return_value = mock_transcriber
@@ -245,7 +245,7 @@ def test_orchestrator_run_handles_error_and_continues(mock_config, tmp_path):
     
     with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
          patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
-         patch("src.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
         mock_transcriber = MagicMock()
         mock_transcriber.transcribe.return_value = "raw transcript"
@@ -289,15 +289,31 @@ def test_orchestrator_run_handles_error_and_continues(mock_config, tmp_path):
 def test_orchestrator_init_transcribers(mock_config):
     # 1. Test HF init
     mock_config.transcriber_provider = "huggingface"
+    mock_config.enable_speaker_attribution = False
     with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
         orchestrator = Orchestrator(mock_config)
         assert isinstance(orchestrator.transcriber, HuggingFaceTranscriber)
         
-    # 2. Test OpenAI init
+    # 2. Test HF with speaker attribution warning
+    mock_config.transcriber_provider = "huggingface"
+    mock_config.enable_speaker_attribution = True
+    with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
+        orchestrator = Orchestrator(mock_config)
+        assert isinstance(orchestrator.transcriber, HuggingFaceTranscriber)
+
+    # 3. Test OpenAI init
     mock_config.transcriber_provider = "openai_compatible"
+    mock_config.enable_speaker_attribution = False
     with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
         orchestrator = Orchestrator(mock_config)
         assert isinstance(orchestrator.transcriber, OpenAICompatibleTranscriber)
+
+    # 4. Test Speaker-Attributed OpenAI init
+    mock_config.transcriber_provider = "openai_compatible"
+    mock_config.enable_speaker_attribution = True
+    with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
+        orchestrator = Orchestrator(mock_config)
+        assert isinstance(orchestrator.transcriber, SpeakerAttributedOpenAICompatibleTranscriber)
 
 def test_orchestrator_init_post_processors(mock_config):
     # 1. Test Gemini init
@@ -330,7 +346,7 @@ def test_orchestrator_run_with_rss_feeds(mock_config):
     
     with patch.object(Orchestrator, "_init_transcriber"), \
          patch.object(Orchestrator, "_init_post_processor"), \
-         patch("src.orchestrator.RSSFetcher") as mock_fetcher_class:
+         patch("podscribe.orchestrator.RSSFetcher") as mock_fetcher_class:
          
         mock_fetcher = mock_fetcher_class.return_value
         # Simulate downloaded files
@@ -345,3 +361,183 @@ def test_orchestrator_run_with_rss_feeds(mock_config):
             mock_fetcher_class.assert_called_once_with(mock_config.input_dir)
             # Verify sync_feeds was called with correct feeds config
             mock_fetcher.sync_feeds.assert_called_once_with(mock_config.rss_feeds)
+
+def test_orchestrator_prompt_file_not_found(mock_config):
+    mock_config.prompt_file = "non_existent_prompt.md"
+    with pytest.raises(FileNotFoundError, match="Prompt template file not found"):
+        Orchestrator(mock_config)
+
+def test_orchestrator_find_files_non_existent_input_dir(mock_config):
+    with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
+        orchestrator = Orchestrator(mock_config)
+        orchestrator.input_dir = Path("non_existent_directory_path_1234")
+        # find_files should return []
+        assert orchestrator.find_files() == []
+
+def test_orchestrator_run_preprocessed_file_missing(mock_config, tmp_path):
+    from podscribe.state import StateManager
+    
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio")
+
+    # Preprocessed path inside state
+    missing_preprocessed_file = tmp_path / "podcast_preprocessed.wav"
+    
+    # Set state as preprocessed but delete file
+    state_mgr = StateManager(mock_config.output_dir)
+    file_hash = state_mgr.get_file_hash(input_file)
+    state_mgr.update_entry(
+        "podcast.mp3",
+        hash=file_hash,
+        status="preprocessed",
+        preprocessed_path=missing_preprocessed_file
+    )
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+         mock_preprocessor = mock_preprocessor_class.return_value
+         new_preprocessed_file = tmp_path / "new_preprocessed.wav"
+         new_preprocessed_file.write_text("fake_preprocessed")
+         mock_preprocessor.preprocess.return_value = new_preprocessed_file
+
+         mock_transcriber = MagicMock()
+         mock_transcriber.transcribe.return_value = "raw transcript"
+         mock_init_t.return_value = mock_transcriber
+
+         mock_post_processor = MagicMock()
+         mock_post_processor.post_process.return_value = "final markdown"
+         mock_init_p.return_value = mock_post_processor
+
+         orchestrator = Orchestrator(mock_config)
+         orchestrator.run()
+
+         # Verify preprocess was called again to recreate the file!
+         mock_preprocessor.preprocess.assert_called_once_with(input_file)
+         state_mgr.load()
+         assert state_mgr.get_entry("podcast.mp3")["preprocessed_path"] == str(new_preprocessed_file)
+
+def test_orchestrator_run_transcription_failure(mock_config, tmp_path):
+    from podscribe.state import StateManager
+    
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio")
+
+    state_mgr = StateManager(mock_config.output_dir)
+    file_hash = state_mgr.get_file_hash(input_file)
+    
+    # Prepopulate to preprocessed to bypass preprocessing mock serialize issue
+    state_mgr.update_entry(
+        "podcast.mp3",
+        hash=file_hash,
+        status="preprocessed",
+        preprocessed_path=input_file
+    )
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+         mock_transcriber = MagicMock()
+         mock_transcriber.transcribe.side_effect = Exception("ASR down")
+         mock_init_t.return_value = mock_transcriber
+
+         mock_init_p.return_value = MagicMock()
+
+         orchestrator = Orchestrator(mock_config)
+         # Should complete loop gracefully despite individual file failure
+         orchestrator.run()
+
+         state_mgr.load()
+         entry = state_mgr.get_entry("podcast.mp3")
+         assert entry["status"] == "failed"
+         assert "Transcription:" in entry["error"]
+
+def test_orchestrator_run_post_processing_failure(mock_config, tmp_path):
+    from podscribe.state import StateManager
+    
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio")
+
+    state_mgr = StateManager(mock_config.output_dir)
+    file_hash = state_mgr.get_file_hash(input_file)
+    
+    # Pre-populate state to "transcribed" with raw_transcript_path and hash
+    raw_transcript_path = mock_config.output_dir / "raw_transcripts" / "podcast_raw.txt"
+    raw_transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_transcript_path.write_text("raw transcript")
+    state_mgr.update_entry(
+        "podcast.mp3",
+        hash=file_hash,
+        status="transcribed",
+        raw_transcript_path=raw_transcript_path
+    )
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+         mock_init_t.return_value = MagicMock()
+
+         mock_post_processor = MagicMock()
+         mock_post_processor.post_process.side_effect = Exception("Rate limit")
+         mock_init_p.return_value = mock_post_processor
+
+         orchestrator = Orchestrator(mock_config)
+         orchestrator.run()
+
+         state_mgr.load()
+         entry = state_mgr.get_entry("podcast.mp3")
+         assert entry["status"] == "failed"
+         assert "Post-processing:" in entry["error"]
+
+def test_orchestrator_run_raw_transcript_missing(mock_config, tmp_path):
+    from podscribe.state import StateManager
+    
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio")
+
+    state_mgr = StateManager(mock_config.output_dir)
+    file_hash = state_mgr.get_file_hash(input_file)
+    
+    # Setup pre-existing transcribed state but delete transcript file, and set preprocessed_path
+    missing_raw_path = mock_config.output_dir / "raw_transcripts" / "podcast_raw.txt"
+    state_mgr.update_entry(
+        "podcast.mp3",
+        hash=file_hash,
+        status="transcribed",
+        preprocessed_path=input_file,
+        raw_transcript_path=missing_raw_path
+    )
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+         mock_preprocessor = mock_preprocessor_class.return_value
+         mock_preprocessor.preprocess.return_value = input_file
+
+         mock_transcriber = MagicMock()
+         mock_transcriber.transcribe.return_value = "new transcript"
+         mock_init_t.return_value = mock_transcriber
+
+         mock_post_processor = MagicMock()
+         mock_post_processor.post_process.return_value = "final MD"
+         mock_init_p.return_value = mock_post_processor
+
+         orchestrator = Orchestrator(mock_config)
+         orchestrator.run()
+
+         # Verify transcribe was called to recreate the missing file
+         mock_transcriber.transcribe.assert_called_once()
+         assert missing_raw_path.exists()
+         assert missing_raw_path.read_text() == "new transcript"

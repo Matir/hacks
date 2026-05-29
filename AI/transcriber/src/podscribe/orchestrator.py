@@ -3,12 +3,12 @@ from pathlib import Path
 import traceback
 from typing import List
 
-from src.config import Config
-from src.state import StateManager
-from src.preprocessor import AudioPreprocessor
-from src.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, BaseTranscriber
-from src.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor
-from src.rss_fetcher import RSSFetcher
+from podscribe.config import Config
+from podscribe.state import StateManager
+from podscribe.preprocessor import AudioPreprocessor
+from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, BaseTranscriber
+from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor
+from podscribe.rss_fetcher import RSSFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,11 @@ class Orchestrator:
         self.preprocessor = AudioPreprocessor(
             enabled=self.config.preprocess_enabled,
             ffmpeg_path=self.config.ffmpeg_path,
-            output_dir=self.output_dir
+            output_dir=self.output_dir,
+            chunking_enabled=self.config.chunking_enabled,
+            chunk_max_duration=self.config.chunk_max_duration,
+            silence_threshold_db=self.config.silence_threshold_db,
+            silence_duration=self.config.silence_duration
         )
         
         # Initialize clients
@@ -47,8 +51,12 @@ class Orchestrator:
         api_key = self.config.get_transcriber_api_key()
 
         if provider == "huggingface":
+            if self.config.enable_speaker_attribution:
+                logger.warning("Speaker attribution is not natively supported on raw HuggingFace API. Using standard transcriber.")
             return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
         elif provider == "openai_compatible":
+            if self.config.enable_speaker_attribution:
+                return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
             return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")

@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 import httpx
-from src.rss_fetcher import RSSFetcher
+from podscribe.rss_fetcher import RSSFetcher
 
 # Configure logging for tests to see the outputs if needed
 logging.basicConfig(level=logging.INFO)
@@ -254,3 +254,71 @@ def test_download_missing_cleanup_failure_log(tmp_path):
             assert len(downloaded) == 0
             # Verify unlink was attempted
             mock_unlink.assert_called_once()
+
+def test_cleanup_temp_files_failure(tmp_path):
+    # Create a temp file to trigger cleanup
+    temp_file = tmp_path / "episode.mp3.download.tmp"
+    temp_file.write_text("partial")
+    
+    # Mock Path.unlink to fail
+    with patch.object(Path, "unlink") as mock_unlink:
+        mock_unlink.side_effect = Exception("Cannot delete")
+        # This should complete without raising error
+        fetcher = RSSFetcher(tmp_path)
+        mock_unlink.assert_called_once()
+
+def test_fetch_episodes_no_channel():
+    # Feed without channel tag
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+      <not_channel>
+        <item>
+          <title>Episode</title>
+        </item>
+      </not_channel>
+    </rss>
+    """
+    feed_url = "https://example.com/feed.xml"
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.text = mock_xml
+        mock_client.get.return_value = mock_response
+        
+        fetcher = RSSFetcher(Path("dummy"))
+        result = fetcher.fetch_episodes(feed_url)
+        assert result == []
+
+def test_fetch_episodes_max_episodes_limit():
+    # Feed with 3 items
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+      <channel>
+        <item>
+          <title>Ep 1</title>
+          <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" />
+        </item>
+        <item>
+          <title>Ep 2</title>
+          <enclosure url="https://example.com/ep2.mp3" type="audio/mpeg" />
+        </item>
+        <item>
+          <title>Ep 3</title>
+          <enclosure url="https://example.com/ep3.mp3" type="audio/mpeg" />
+        </item>
+      </channel>
+    </rss>
+    """
+    feed_url = "https://example.com/feed.xml"
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.text = mock_xml
+        mock_client.get.return_value = mock_response
+        
+        fetcher = RSSFetcher(Path("dummy"))
+        # Call with max_episodes=2
+        result = fetcher.fetch_episodes(feed_url, max_episodes=2)
+        assert len(result) == 2
+        assert result[0]["title"] == "Ep 1"
+        assert result[1]["title"] == "Ep 2"

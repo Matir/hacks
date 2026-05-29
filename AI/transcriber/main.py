@@ -6,8 +6,8 @@ import sys
 
 from dotenv import load_dotenv
 
-from src.config import Config
-from src.orchestrator import Orchestrator
+from podscribe.config import Config
+from podscribe.orchestrator import Orchestrator
 
 # Environment variables loaded via python-dotenv
 

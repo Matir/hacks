@@ -8,10 +8,15 @@ prompt_file = "prompts/post_process.md"
 [preprocessing]
 enabled = true
 ffmpeg_path = "ffmpeg" # Use "ffmpeg" if it is in your system PATH, otherwise specify absolute path
+chunking_enabled = false
+chunk_max_duration = 300 # Max chunk duration (5 minutes)
+silence_threshold_db = -30 # Silence decibel threshold
+silence_duration = 0.5 # Min silence duration in seconds
 
 [transcriber]
 # Supported providers: "huggingface", "openai_compatible"
 provider = "huggingface"
+enable_speaker_attribution = false
 
 # For Hugging Face:
 # Dedicated Endpoint URL or Inference API URL

@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from src.state import StateManager
+from podscribe.state import StateManager
 
 def test_state_manager_init_and_save(tmp_path):
     state_mgr = StateManager(tmp_path)

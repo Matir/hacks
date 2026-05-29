@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from src.config import Config
+from podscribe.config import Config
 
 def test_config_load_valid(tmp_path):
     # Create a dummy config file
@@ -13,12 +13,17 @@ def test_config_load_valid(tmp_path):
     [preprocessing]
     enabled = false
     ffmpeg_path = "/usr/bin/ffmpeg"
+    chunking_enabled = true
+    chunk_max_duration = 180
+    silence_threshold_db = -25
+    silence_duration = 0.8
 
     [transcriber]
     provider = "openai_compatible"
     endpoint_url = "https://custom-asr.com/v1/audio/transcriptions"
     model = "custom-model"
     api_key_env = "CUSTOM_ASR_KEY"
+    enable_speaker_attribution = true
 
     [post_processor]
     provider = "gemini"
@@ -45,10 +50,15 @@ def test_config_load_valid(tmp_path):
     assert config.output_dir == Path("custom_output")
     assert config.prompt_file == Path("custom_prompt.md")
     assert config.preprocess_enabled is False
+    assert config.chunking_enabled is True
+    assert config.chunk_max_duration == 180
+    assert config.silence_threshold_db == -25
+    assert config.silence_duration == 0.8
     assert config.ffmpeg_path == "/usr/bin/ffmpeg"
     assert config.transcriber_provider == "openai_compatible"
     assert config.transcriber_endpoint == "https://custom-asr.com/v1/audio/transcriptions"
     assert config.transcriber_model == "custom-model"
+    assert config.enable_speaker_attribution is True
     
     # Test API key retrieval (requires env var setting)
     import os
@@ -86,6 +96,7 @@ def test_config_defaults(tmp_path):
     assert config.transcriber_provider == "huggingface"
     assert config.transcriber_endpoint == ""
     assert config.transcriber_model == ""
+    assert config.enable_speaker_attribution is False
     assert config.get_transcriber_api_key() == ""  # Default env HF_API_KEY not set
     assert config.post_processor_provider == "gemini"
     assert config.post_processor_model == ""

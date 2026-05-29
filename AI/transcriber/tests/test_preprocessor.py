@@ -2,7 +2,7 @@ import subprocess
 from unittest.mock import patch, MagicMock
 import pytest
 from pathlib import Path
-from src.preprocessor import AudioPreprocessor
+from podscribe.preprocessor import AudioPreprocessor
 
 def test_is_ffmpeg_available():
     preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
@@ -89,3 +89,132 @@ def test_preprocess_failure(tmp_path):
             
             with pytest.raises(RuntimeError, match="FFmpeg preprocessing failed for audio.mp3: Some FFmpeg error"):
                 preprocessor.preprocess(input_file)
+
+def test_detect_silence_midpoints():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    
+    mock_stderr = """
+    Input #0, mp3, from 'audio.mp3':
+      Duration: 00:10:00.50, start: 0.000000, bitrate: 128 kb/s
+    [silencedetect @ 0x...] silence_start: 100.0
+    [silencedetect @ 0x...] silence_end: 102.0 | silence_duration: 2.0
+    [silencedetect @ 0x...] silence_start: 250.0
+    [silencedetect @ 0x...] silence_end: 253.0 | silence_duration: 3.0
+    """
+    
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="", stderr=mock_stderr, returncode=0)
+        
+        midpoints, duration = preprocessor._detect_silence_midpoints(Path("audio.mp3"))
+        
+        assert duration == 600.50  # 10 mins * 60 + 0.50 secs
+        # midpoints: (100+102)/2 = 101, (250+253)/2 = 251.5
+        assert midpoints == [101.0, 251.5]
+
+def test_calculate_split_points():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"), chunk_max_duration=100)
+    
+    # Case 1: Silence available
+    midpoints = [40.0, 90.0, 150.0, 195.0]
+    total_duration = 250.0
+    
+    splits = preprocessor._calculate_split_points(midpoints, total_duration)
+    # 1st target: 100 -> nearest silence before 100 is 90.0
+    # 2nd target: 90 + 100 = 190 -> nearest silence before 190 is 150.0
+    # remaining (250 - 150 = 100) is <= 100, so no more splits are needed!
+    assert splits == [90.0, 150.0]
+    
+    # Case 2: Hard cut fallback (no silence pauses)
+    midpoints = []
+    splits = preprocessor._calculate_split_points(midpoints, total_duration)
+    assert splits == [100.0, 200.0]
+
+def test_preprocess_chunking_single_chunk(tmp_path):
+    output_dir = tmp_path / "output"
+    preprocessor = AudioPreprocessor(
+        enabled=True,
+        ffmpeg_path="ffmpeg",
+        output_dir=output_dir,
+        chunking_enabled=True,
+        chunk_max_duration=300
+    )
+    input_file = tmp_path / "audio.mp3"
+    
+    # Pre-create the chunk directory to cover the directory exists/cleanup block
+    chunks_dir = output_dir / "preprocessed" / "audio_chunks"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Mock silence detection to return short duration (150s, no splits)
+    with patch("shutil.which", return_value="/usr/bin/ffmpeg"), \
+         patch.object(AudioPreprocessor, "_detect_silence_midpoints", return_value=([], 150.0)), \
+         patch("subprocess.run") as mock_run:
+         
+         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+         
+         result = preprocessor.preprocess(input_file)
+         
+         # Should return the chunks directory
+         assert result == output_dir / "preprocessed" / "audio_chunks"
+         # Verify single downmix chunk command
+         expected_cmd = [
+             "ffmpeg", "-y", "-i", str(input_file),
+             "-ar", "16000", "-ac", "1",
+             str(result / "chunk_000.wav")
+         ]
+         mock_run.assert_called_once_with(expected_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+
+def test_preprocess_chunking_multiple_chunks(tmp_path):
+    output_dir = tmp_path / "output"
+    preprocessor = AudioPreprocessor(
+        enabled=True,
+        ffmpeg_path="ffmpeg",
+        output_dir=output_dir,
+        chunking_enabled=True,
+        chunk_max_duration=100
+    )
+    input_file = tmp_path / "audio.mp3"
+    
+    # Mock silence detection and split times: splits at [90.0, 180.0]
+    with patch("shutil.which", return_value="/usr/bin/ffmpeg"), \
+         patch.object(AudioPreprocessor, "_detect_silence_midpoints", return_value=([90.0, 180.0], 250.0)), \
+         patch("subprocess.run") as mock_run:
+         
+         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+         
+         result = preprocessor.preprocess(input_file)
+         
+         assert result == output_dir / "preprocessed" / "audio_chunks"
+         expected_cmd = [
+             "ffmpeg", "-y", "-i", str(input_file),
+             "-f", "segment", "-segment_times", "90.000,180.000",
+             "-ar", "16000", "-ac", "1",
+             str(result / "chunk_%03d.wav")
+         ]
+         mock_run.assert_called_once_with(expected_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+
+def test_detect_silence_failure():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd=["ffmpeg"], stderr="Detect failed")
+        with pytest.raises(RuntimeError, match="FFmpeg silence detection failed for audio.mp3: Detect failed"):
+            preprocessor._detect_silence_midpoints(Path("audio.mp3"))
+
+def test_preprocess_chunking_failure(tmp_path):
+    output_dir = tmp_path / "output"
+    preprocessor = AudioPreprocessor(
+        enabled=True,
+        ffmpeg_path="ffmpeg",
+        output_dir=output_dir,
+        chunking_enabled=True,
+        chunk_max_duration=100
+    )
+    input_file = tmp_path / "audio.mp3"
+    
+    with patch("shutil.which", return_value="/usr/bin/ffmpeg"), \
+         patch.object(AudioPreprocessor, "_detect_silence_midpoints", return_value=([], 150.0)), \
+         patch("subprocess.run") as mock_run:
+         
+         mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd=["ffmpeg"], stderr="Split failed")
+         with pytest.raises(RuntimeError, match="FFmpeg chunking failed for audio.mp3: Split failed"):
+             preprocessor.preprocess(input_file)

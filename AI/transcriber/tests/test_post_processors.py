@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 import pytest
-from src.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor
+from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor
 
 # ----------------------------------------------------------------------
 # Gemini Post Processor Tests
@@ -22,7 +22,7 @@ def test_gemini_post_process_success():
     prompt_template = "Clean this: {{TRANSCRIPT}}"
     raw_transcript = "uh hello like world"
     
-    with patch("src.post_processors.genai.Client") as mock_genai_client_class:
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
         mock_client = mock_genai_client_class.return_value
         mock_models = mock_client.models
         mock_response = MagicMock()
@@ -47,7 +47,7 @@ def test_gemini_post_process_key_fallback():
     # Empty API key to test fallback to None
     proc = GeminiPostProcessor(model="gemini-model", api_key="", temperature=0.2)
     
-    with patch("src.post_processors.genai.Client") as mock_genai_client_class:
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
         mock_client = mock_genai_client_class.return_value
         mock_client.models.generate_content.return_value = MagicMock(text="output")
         
@@ -80,7 +80,7 @@ def test_openai_post_process_success():
     prompt_template = "Format: {{TRANSCRIPT}}"
     raw_transcript = "raw transcript data"
     
-    with patch("src.post_processors.OpenAI") as mock_openai_class:
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class:
         mock_client = mock_openai_class.return_value
         mock_chat = mock_client.chat
         mock_response = MagicMock()
@@ -116,7 +116,7 @@ def test_openai_post_process_dummy_key_fallback():
         temperature=0.1
     )
     
-    with patch("src.post_processors.OpenAI") as mock_openai_class:
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class:
         mock_client = mock_openai_class.return_value
         mock_choice = MagicMock()
         mock_choice.message.content = "output"
@@ -133,7 +133,7 @@ def test_openai_post_process_dummy_key_fallback():
 def test_gemini_post_process_empty_response():
     proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="key", temperature=0.3)
     
-    with patch("src.post_processors.genai.Client") as mock_genai_client_class:
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
         mock_client = mock_genai_client_class.return_value
         mock_models = mock_client.models
         mock_response = MagicMock()
@@ -146,7 +146,7 @@ def test_gemini_post_process_empty_response():
 def test_gemini_post_process_failure():
     proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="key", temperature=0.3)
     
-    with patch("src.post_processors.genai.Client") as mock_genai_client_class:
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
         mock_client = mock_genai_client_class.return_value
         mock_client.models.generate_content.side_effect = Exception("API Error")
         
@@ -172,7 +172,7 @@ def test_openai_post_process_empty_content():
         temperature=0.1
     )
     
-    with patch("src.post_processors.OpenAI") as mock_openai_class:
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class:
         mock_client = mock_openai_class.return_value
         mock_choice = MagicMock()
         mock_choice.message.content = None # Empty content
@@ -189,7 +189,7 @@ def test_openai_post_process_no_choices():
         temperature=0.1
     )
     
-    with patch("src.post_processors.OpenAI") as mock_openai_class:
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class:
         mock_client = mock_openai_class.return_value
         mock_client.chat.completions.create.return_value = MagicMock(choices=[]) # No choices
         
@@ -204,7 +204,7 @@ def test_openai_post_process_failure():
         temperature=0.1
     )
     
-    with patch("src.post_processors.OpenAI") as mock_openai_class:
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class:
         mock_client = mock_openai_class.return_value
         mock_client.chat.completions.create.side_effect = Exception("API Error")
         
