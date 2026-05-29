@@ -3,24 +3,12 @@ import os
 from pathlib import Path
 import sys
 
+from dotenv import load_dotenv
+
 from src.config import Config
 from src.orchestrator import Orchestrator
 
-def load_dotenv(dotenv_path: str = ".env"):
-    """Simple, zero-dependency .env file loader."""
-    path = Path(dotenv_path)
-    if path.exists():
-        with open(path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, val = line.split("=", 1)
-                    key = key.strip()
-                    val = val.strip().strip('"').strip("'")
-                    os.environ[key] = val
-        print("Loaded environment variables from .env")
+# Environment variables loaded via python-dotenv
 
 def setup_logging(output_dir: Path):
     """Configure logging to output to both stdout and a file."""

@@ -15,6 +15,20 @@ MEDIA_NS = "http://search.yahoo.com/mrss/"
 class RSSFetcher:
     def __init__(self, input_dir: Path):
         self.input_dir = input_dir
+        self._cleanup_temp_files()
+
+    def _cleanup_temp_files(self):
+        """Scan input_dir for any leftover .download.tmp files and remove them."""
+        if not self.input_dir.exists():
+            return
+        
+        logger.info(f"Checking for leftover temporary files in {self.input_dir}...")
+        for temp_file in self.input_dir.glob("*.download.tmp"):
+            try:
+                logger.info(f"Removing leftover temporary file: {temp_file.name}")
+                temp_file.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove leftover temporary file {temp_file}: {e}")
 
     def _sanitize_filename(self, name: str) -> str:
         name = re.sub(r"[^\w\s.-]", "", name)
@@ -86,20 +100,29 @@ class RSSFetcher:
                 logger.debug(f"Already exists, skipping: {episode['filename']}")
                 continue
 
-            logger.info(f"Downloading: {episode['title']} -> {episode['filename']}")
+            temp_dest = dest.with_suffix(dest.suffix + ".download.tmp")
+            logger.info(f"Downloading: {episode['title']} -> {episode['filename']} (via temp file)")
             try:
                 with httpx.Client(follow_redirects=True, timeout=600) as client:
                     with client.stream("GET", episode["url"]) as response:
                         response.raise_for_status()
-                        with open(dest, "wb") as f:
+                        with open(temp_dest, "wb") as f:
                             for chunk in response.iter_bytes(chunk_size=65536):
                                 f.write(chunk)
+                
+                # Rename to final destination only after successful download
+                temp_dest.rename(dest)
                 logger.info(f"Downloaded: {episode['filename']}")
                 downloaded.append(dest)
             except Exception as e:
                 logger.error(f"Failed to download {episode['filename']}: {e}")
-                if dest.exists():
-                    dest.unlink()
+            finally:
+                if temp_dest.exists():
+                    try:
+                        logger.info(f"Cleaning up temporary download file: {temp_dest.name}")
+                        temp_dest.unlink()
+                    except Exception as cleanup_err:
+                        logger.error(f"Failed to clean up temp file {temp_dest}: {cleanup_err}")
 
         return downloaded
 

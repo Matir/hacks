@@ -65,6 +65,11 @@ class HuggingFaceTranscriber(BaseTranscriber):
 
 class OpenAICompatibleTranscriber(BaseTranscriber):
     def __init__(self, endpoint_url: str, api_key: str, model: str):
+        if endpoint_url:
+            endpoint_url = endpoint_url.rstrip("/")
+            if endpoint_url.endswith("/audio/transcriptions"):
+                logger.warning("Stripping '/audio/transcriptions' from endpoint_url.")
+                endpoint_url = endpoint_url.removesuffix("/audio/transcriptions")
         self.endpoint_url = endpoint_url
         self.api_key = api_key
         self.model = model

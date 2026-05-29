@@ -27,7 +27,7 @@ class GeminiPostProcessor(BasePostProcessor):
             # Initialize Gemini client
             # If api_key is empty, it will try to look up GEMINI_API_KEY in env automatically,
             # but passing it explicitly is safer.
-            client = genai.Client(api_key=self.api_key)
+            client = genai.Client(api_key=self.api_key or None)
             
             # Prepare prompt by injecting transcript
             prompt = prompt_template.replace("{{TRANSCRIPT}}", transcript)
@@ -53,6 +53,11 @@ class GeminiPostProcessor(BasePostProcessor):
 
 class OpenAICompatiblePostProcessor(BasePostProcessor):
     def __init__(self, endpoint_url: str, api_key: str, model: str, temperature: float):
+        if endpoint_url:
+            endpoint_url = endpoint_url.rstrip("/")
+            if endpoint_url.endswith("/chat/completions"):
+                logger.warning("Stripping '/chat/completions' from endpoint_url.")
+                endpoint_url = endpoint_url.removesuffix("/chat/completions")
         self.endpoint_url = endpoint_url
         self.api_key = api_key
         self.model = model
@@ -69,7 +74,7 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
             # Works for OpenAI, OpenRouter, Local vLLM, DeepSeek, etc.
             client = OpenAI(
                 base_url=self.endpoint_url,
-                api_key=self.api_key
+                api_key=self.api_key or "dummy-key"
             )
 
             prompt = prompt_template.replace("{{TRANSCRIPT}}", transcript)
