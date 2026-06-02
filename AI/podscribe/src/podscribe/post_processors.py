@@ -6,10 +6,34 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
+class TokenUsage:
+    def __init__(self, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int = 0):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.total_tokens = total_tokens
+
+    def to_dict(self) -> dict:
+        return {
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'TokenUsage':
+        if not data:
+            return cls()
+        return cls(
+            prompt_tokens=data.get("prompt_tokens", 0),
+            completion_tokens=data.get("completion_tokens", 0),
+            total_tokens=data.get("total_tokens", 0)
+        )
+
+
 class BasePostProcessor(abc.ABC):
     @abc.abstractmethod
-    def post_process(self, transcript: str, prompt_template: str) -> str:
-        """Post-process the transcript using the LLM and return the polished text."""
+    def post_process(self, transcript: str, prompt_template: str) -> tuple[str, TokenUsage]:
+        """Post-process the transcript using the LLM and return the polished text and token usage."""
         pass
 
 class GeminiPostProcessor(BasePostProcessor):
@@ -18,7 +42,7 @@ class GeminiPostProcessor(BasePostProcessor):
         self.api_key = api_key
         self.temperature = temperature
 
-    def post_process(self, transcript: str, prompt_template: str) -> str:
+    def post_process(self, transcript: str, prompt_template: str) -> tuple[str, TokenUsage]:
         if not self.model:
             raise ValueError("Gemini model must be configured.")
 
@@ -42,8 +66,14 @@ class GeminiPostProcessor(BasePostProcessor):
                 config=config
             )
 
+            usage = TokenUsage()
+            if response.usage_metadata:
+                usage.prompt_tokens = response.usage_metadata.prompt_token_count or 0
+                usage.completion_tokens = response.usage_metadata.candidates_token_count or 0
+                usage.total_tokens = response.usage_metadata.total_token_count or 0
+
             if response.text:
-                return response.text
+                return response.text, usage
             else:
                 raise RuntimeError("Empty response from Gemini.")
 
@@ -63,7 +93,7 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
         self.model = model
         self.temperature = temperature
 
-    def post_process(self, transcript: str, prompt_template: str) -> str:
+    def post_process(self, transcript: str, prompt_template: str) -> tuple[str, TokenUsage]:
         if not self.endpoint_url:
             raise ValueError("OpenAI-compatible endpoint URL must be configured.")
         if not self.model:
@@ -87,10 +117,16 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
                 temperature=self.temperature
             )
 
+            usage = TokenUsage()
+            if response.usage:
+                usage.prompt_tokens = response.usage.prompt_tokens or 0
+                usage.completion_tokens = response.usage.completion_tokens or 0
+                usage.total_tokens = response.usage.total_tokens or 0
+
             if response.choices and len(response.choices) > 0:
                 content = response.choices[0].message.content
                 if content:
-                    return content
+                    return content, usage
                 else:
                     raise RuntimeError("Empty content in response from OpenAI-compatible API.")
             else:

@@ -263,3 +263,38 @@ def test_preprocess_chunking_failure(tmp_path):
          mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd=["ffmpeg"], stderr="Split failed")
          with pytest.raises(RuntimeError, match="FFmpeg chunking failed for audio.mp3: Split failed"):
              preprocessor.preprocess(input_file)
+
+def test_get_duration_success():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    mock_stderr = "  Duration: 00:05:30.25, start: 0.00, bitrate: 128 kb/s"
+    
+    with patch("shutil.which", return_value="/usr/bin/ffmpeg"), \
+         patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="", stderr=mock_stderr, returncode=0)
+        
+        duration = preprocessor.get_duration(Path("audio.mp3"))
+        assert duration == 330.25  # 5 mins * 60 + 30.25 secs
+        mock_run.assert_called_once_with(
+            ["ffmpeg", "-i", "audio.mp3", "-f", "null", "-"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False
+        )
+
+def test_get_duration_no_ffmpeg():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    
+    with patch("shutil.which", return_value=None):
+        duration = preprocessor.get_duration(Path("audio.mp3"))
+        assert duration == 0.0
+
+def test_get_duration_failure():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    
+    with patch("shutil.which", return_value="/usr/bin/ffmpeg"), \
+         patch("subprocess.run") as mock_run:
+        mock_run.side_effect = Exception("FFmpeg crashed")
+        
+        duration = preprocessor.get_duration(Path("audio.mp3"))
+        assert duration == 0.0

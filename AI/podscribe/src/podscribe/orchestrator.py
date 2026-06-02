@@ -7,7 +7,8 @@ from podscribe.config import Config
 from podscribe.state import StateManager
 from podscribe.preprocessor import AudioPreprocessor
 from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, BaseTranscriber
-from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor
+from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor, TokenUsage
+from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
 from podscribe.rss_fetcher import RSSFetcher
 
 logger = logging.getLogger(__name__)
@@ -145,6 +146,10 @@ class Orchestrator:
                     )
                     entry = self.state_manager.get_entry(relative_path)
 
+                # Get and store audio duration
+                audio_duration = self.preprocessor.get_duration(file_path)
+                self.state_manager.update_entry(relative_path, audio_duration=audio_duration)
+ 
                 working_file = file_path
 
                 # 2. Preprocess (if needed)
@@ -218,17 +223,18 @@ class Orchestrator:
                 # 4. Post-process (if needed)
                 if self.state_manager.get_entry(relative_path).get("status") == "transcribed":
                     try:
-                        final_transcript = self.post_processor.post_process(raw_transcript, self.prompt_template)
+                        final_transcript, token_usage = self.post_processor.post_process(raw_transcript, self.prompt_template)
                         
                         # Save final transcript
                         final_transcript_path = self.output_dir / f"{file_path.stem}_final.md"
                         with open(final_transcript_path, "w") as f:
                             f.write(final_transcript)
-
+ 
                         self.state_manager.update_entry(
                             relative_path,
                             status="completed",
-                            final_transcript_path=final_transcript_path
+                            final_transcript_path=final_transcript_path,
+                            token_usage=token_usage.to_dict()
                         )
                         logger.info(f"Successfully completed pipeline for {relative_path}")
                     except Exception as e:
@@ -240,3 +246,66 @@ class Orchestrator:
                 logger.error(traceback.format_exc())
                 # Continue to the next file even if one fails
                 continue
+
+        # 5. Print Summary Report
+        if files:
+            self.print_summary_report(files)
+
+    def print_summary_report(self, files: List[Path]):
+        total_files = len(files)
+        completed_files = 0
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_tokens = 0
+        total_post_processing_cost = 0.0
+        total_transcription_duration = 0.0
+        total_transcription_cost = 0.0
+ 
+        for file_path in files:
+            entry = self.state_manager.get_entry(file_path.name)
+            if entry.get("status") == "completed":
+                completed_files += 1
+                
+                # LLM Stats
+                usage_dict = entry.get("token_usage", {})
+                prompt = usage_dict.get("prompt_tokens", 0)
+                completion = usage_dict.get("completion_tokens", 0)
+                total = usage_dict.get("total_tokens", 0)
+                
+                total_prompt_tokens += prompt
+                total_completion_tokens += completion
+                total_tokens += total
+                
+                model = self.config.post_processor_model
+                cost = calculate_post_processing_cost(model, prompt, completion)
+                total_post_processing_cost += cost
+                
+                # Transcription Stats
+                duration = entry.get("audio_duration", 0.0)
+                total_transcription_duration += duration
+                
+                provider = self.config.transcriber_provider
+                endpoint = self.config.transcriber_endpoint
+                t_cost = calculate_transcription_cost(provider, duration, endpoint)
+                total_transcription_cost += t_cost
+ 
+        total_cost = total_post_processing_cost + total_transcription_cost
+        
+        # Convert duration to readable format (HH:MM:SS)
+        hrs = int(total_transcription_duration // 3600)
+        mins = int((total_transcription_duration % 3600) // 60)
+        secs = int(total_transcription_duration % 60)
+        duration_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
+ 
+        logger.info("==================================================")
+        logger.info("                PODSCRIBE REPORT                  ")
+        logger.info("==================================================")
+        logger.info(f"Total Files Found: {total_files}")
+        logger.info(f"Completed Files:   {completed_files}")
+        logger.info(f"Audio Transcribed: {duration_str} ({total_transcription_duration:.2f}s)")
+        logger.info(f"Total LLM Tokens:  {total_tokens:,} (Prompt: {total_prompt_tokens:,}, Completion: {total_completion_tokens:,})")
+        logger.info("--------------------------------------------------")
+        logger.info(f"ASR Cost ({self.config.transcriber_provider}):".ljust(30) + f"${total_transcription_cost:.4f}")
+        logger.info(f"LLM Cost ({self.config.post_processor_model}):".ljust(30) + f"${total_post_processing_cost:.4f}")
+        logger.info(f"Total Estimated Cost:".ljust(30) + f"${total_cost:.4f}")
+        logger.info("==================================================")

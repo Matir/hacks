@@ -21,6 +21,12 @@ def test_state_manager_update_and_load(tmp_path):
     entry = state_mgr.get_entry("file1.mp3")
     assert entry["status"] == "new"
     assert entry["hash"] == ""
+    assert entry["audio_duration"] == 0.0
+    assert entry["token_usage"] == {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+    }
     
     # Update entry
     state_mgr.update_entry(

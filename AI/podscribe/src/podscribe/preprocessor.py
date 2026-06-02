@@ -200,3 +200,41 @@ class AudioPreprocessor:
             raise RuntimeError(f"FFmpeg chunking failed for {file_path.name}: {e.stderr}") from e
 
         return output_dir
+
+    def get_duration(self, file_path: Path) -> float:
+        """Get duration of audio file in seconds using FFmpeg."""
+        if not self.is_ffmpeg_available():
+            logger.warning("FFmpeg not available, cannot determine audio duration locally.")
+            return 0.0
+
+        cmd = [
+            self.ffmpeg_path,
+            "-i", str(file_path),
+            "-f", "null",
+            "-"
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False # ffmpeg returns non-zero often for null muxer info
+            )
+            # Parse duration from stderr
+            for line in result.stderr.splitlines():
+                duration_match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?", line)
+                if duration_match:
+                    hrs = int(duration_match.group(1))
+                    mins = int(duration_match.group(2))
+                    secs = int(duration_match.group(3))
+                    decimals_str = duration_match.group(4) if duration_match.group(4) else ""
+                    if decimals_str:
+                        fractional = int(decimals_str) / (10 ** len(decimals_str))
+                    else:
+                        fractional = 0.0
+                    return hrs * 3600 + mins * 60 + secs + fractional
+        except Exception as e:
+            logger.error(f"Failed to get audio duration for {file_path.name}: {e}")
+            
+        return 0.0

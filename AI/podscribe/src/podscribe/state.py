@@ -41,7 +41,13 @@ class StateManager:
             "preprocessed_path": "",
             "raw_transcript_path": "",
             "final_transcript_path": "",
-            "error": ""
+            "error": "",
+            "audio_duration": 0.0,
+            "token_usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+            }
         })
 
     def update_entry(self, relative_path: str, **kwargs):

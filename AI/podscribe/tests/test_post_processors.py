@@ -27,11 +27,19 @@ def test_gemini_post_process_success():
         mock_models = mock_client.models
         mock_response = MagicMock()
         mock_response.text = "Hello World"
+        mock_usage = MagicMock()
+        mock_usage.prompt_token_count = 10
+        mock_usage.candidates_token_count = 5
+        mock_usage.total_token_count = 15
+        mock_response.usage_metadata = mock_usage
         mock_models.generate_content.return_value = mock_response
         
-        result = proc.post_process(raw_transcript, prompt_template)
+        text, usage = proc.post_process(raw_transcript, prompt_template)
         
-        assert result == "Hello World"
+        assert text == "Hello World"
+        assert usage.prompt_tokens == 10
+        assert usage.completion_tokens == 5
+        assert usage.total_tokens == 15
         mock_genai_client_class.assert_called_once_with(api_key="gem_key")
         
         # Verify generate_content call
@@ -49,7 +57,13 @@ def test_gemini_post_process_key_fallback():
     
     with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
         mock_client = mock_genai_client_class.return_value
-        mock_client.models.generate_content.return_value = MagicMock(text="output")
+        mock_response = MagicMock(text="output")
+        mock_usage = MagicMock()
+        mock_usage.prompt_token_count = 0
+        mock_usage.candidates_token_count = 0
+        mock_usage.total_token_count = 0
+        mock_response.usage_metadata = mock_usage
+        mock_client.models.generate_content.return_value = mock_response
         
         proc.post_process("raw", "temp {{TRANSCRIPT}}")
         
@@ -84,6 +98,11 @@ def test_openai_post_process_success():
         mock_client = mock_openai_class.return_value
         mock_chat = mock_client.chat
         mock_response = MagicMock()
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 20
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 30
+        mock_response.usage = mock_usage
         
         # Mock nested choice structure
         mock_choice = MagicMock()
@@ -91,9 +110,12 @@ def test_openai_post_process_success():
         mock_response.choices = [mock_choice]
         mock_chat.completions.create.return_value = mock_response
         
-        result = proc.post_process(raw_transcript, prompt_template)
+        text, usage = proc.post_process(raw_transcript, prompt_template)
         
-        assert result == "formatted output"
+        assert text == "formatted output"
+        assert usage.prompt_tokens == 20
+        assert usage.completion_tokens == 10
+        assert usage.total_tokens == 30
         mock_openai_class.assert_called_once_with(
             base_url="https://openrouter.ai/api/v1",
             api_key="op-key"
@@ -120,7 +142,13 @@ def test_openai_post_process_dummy_key_fallback():
         mock_client = mock_openai_class.return_value
         mock_choice = MagicMock()
         mock_choice.message.content = "output"
-        mock_client.chat.completions.create.return_value = MagicMock(choices=[mock_choice])
+        mock_response = MagicMock(choices=[mock_choice])
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 0
+        mock_usage.completion_tokens = 0
+        mock_usage.total_tokens = 0
+        mock_response.usage = mock_usage
+        mock_client.chat.completions.create.return_value = mock_response
         
         proc.post_process("raw", "temp {{TRANSCRIPT}}")
         

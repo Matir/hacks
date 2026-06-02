@@ -5,7 +5,7 @@ import pytest
 from podscribe.config import Config
 from podscribe.orchestrator import Orchestrator
 from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber
-from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor
+from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, TokenUsage
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -72,13 +72,14 @@ def test_orchestrator_run_full_success(mock_config, tmp_path):
         
         # Setup post-processor mock
         mock_post_processor = MagicMock()
-        mock_post_processor.post_process.return_value = "polished markdown text"
+        mock_post_processor.post_process.return_value = ("polished markdown text", TokenUsage(10, 5, 15))
         mock_init_p.return_value = mock_post_processor
         
         # Setup preprocessor mock instance
         mock_preprocessor = mock_preprocessor_class.return_value
         preprocessed_file = mock_config.output_dir / "preprocessed" / "podcast_16k_mono.wav"
         mock_preprocessor.preprocess.return_value = preprocessed_file
+        mock_preprocessor.get_duration.return_value = 120.0
         
         # Instantiate and run Orchestrator
         orchestrator = Orchestrator(mock_config)
@@ -117,6 +118,12 @@ def test_orchestrator_run_full_success(mock_config, tmp_path):
             assert state["podcast.mp3"]["preprocessed_path"] == str(preprocessed_file)
             assert state["podcast.mp3"]["raw_transcript_path"] == str(raw_transcript_file)
             assert state["podcast.mp3"]["final_transcript_path"] == str(final_transcript_file)
+            assert state["podcast.mp3"]["audio_duration"] == 120.0
+            assert state["podcast.mp3"]["token_usage"] == {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
 
 def test_orchestrator_run_skips_completed(mock_config, tmp_path):
     input_dir = mock_config.input_dir
@@ -179,9 +186,10 @@ def test_orchestrator_run_resumes_from_transcribed(mock_config, tmp_path):
         mock_init_t.return_value = mock_transcriber
         
         mock_post_processor = MagicMock()
-        mock_post_processor.post_process.return_value = "polished markdown text"
+        mock_post_processor.post_process.return_value = ("polished markdown text", TokenUsage(20, 10, 30))
         mock_init_p.return_value = mock_post_processor
         mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 120.0
         
         # Pre-populate state.json: status is "transcribed"
         # Also, the raw transcript file must exist because Orchestrator will try to read it!
@@ -252,11 +260,12 @@ def test_orchestrator_run_handles_error_and_continues(mock_config, tmp_path):
         mock_init_t.return_value = mock_transcriber
         
         mock_post_processor = MagicMock()
-        mock_post_processor.post_process.return_value = "polished text"
+        mock_post_processor.post_process.return_value = ("polished text", TokenUsage(5, 2, 7))
         mock_init_p.return_value = mock_post_processor
         
         # Preprocessor mock
         mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 120.0
         
         # Configure preprocessor to FAIL on file1, but succeed on file2
         def preprocess_side_effect(file_path):
@@ -400,6 +409,7 @@ def test_orchestrator_run_preprocessed_file_missing(mock_config, tmp_path):
          patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
          mock_preprocessor = mock_preprocessor_class.return_value
+         mock_preprocessor.get_duration.return_value = 120.0
          new_preprocessed_file = tmp_path / "new_preprocessed.wav"
          new_preprocessed_file.write_text("fake_preprocessed")
          mock_preprocessor.preprocess.return_value = new_preprocessed_file
@@ -409,7 +419,7 @@ def test_orchestrator_run_preprocessed_file_missing(mock_config, tmp_path):
          mock_init_t.return_value = mock_transcriber
 
          mock_post_processor = MagicMock()
-         mock_post_processor.post_process.return_value = "final markdown"
+         mock_post_processor.post_process.return_value = ("final markdown", TokenUsage(0, 0, 0))
          mock_init_p.return_value = mock_post_processor
 
          orchestrator = Orchestrator(mock_config)
@@ -442,6 +452,9 @@ def test_orchestrator_run_transcription_failure(mock_config, tmp_path):
     with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
          patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
          patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+         mock_preprocessor = mock_preprocessor_class.return_value
+         mock_preprocessor.get_duration.return_value = 120.0
          
          mock_transcriber = MagicMock()
          mock_transcriber.transcribe.side_effect = Exception("ASR down")
@@ -484,6 +497,9 @@ def test_orchestrator_run_post_processing_failure(mock_config, tmp_path):
          patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
          patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
+         mock_preprocessor = mock_preprocessor_class.return_value
+         mock_preprocessor.get_duration.return_value = 120.0
+         
          mock_init_t.return_value = MagicMock()
 
          mock_post_processor = MagicMock()
@@ -524,6 +540,7 @@ def test_orchestrator_run_raw_transcript_missing(mock_config, tmp_path):
          patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
          
          mock_preprocessor = mock_preprocessor_class.return_value
+         mock_preprocessor.get_duration.return_value = 120.0
          mock_preprocessor.preprocess.return_value = input_file
 
          mock_transcriber = MagicMock()
@@ -531,7 +548,7 @@ def test_orchestrator_run_raw_transcript_missing(mock_config, tmp_path):
          mock_init_t.return_value = mock_transcriber
 
          mock_post_processor = MagicMock()
-         mock_post_processor.post_process.return_value = "final MD"
+         mock_post_processor.post_process.return_value = ("final MD", TokenUsage(1, 1, 2))
          mock_init_p.return_value = mock_post_processor
 
          orchestrator = Orchestrator(mock_config)
