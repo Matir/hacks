@@ -185,6 +185,32 @@ def test_fetch_episodes_empty_title():
         assert episodes[0]["title"] == ""
         assert episodes[0]["filename"] == "episode.mp3" # Fallback title used
 
+def test_fetch_episodes_emoji_only_title():
+    feed_url = "https://example.com/podcast.xml"
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+      <channel>
+        <item>
+          <title>😊😊😊</title>
+          <enclosure url="https://example.com/ep1-no-ext" type="audio/mpeg" />
+        </item>
+      </channel>
+    </rss>
+    """
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.text = mock_xml
+        mock_client.get.return_value = mock_response
+        
+        fetcher = RSSFetcher(Path("dummy_dir"))
+        episodes = fetcher.fetch_episodes(feed_url)
+        
+        assert len(episodes) == 1
+        assert episodes[0]["title"] == "😊😊😊"
+        assert episodes[0]["filename"] == "episode.mp3" # Fallback title used because sanitized is empty
+
 def test_sync_feeds_success(tmp_path):
     feeds = [
         {"url": "https://example.com/feed.xml", "max_episodes": 1}

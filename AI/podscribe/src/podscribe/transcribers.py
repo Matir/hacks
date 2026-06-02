@@ -22,7 +22,7 @@ class HuggingFaceTranscriber(BaseTranscriber):
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
             logger.info(f"Processing chunks sequentially in directory: {file_path}")
-            chunks = sorted([f for f in file_path.iterdir() if f.is_file()])
+            chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
             results = []
             for chunk in chunks:
                 results.append(self._transcribe_single(chunk))
@@ -81,15 +81,12 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
             logger.info(f"Processing chunks sequentially in directory: {file_path}")
-            chunks = sorted([f for f in file_path.iterdir() if f.is_file()])
+            chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
             results = []
-            last_text = ""
             for chunk in chunks:
-                # Use the last 1000 characters as context to avoid prompt bloat
-                prompt = last_text[-1000:] if last_text else ""
+                prompt = " ".join(results) if results else ""
                 text = self._transcribe_single(chunk, prompt=prompt)
                 results.append(text)
-                last_text = text
             return " ".join(results)
         return self._transcribe_single(file_path)
 
@@ -133,15 +130,12 @@ class SpeakerAttributedOpenAICompatibleTranscriber(OpenAICompatibleTranscriber):
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
             logger.info(f"Processing speaker-attributed chunks sequentially in directory: {file_path}")
-            chunks = sorted([f for f in file_path.iterdir() if f.is_file()])
+            chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
             results = []
-            last_text = ""
             for chunk in chunks:
-                prompt = last_text[-1000:] if last_text else ""
+                prompt = "\n\n".join(results) if results else ""
                 text = self._transcribe_single(chunk, prompt=prompt)
                 results.append(text)
-                
-                last_text = text
             return "\n\n".join(results)
         return self._transcribe_single(file_path)
 

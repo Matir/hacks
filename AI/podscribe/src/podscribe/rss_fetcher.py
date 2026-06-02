@@ -64,7 +64,10 @@ class RSSFetcher:
             filename = self._filename_from_url(media_url)
             if not filename:
                 safe_title = self._sanitize_filename(title) if title else "episode"
+                if not safe_title:
+                    safe_title = "episode"
                 filename = f"{safe_title}.mp3"
+
 
             episodes.append({"title": title, "url": media_url, "filename": filename})
             if max_episodes is not None and len(episodes) >= max_episodes:

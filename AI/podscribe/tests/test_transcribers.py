@@ -467,6 +467,7 @@ def test_openai_transcribe_directory_rolling_context(tmp_path):
     dir_path.mkdir()
     (dir_path / "chunk_001.wav").write_bytes(b"audio1")
     (dir_path / "chunk_002.wav").write_bytes(b"audio2")
+    (dir_path / "chunk_003.wav").write_bytes(b"audio3")
     
     transcriber = OpenAICompatibleTranscriber(endpoint_url="https://api.baseten.co/v1", api_key="key", model="model")
     
@@ -476,14 +477,15 @@ def test_openai_transcribe_directory_rolling_context(tmp_path):
         # Mock standard text return value
         mock_client.audio.transcriptions.create.side_effect = [
             "First chunk text.",
-            "Second chunk text."
+            "Second chunk text.",
+            "Third chunk text."
         ]
         
         result = transcriber.transcribe(dir_path)
-        assert result == "First chunk text. Second chunk text."
+        assert result == "First chunk text. Second chunk text. Third chunk text."
         
         # Verify rolling context was passed
-        assert mock_client.audio.transcriptions.create.call_count == 2
+        assert mock_client.audio.transcriptions.create.call_count == 3
         calls = mock_client.audio.transcriptions.create.call_args_list
         
         # First call: no prompt/prefix_text
@@ -494,11 +496,16 @@ def test_openai_transcribe_directory_rolling_context(tmp_path):
         assert calls[1][1]["prompt"] == "First chunk text."
         assert calls[1][1]["extra_body"] == {"prefix_text": "First chunk text."}
 
+        # Third call: receives first + second transcript as prompt/prefix_text
+        assert calls[2][1]["prompt"] == "First chunk text. Second chunk text."
+        assert calls[2][1]["extra_body"] == {"prefix_text": "First chunk text. Second chunk text."}
+
 def test_speaker_attributed_transcribe_directory_rolling_context(tmp_path):
     dir_path = tmp_path / "chunks"
     dir_path.mkdir()
     (dir_path / "chunk_001.wav").write_bytes(b"audio1")
     (dir_path / "chunk_002.wav").write_bytes(b"audio2")
+    (dir_path / "chunk_003.wav").write_bytes(b"audio3")
     
     transcriber = SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url="https://api.baseten.co/v1", api_key="key", model="model")
     
@@ -512,13 +519,16 @@ def test_speaker_attributed_transcribe_directory_rolling_context(tmp_path):
         mock_resp2 = {
             "segments": [{"speaker": 1, "text": "Hi Sarah"}]
         }
-        mock_client.audio.transcriptions.create.side_effect = [mock_resp1, mock_resp2]
+        mock_resp3 = {
+            "segments": [{"speaker": 0, "text": "Welcome back"}]
+        }
+        mock_client.audio.transcriptions.create.side_effect = [mock_resp1, mock_resp2, mock_resp3]
         
         result = transcriber.transcribe(dir_path)
-        assert result == "[Speaker 0]: Hello David\n\n[Speaker 1]: Hi Sarah"
+        assert result == "[Speaker 0]: Hello David\n\n[Speaker 1]: Hi Sarah\n\n[Speaker 0]: Welcome back"
         
         # Verify rolling context preserves the "[Speaker 0]: " tags
-        assert mock_client.audio.transcriptions.create.call_count == 2
+        assert mock_client.audio.transcriptions.create.call_count == 3
         calls = mock_client.audio.transcriptions.create.call_args_list
         
         assert calls[0][1]["prompt"] is None
@@ -526,3 +536,7 @@ def test_speaker_attributed_transcribe_directory_rolling_context(tmp_path):
         # Second call should receive "[Speaker 0]: Hello David" (speaker tag kept)
         assert calls[1][1]["prompt"] == "[Speaker 0]: Hello David"
         assert calls[1][1]["extra_body"] == {"diarize": True, "prefix_text": "[Speaker 0]: Hello David"}
+
+        # Third call should receive entire accumulated transcript so far
+        assert calls[2][1]["prompt"] == "[Speaker 0]: Hello David\n\n[Speaker 1]: Hi Sarah"
+        assert calls[2][1]["extra_body"] == {"diarize": True, "prefix_text": "[Speaker 0]: Hello David\n\n[Speaker 1]: Hi Sarah"}

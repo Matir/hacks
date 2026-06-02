@@ -163,10 +163,20 @@ class Orchestrator:
                 elif entry.get("preprocessed_path"):
                     # Skip preprocessing, use previous result
                     working_file = Path(entry["preprocessed_path"])
+                    is_missing = False
                     if not working_file.exists():
-                        logger.warning(f"Preprocessed file missing: {working_file}. Re-running.")
+                        is_missing = True
+                    elif working_file.is_dir():
+                        # Ensure chunk directory is not empty
+                        chunks = [f for f in working_file.iterdir() if f.is_file() and f.suffix.lower() == ".wav"]
+                        if not chunks:
+                            is_missing = True
+
+                    if is_missing:
+                        logger.warning(f"Preprocessed file missing or empty chunk directory: {working_file}. Re-running.")
                         working_file = self.preprocessor.preprocess(file_path)
                         self.state_manager.update_entry(relative_path, preprocessed_path=working_file)
+
 
                 # 3. Transcribe (if needed)
                 raw_transcript = ""

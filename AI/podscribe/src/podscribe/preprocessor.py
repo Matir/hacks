@@ -49,35 +49,52 @@ class AudioPreprocessor:
             logger.error(f"FFmpeg silence detection failed. Stderr: {e.stderr}")
             raise RuntimeError(f"FFmpeg silence detection failed for {file_path.name}: {e.stderr}") from e
 
-        # Parse midpoints and total duration from stderr
-        silence_starts = []
-        silence_ends = []
+        # Reconstruct silence midpoints and total duration chronologically
+        midpoints = []
         total_duration = 0.0
+        current_start = None
+        first_event_is_end = True
 
         for line in result.stderr.splitlines():
-            # Parse duration
-            duration_match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})", line)
+            # Parse duration with optional/arbitrary decimal precision
+            duration_match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?", line)
             if duration_match:
                 hrs = int(duration_match.group(1))
                 mins = int(duration_match.group(2))
                 secs = int(duration_match.group(3))
-                hsecs = int(duration_match.group(4))
-                total_duration = hrs * 3600 + mins * 60 + secs + hsecs / 100
+                if duration_match.group(4):
+                    decimals_str = duration_match.group(4)
+                    precision = len(decimals_str)
+                    fractional = int(decimals_str) / (10 ** precision)
+                else:
+                    fractional = 0.0
+                total_duration = hrs * 3600 + mins * 60 + secs + fractional
 
-            # Parse silence intervals
+            # Parse silence events chronologically
             start_match = re.search(r"silence_start: (\d+\.?\d*)", line)
             if start_match:
-                silence_starts.append(float(start_match.group(1)))
+                current_start = float(start_match.group(1))
+                first_event_is_end = False
+
             end_match = re.search(r"silence_end: (\d+\.?\d*)", line)
             if end_match:
-                silence_ends.append(float(end_match.group(1)))
+                end_time = float(end_match.group(1))
+                if first_event_is_end:
+                    # Audio started in silence
+                    start_time = 0.0
+                    first_event_is_end = False
+                else:
+                    start_time = current_start if current_start is not None else end_time
+                
+                midpoints.append((start_time + end_time) / 2)
+                current_start = None
 
-        # Compute midpoints
-        midpoints = []
-        for i in range(min(len(silence_starts), len(silence_ends))):
-            midpoints.append((silence_starts[i] + silence_ends[i]) / 2)
+        # Handle case where audio ends in silence
+        if current_start is not None and total_duration > current_start:
+            midpoints.append((current_start + total_duration) / 2)
 
         return sorted(midpoints), total_duration
+
 
     def _calculate_split_points(self, midpoints: list[float], total_duration: float) -> list[float]:
         """

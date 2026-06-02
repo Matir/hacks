@@ -111,6 +111,51 @@ def test_detect_silence_midpoints():
         # midpoints: (100+102)/2 = 101, (250+253)/2 = 251.5
         assert midpoints == [101.0, 251.5]
 
+def test_detect_silence_midpoints_unbalanced():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    
+    # Unbalanced case:
+    # - Starts in silence (silence_end at 5.0 with no start)
+    # - Normal silence at [100.0, 105.0]
+    # - Ends in silence (silence_start at 500.0 with no end)
+    mock_stderr = """
+    Input #0, wav, from 'audio.wav':
+      Duration: 00:10:00.00, start: 0.000000, bitrate: 256 kb/s
+    [silencedetect @ 0x...] silence_end: 5.0 | silence_duration: 5.0
+    [silencedetect @ 0x...] silence_start: 100.0
+    [silencedetect @ 0x...] silence_end: 105.0 | silence_duration: 5.0
+    [silencedetect @ 0x...] silence_start: 500.0
+    """
+    
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="", stderr=mock_stderr, returncode=0)
+        
+        midpoints, duration = preprocessor._detect_silence_midpoints(Path("audio.wav"))
+        
+        assert duration == 600.0
+        # Expected midpoints:
+        # 1. Starts in silence -> [0, 5.0] -> 2.5
+        # 2. Normal silence -> [100.0, 105.0] -> 102.5
+        # 3. Ends in silence -> [500.0, 600.0] -> 550.0
+        assert midpoints == [2.5, 102.5, 550.0]
+
+def test_detect_silence_duration_parsing():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    
+    # Test case 1: 3 decimals in duration
+    mock_stderr_1 = "  Duration: 00:01:30.123, start: 0.00, bitrate: 128 kb/s"
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="", stderr=mock_stderr_1, returncode=0)
+        _, duration = preprocessor._detect_silence_midpoints(Path("audio.wav"))
+        assert duration == 90.123
+
+    # Test case 2: No decimals in duration
+    mock_stderr_2 = "  Duration: 00:01:30, start: 0.00, bitrate: 128 kb/s"
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="", stderr=mock_stderr_2, returncode=0)
+        _, duration = preprocessor._detect_silence_midpoints(Path("audio.wav"))
+        assert duration == 90.0
+
 def test_calculate_split_points():
     preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"), chunk_max_duration=100)
     
