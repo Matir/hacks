@@ -5,7 +5,7 @@ A modular, robust, and stateful Python command-line pipeline to ingest audio/vid
 ## Features
 
 -   **Modular Architecture:** Swappable components for ASR transcription hosts and text LLM providers.
--   **Native Speaker Attribution:** Pre-optimized to leverage the **IBM Granite Speech 4.1 2B Plus** model for producing speaker-tagged text directly without PyAnnote alignment.
+-   **Native Speaker Attribution:** Pre-optimized to leverage the **IBM Granite Speech 4.1 2B Plus** model for producing speaker-tagged text directly without PyAnnote alignment. Also supports **CrispASR** which natively returns speaker-attributed text (utilizing `verbose_json` and `diarize: true` under the hood).
 -   **Local Audio Preprocessing:** Integrated system `ffmpeg` utility automatically extracts audio tracks from video and downsamples media to optimal **16kHz mono WAV** files prior to upload, conserving bandwidth and reducing inference costs.
 -   **RSS / Podcast Feed Sync:** Automatically downloads new podcast episodes from any number of configured RSS feeds before processing begins. Episodes already present in the input directory are skipped, so re-running is always safe.
 -   **Resilient State Management:** Uses a `state.json` registry to track processing status (`preprocessed`, `transcribed`, `completed`) and file MD5 hashes. Runs can be interrupted and safely resumed without repeating expensive transcription calls or duplicating work.
@@ -74,7 +74,7 @@ endpoint_url = "https://api-inference.huggingface.co/models/ibm-granite/granite-
 model = "ibm-granite/granite-speech-4.1-2b-plus"
 api_key_env = "HF_API_KEY"
 
-# Example for CrispASR:
+# Example for CrispASR (always speaker-attributed):
 # provider = "crispasr"
 # endpoint_url = "https://api.crispasr.ai/v1"
 # model = "crisp-model"

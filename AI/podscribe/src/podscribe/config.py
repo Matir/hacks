@@ -68,6 +68,10 @@ class Config:
     def enable_speaker_attribution(self) -> bool:
         return bool(self.data.get("transcriber", {}).get("enable_speaker_attribution", False))
 
+    @property
+    def language(self) -> str:
+        return str(self.data.get("transcriber", {}).get("language", "en"))
+
     def get_transcriber_api_key(self) -> str:
         env_var = self.data.get("transcriber", {}).get("api_key_env", "HF_API_KEY")
         return os.environ.get(env_var, "")

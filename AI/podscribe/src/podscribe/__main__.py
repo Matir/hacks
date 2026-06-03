@@ -53,6 +53,11 @@ def main():
         help="Specify which stage of the pipeline to run: 'transcribe' (preprocessing + transcription), 'postprocess' (only LLM cleaning/formatting), or 'all' (default)"
     )
     parser.add_argument(
+        "--language",
+        default=None,
+        help="Specify the language for transcription (e.g. 'en', 'es'). Defaults to config file value or 'en'."
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
@@ -70,6 +75,11 @@ def main():
         print(f"Error: {e}")
         print(f"Please ensure '{args.config}' exists.")
         sys.exit(1)
+
+    if args.language is not None:
+        if "transcriber" not in config.data:
+            config.data["transcriber"] = {}
+        config.data["transcriber"]["language"] = args.language
 
     # 3. Setup Logging (requires output directory from config)
     setup_logging(Path(config.output_dir), log_level_str=args.log_level)

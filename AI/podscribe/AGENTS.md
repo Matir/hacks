@@ -38,7 +38,7 @@ This document defines the logical "Agents" that make up the transcription and po
     *   Communicates with the configured ASR endpoint (Hugging Face, Baseten, etc.).
     *   Handles API authentication and payload transmission.
     *   Extracts the raw text output, preserving the native speaker tags (e.g., `[Speaker 1]`).
-    *   Supports speaker diarization/attribution mode based on user configuration, automatically invoking segment-level transcription APIs and reconstructing dialogues tagged with speaker IDs.
+    *   Supports speaker diarization/attribution mode based on user configuration (or always-on for specific providers like CrispASR), automatically invoking segment-level transcription APIs and reconstructing dialogues tagged with speaker IDs.
 *   **Tools:**
     *   `httpx` / `requests`: For API communication.
     *   Swappable API Client Backends (`HuggingFaceTranscriber`, `OpenAICompatibleTranscriber`, `SpeakerAttributedOpenAICompatibleTranscriber`, `CrispASRTranscriber`).

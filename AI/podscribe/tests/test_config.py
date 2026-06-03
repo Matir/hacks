@@ -24,6 +24,7 @@ def test_config_load_valid(tmp_path):
     model = "custom-model"
     api_key_env = "CUSTOM_ASR_KEY"
     enable_speaker_attribution = true
+    language = "es"
 
     [post_processor]
     provider = "gemini"
@@ -59,6 +60,7 @@ def test_config_load_valid(tmp_path):
     assert config.transcriber_endpoint == "https://custom-asr.com/v1/audio/transcriptions"
     assert config.transcriber_model == "custom-model"
     assert config.enable_speaker_attribution is True
+    assert config.language == "es"
     
     # Test API key retrieval (requires env var setting)
     import os
@@ -97,6 +99,7 @@ def test_config_defaults(tmp_path):
     assert config.transcriber_endpoint == ""
     assert config.transcriber_model == ""
     assert config.enable_speaker_attribution is False
+    assert config.language == "en"
     assert config.get_transcriber_api_key() == ""  # Default env HF_API_KEY not set
     assert config.post_processor_provider == "gemini"
     assert config.post_processor_model == ""

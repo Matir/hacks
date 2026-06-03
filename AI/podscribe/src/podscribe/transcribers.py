@@ -83,10 +83,11 @@ class SpeakerAttributedMixin:
         return "\n\n".join(lines)
 
 class HuggingFaceTranscriber(BaseTranscriber):
-    def __init__(self, endpoint_url: str, api_key: str, model: str):
+    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en"):
         self.endpoint_url = endpoint_url
         self.api_key = api_key
         self.model = model
+        self.language = language
 
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
@@ -187,7 +188,7 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
             raise RuntimeError(f"Speaker attributed Hugging Face transcription failed: {e}") from e
 
 class OpenAICompatibleTranscriber(BaseTranscriber):
-    def __init__(self, endpoint_url: str, api_key: str, model: str):
+    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en"):
         if endpoint_url:
             endpoint_url = endpoint_url.rstrip("/")
             if endpoint_url.endswith("/audio/transcriptions"):
@@ -196,6 +197,7 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
         self.endpoint_url = endpoint_url
         self.api_key = api_key
         self.model = model
+        self.language = language
 
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
@@ -231,7 +233,8 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
                     file=audio_file,
                     response_format="text",
                     prompt=prompt or None,
-                    extra_body=extra_body if extra_body else None
+                    extra_body=extra_body if extra_body else None,
+                    language=self.language
                 )
 
             if isinstance(transcript_response, str):
@@ -269,7 +272,8 @@ class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenA
                     file=audio_file,
                     response_format="verbose_json",
                     prompt=prompt or None,
-                    extra_body=extra_body
+                    extra_body=extra_body,
+                    language=self.language
                 )
 
             if isinstance(transcript_response, str):
@@ -313,26 +317,31 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
                 elif current_speaker == speaker:
                     current_text.append(text)
                 else:
-                    speaker_label = f"[{current_speaker}]: " if current_speaker else ""
-                    results.append(f"{speaker_label}{' '.join(current_text)}")
+                    results.append(f"[{current_speaker}]: {' '.join(current_text)}")
                     current_speaker = speaker
                     current_text = [text]
             
             if current_speaker is not None and current_text:
-                speaker_label = f"[{current_speaker}]: " if current_speaker else ""
-                results.append(f"{speaker_label}{' '.join(current_text)}")
+                results.append(f"[{current_speaker}]: {' '.join(current_text)}")
                 
             return "\n\n".join(results)
         
         text, speaker = self._transcribe_single_crisp(file_path)
-        if speaker:
-            return f"[{speaker}]: {text}"
-        return text
+        return f"[{speaker}]: {text}"
 
     def _transcribe_single_crisp(self, file_path: Path) -> tuple[str, str]:
         logger.debug(f"Sending audio chunk {file_path.name} to CrispASR pipeline")
         if not self.endpoint_url:
             raise ValueError("CrispASR endpoint URL must be configured.")
+
+        logger.debug(
+            f"CrispASR Request: url={self.endpoint_url}, "
+            f"model={self.model or 'default'}, "
+            f"response_format=verbose_json, "
+            f"diarize=True, "
+            f"language={self.language}, "
+            f"file={file_path.name}"
+        )
 
         logger.info(f"Sending request to CrispASR endpoint: {self.endpoint_url}")
         try:
@@ -345,12 +354,15 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
                 raw_response = client.audio.transcriptions.with_raw_response.create(
                     model=self.model or "default",
                     file=audio_file,
-                    response_format="json",
+                    response_format="verbose_json",
+                    extra_body={"diarize": True},
+                    language=self.language
                 )
                 
                 response_json = raw_response.http_response.json()
+                logger.debug(f"CrispASR Response: {response_json}")
                 text = response_json.get("text", "").strip()
-                speaker = response_json.get("speaker", "").strip()
+                speaker = response_json.get("speaker", "").strip() or "Speaker Unknown"
                 return text, speaker
 
         except Exception as e:

@@ -1,7 +1,27 @@
 import logging
 from pathlib import Path
+import re
 import traceback
 from typing import List
+
+def count_words_and_segments(transcript: str) -> tuple[int, int]:
+    """Calculate the number of transcribed words and segments in a transcript.
+    
+    Excludes speaker labels (e.g. [Speaker 1]:) from the word count.
+    """
+    if not transcript.strip():
+        return 0, 0
+
+    # 1. Count segments (separated by double newlines)
+    raw_segments = [s.strip() for s in transcript.split("\n\n") if s.strip()]
+    num_segments = len(raw_segments)
+
+    # 2. Count words
+    # Remove speaker tags of the form "[Speaker Label]:" or "[Name]:"
+    cleaned_transcript = re.sub(r'\[[^\]]+\]:', '', transcript)
+    num_words = len(cleaned_transcript.split())
+
+    return num_words, num_segments
 
 from podscribe.config import Config
 from podscribe.state import StateManager
@@ -53,18 +73,19 @@ class Orchestrator:
         endpoint = self.config.transcriber_endpoint
         model = self.config.transcriber_model
         api_key = self.config.get_transcriber_api_key()
+        language = self.config.language
 
         if provider == "huggingface":
             if self.config.enable_speaker_attribution:
                 logger.info("Using speaker-attributed HuggingFace transcriber (assuming endpoint returns segments or chunks with speaker labels).")
-                return SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
-            return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
+                return SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
+            return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
         elif provider == "openai_compatible":
             if self.config.enable_speaker_attribution:
-                return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
-            return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
+                return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
+            return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
         elif provider == "crispasr":
-            return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
+            return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
 
@@ -224,10 +245,13 @@ class Orchestrator:
                             with open(raw_transcript_path, "w") as f:
                                 f.write(raw_transcript)
 
+                            num_words, num_segments = count_words_and_segments(raw_transcript)
                             self.state_manager.update_entry(
                                 relative_path,
                                 status="transcribed",
-                                raw_transcript_path=raw_transcript_path
+                                raw_transcript_path=raw_transcript_path,
+                                num_words=num_words,
+                                num_segments=num_segments
                             )
                         except Exception as e:
                             self.state_manager.update_entry(relative_path, status="failed", error=f"Transcription: {str(e)}")
@@ -245,7 +269,13 @@ class Orchestrator:
                             raw_transcript = self.transcriber.transcribe(working_file)
                             with open(raw_transcript_path, "w") as f:
                                 f.write(raw_transcript)
-                            self.state_manager.update_entry(relative_path, raw_transcript_path=raw_transcript_path)
+                        num_words, num_segments = count_words_and_segments(raw_transcript)
+                        self.state_manager.update_entry(
+                            relative_path,
+                            raw_transcript_path=raw_transcript_path,
+                            num_words=num_words,
+                            num_segments=num_segments
+                        )
                 else:
                     # self.stage == "postprocess"
                     # Load the raw transcript. Do not run transcriber.
@@ -257,13 +287,22 @@ class Orchestrator:
                             with open(raw_transcript_path, "r") as f:
                                 raw_transcript = f.read()
 
+                            num_words, num_segments = count_words_and_segments(raw_transcript)
                             # If status was new or preprocessed, promote to transcribed since we verified the raw transcript exists
                             current_status = self.state_manager.get_entry(relative_path).get("status")
                             if current_status in ("new", "preprocessed"):
                                 self.state_manager.update_entry(
                                     relative_path,
                                     status="transcribed",
-                                    raw_transcript_path=raw_transcript_path
+                                    raw_transcript_path=raw_transcript_path,
+                                    num_words=num_words,
+                                    num_segments=num_segments
+                                )
+                            else:
+                                self.state_manager.update_entry(
+                                    relative_path,
+                                    num_words=num_words,
+                                    num_segments=num_segments
                                 )
                         else:
                             raise FileNotFoundError(f"Raw transcript not found at {raw_transcript_path}. Cannot post-process without transcription.")
@@ -316,6 +355,8 @@ class Orchestrator:
         total_post_processing_cost = 0.0
         total_transcription_duration = 0.0
         total_transcription_cost = 0.0
+        total_words = 0
+        total_segments = 0
 
         for file_path in files:
             entry = self.state_manager.get_entry(file_path.name)
@@ -331,6 +372,28 @@ class Orchestrator:
                 endpoint = self.config.transcriber_endpoint
                 t_cost = calculate_transcription_cost(provider, duration, endpoint)
                 total_transcription_cost += t_cost
+
+                # Extract words and segments with fallback
+                num_words = entry.get("num_words")
+                num_segments = entry.get("num_segments")
+                if num_words is None or num_segments is None:
+                    raw_path_str = entry.get("raw_transcript_path")
+                    if raw_path_str and Path(raw_path_str).exists():
+                        try:
+                            with open(Path(raw_path_str), "r") as f:
+                                raw_transcript = f.read()
+                            num_words, num_segments = count_words_and_segments(raw_transcript)
+                            self.state_manager.update_entry(
+                                file_path.name,
+                                num_words=num_words,
+                                num_segments=num_segments
+                            )
+                        except Exception:
+                            num_words, num_segments = 0, 0
+                    else:
+                        num_words, num_segments = 0, 0
+                total_words += num_words
+                total_segments += num_segments
 
             # LLM Stats (applicable if status is completed)
             if status == "completed":
@@ -364,6 +427,8 @@ class Orchestrator:
         logger.info(f"Transcribed Files: {transcribed_files}")
         logger.info(f"Completed Files:   {completed_files}")
         logger.info(f"Audio Transcribed: {duration_str} ({total_transcription_duration:.2f}s)")
+        logger.info(f"Transcribed Words: {total_words:,}")
+        logger.info(f"Segments:          {total_segments:,}")
         logger.info(f"Total LLM Tokens:  {total_tokens:,} (Prompt: {total_prompt_tokens:,}, Completion: {total_completion_tokens:,})")
         logger.info("--------------------------------------------------")
         logger.info(f"ASR Cost ({self.config.transcriber_provider}):".ljust(30) + f"${total_transcription_cost:.4f}")

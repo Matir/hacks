@@ -124,6 +124,8 @@ def test_orchestrator_run_full_success(mock_config, tmp_path):
                 "completion_tokens": 5,
                 "total_tokens": 15
             }
+            assert state["podcast.mp3"]["num_words"] == 3
+            assert state["podcast.mp3"]["num_segments"] == 1
 
 def test_orchestrator_run_skips_completed(mock_config, tmp_path):
     input_dir = mock_config.input_dir
@@ -747,3 +749,103 @@ def test_orchestrator_run_dependencies_check_missing_ffmpeg_stage_postprocess(mo
         orchestrator = Orchestrator(mock_config, stage="postprocess")
         # Should NOT raise RuntimeError because stage is 'postprocess' (FFmpeg not needed)
         orchestrator.run()
+
+def test_count_words_and_segments():
+    from podscribe.orchestrator import count_words_and_segments
+
+    # Empty
+    assert count_words_and_segments("") == (0, 0)
+    assert count_words_and_segments("   \n ") == (0, 0)
+    
+    # Non-speaker-attributed single paragraph
+    assert count_words_and_segments("Hello world transcript.") == (3, 1)
+    
+    # Non-speaker-attributed multiple paragraphs
+    assert count_words_and_segments("Hello world.\n\nThis is paragraph two.") == (6, 2)
+    
+    # Speaker-attributed
+    transcript = "[Speaker 1]: Hello there.\n\n[Speaker 2]: Hi! How are you?"
+    assert count_words_and_segments(transcript) == (6, 2)
+    
+    # Speaker-attributed with more complex name
+    transcript_complex = "[Speaker A. Name]: Yes.\n\n[Speaker B]: No."
+    assert count_words_and_segments(transcript_complex) == (2, 2)
+
+def test_print_summary_report_logs_words_and_segments(mock_config, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    
+    with patch.object(Orchestrator, "_init_transcriber"), \
+         patch.object(Orchestrator, "_init_post_processor"):
+        orchestrator = Orchestrator(mock_config)
+        
+        # Populate state.json with 2 entries
+        orchestrator.state_manager.update_entry(
+            "file1.mp3",
+            status="completed",
+            audio_duration=60.0,
+            num_words=100,
+            num_segments=10,
+            token_usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        )
+        orchestrator.state_manager.update_entry(
+            "file2.mp3",
+            status="transcribed",
+            audio_duration=120.0,
+            num_words=250,
+            num_segments=25
+        )
+        
+        orchestrator.print_summary_report([Path("file1.mp3"), Path("file2.mp3")])
+        
+        log_text = caplog.text
+        assert "Transcribed Words: 350" in log_text
+        assert "Segments:          35" in log_text
+
+def test_print_summary_report_logs_words_and_segments_fallback(mock_config, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    
+    with patch.object(Orchestrator, "_init_transcriber"), \
+         patch.object(Orchestrator, "_init_post_processor"):
+        orchestrator = Orchestrator(mock_config)
+        
+        # Write dummy raw transcript files
+        raw_dir = tmp_path / "output" / "raw_transcripts"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        
+        raw_file1 = raw_dir / "file1_raw.txt"
+        raw_file1.write_text("[Speaker 1]: Hello world.\n\n[Speaker 2]: Hey.") # 3 words, 2 segments
+        
+        raw_file2 = raw_dir / "file2_raw.txt"
+        raw_file2.write_text("Just plain transcript text.") # 4 words, 1 segment
+        
+        # Populate state with missing num_words/num_segments but valid raw_transcript_path
+        orchestrator.state_manager.update_entry(
+            "file1.mp3",
+            status="completed",
+            audio_duration=60.0,
+            raw_transcript_path=raw_file1,
+            token_usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        )
+        orchestrator.state_manager.update_entry(
+            "file2.mp3",
+            status="transcribed",
+            audio_duration=120.0,
+            raw_transcript_path=raw_file2
+        )
+        
+        # Before print, state shouldn't have the counts
+        assert "num_words" not in orchestrator.state_manager.get_entry("file1.mp3")
+        
+        orchestrator.print_summary_report([Path("file1.mp3"), Path("file2.mp3")])
+        
+        log_text = caplog.text
+        assert "Transcribed Words: 7" in log_text
+        assert "Segments:          3" in log_text
+        
+        # State should be updated now
+        entry1 = orchestrator.state_manager.get_entry("file1.mp3")
+        assert entry1["num_words"] == 3
+        assert entry1["num_segments"] == 2
+

@@ -141,8 +141,33 @@ def test_openai_transcribe_success(tmp_path):
         call_args = mock_transcriptions.create.call_args[1]
         assert call_args["model"] == "granite-speech"
         assert call_args["response_format"] == "text"
+        assert call_args["language"] == "en"
         # File is opened in transcribe(), so we check it's a file object
         assert hasattr(call_args["file"], "read")
+
+def test_openai_transcribe_custom_language(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = OpenAICompatibleTranscriber(
+        endpoint_url="https://api.baseten.co/v1",
+        api_key="my-key",
+        model="granite-speech",
+        language="es"
+    )
+    
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_transcriptions = mock_client.audio.transcriptions
+        mock_response = MagicMock()
+        mock_response.text = "spanish transcript"
+        mock_transcriptions.create.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        
+        assert result == "spanish transcript"
+        call_args = mock_transcriptions.create.call_args[1]
+        assert call_args["language"] == "es"
 
 def test_openai_transcribe_dummy_key_fallback(tmp_path):
     audio_file = tmp_path / "test.wav"
@@ -260,6 +285,32 @@ def test_speaker_attributed_transcribe_success_dict(tmp_path):
         call_args = mock_client.audio.transcriptions.create.call_args[1]
         assert call_args["response_format"] == "verbose_json"
         assert call_args["extra_body"] == {"diarize": True}
+        assert call_args["language"] == "en"
+
+def test_speaker_attributed_transcribe_custom_language(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = SpeakerAttributedOpenAICompatibleTranscriber(
+        endpoint_url="https://api.baseten.co/v1",
+        api_key="key",
+        model="model",
+        language="es"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_response = MagicMock()
+        mock_response.segments = [
+            {"speaker": "0", "text": "Hola amigo"}
+        ]
+        mock_client.audio.transcriptions.create.return_value = mock_response
+
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Speaker 0]: Hola amigo"
+        
+        call_args = mock_client.audio.transcriptions.create.call_args[1]
+        assert call_args["language"] == "es"
 
 def test_speaker_attributed_transcribe_success_objects(tmp_path):
     audio_file = tmp_path / "test.wav"
@@ -725,7 +776,36 @@ def test_crispasr_transcribe_success_single_file(tmp_path):
         
         call_args = mock_client.audio.transcriptions.with_raw_response.create.call_args[1]
         assert call_args["model"] == "crisp-model"
-        assert call_args["response_format"] == "json"
+        assert call_args["response_format"] == "verbose_json"
+        assert call_args["extra_body"] == {"diarize": True}
+        assert call_args["language"] == "en"
+
+def test_crispasr_transcribe_custom_language(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = CrispASRTranscriber(
+        endpoint_url="https://api.crispasr.ai/v1",
+        api_key="crisp-key",
+        model="crisp-model",
+        language="es"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        
+        mock_raw_response = MagicMock()
+        mock_raw_response.http_response.json.return_value = {
+            "text": "Hola mundo",
+            "speaker": "Alice"
+        }
+        mock_client.audio.transcriptions.with_raw_response.create.return_value = mock_raw_response
+
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Alice]: Hola mundo"
+        
+        call_args = mock_client.audio.transcriptions.with_raw_response.create.call_args[1]
+        assert call_args["language"] == "es"
 
 def test_crispasr_transcribe_success_directory(tmp_path):
     dir_path = tmp_path / "chunks"
@@ -783,7 +863,7 @@ def test_crispasr_transcribe_no_speaker(tmp_path):
         mock_client.audio.transcriptions.with_raw_response.create.return_value = mock_raw_response
 
         result = transcriber.transcribe(audio_file)
-        assert result == "Hello world no speaker"
+        assert result == "[Speaker Unknown]: Hello world no speaker"
 
 def test_crispasr_transcribe_failure(tmp_path):
     audio_file = tmp_path / "test.wav"
@@ -801,3 +881,37 @@ def test_crispasr_transcribe_failure(tmp_path):
 
         with pytest.raises(RuntimeError, match="CrispASR transcription failed: Crisp Error"):
             transcriber.transcribe(audio_file)
+
+def test_crispasr_transcribe_debug_logging(tmp_path, caplog):
+    import logging
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = CrispASRTranscriber(
+        endpoint_url="https://api.crispasr.ai/v1",
+        api_key="crisp-key",
+        model="crisp-model"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_raw_response = MagicMock()
+        mock_raw_response.http_response.json.return_value = {
+            "text": "Hello",
+            "speaker": "Alice"
+        }
+        mock_client.audio.transcriptions.with_raw_response.create.return_value = mock_raw_response
+
+        # Test with INFO level (should NOT show debug log)
+        with caplog.at_level(logging.INFO):
+            transcriber.transcribe(audio_file)
+            assert not any("CrispASR Request:" in record.message for record in caplog.records)
+            assert not any("CrispASR Response:" in record.message for record in caplog.records)
+
+        caplog.clear()
+
+        # Test with DEBUG level (should show debug log)
+        with caplog.at_level(logging.DEBUG):
+            transcriber.transcribe(audio_file)
+            assert any("CrispASR Request: url=https://api.crispasr.ai/v1, model=crisp-model, response_format=verbose_json, diarize=True, language=en, file=test.wav" in record.message for record in caplog.records)
+            assert any("CrispASR Response: {'text': 'Hello', 'speaker': 'Alice'}" in record.message for record in caplog.records)
