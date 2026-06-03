@@ -11,10 +11,13 @@ from podscribe.orchestrator import Orchestrator
 
 # Environment variables loaded via python-dotenv
 
-def setup_logging(output_dir: Path):
+def setup_logging(output_dir: Path, log_level_str: str = "INFO"):
     """Configure logging to output to both stdout and a file."""
     output_dir.mkdir(parents=True, exist_ok=True)
     log_file = output_dir / "pipeline.log"
+
+    # Parse log level
+    numeric_level = getattr(logging, log_level_str.upper(), logging.INFO)
 
     # Define format
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -23,7 +26,7 @@ def setup_logging(output_dir: Path):
 
     # Root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(numeric_level)
 
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -43,6 +46,18 @@ def main():
         default="config.toml",
         help="Path to the TOML configuration file (default: config.toml)"
     )
+    parser.add_argument(
+        "--stage",
+        choices=["all", "transcribe", "postprocess"],
+        default="all",
+        help="Specify which stage of the pipeline to run: 'transcribe' (preprocessing + transcription), 'postprocess' (only LLM cleaning/formatting), or 'all' (default)"
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Set the logging level (default: INFO)"
+    )
     args = parser.parse_args()
 
     # 1. Load .env if present (contains keys like HF_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY)
@@ -57,13 +72,13 @@ def main():
         sys.exit(1)
 
     # 3. Setup Logging (requires output directory from config)
-    setup_logging(Path(config.output_dir))
+    setup_logging(Path(config.output_dir), log_level_str=args.log_level)
 
     logging.info("Starting Audio Transcription & Post-Processing Pipeline")
     
     # 4. Run Orchestrator
     try:
-        orchestrator = Orchestrator(config)
+        orchestrator = Orchestrator(config, stage=args.stage)
         orchestrator.run()
     except Exception as e:
         logging.critical(f"Pipeline failed with an unhandled error: {e}")

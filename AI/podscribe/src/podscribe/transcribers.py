@@ -30,6 +30,7 @@ class HuggingFaceTranscriber(BaseTranscriber):
         return self._transcribe_single(file_path)
 
     def _transcribe_single(self, file_path: Path) -> str:
+        logger.debug(f"Sending audio chunk {file_path.name} to Hugging Face ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("Hugging Face endpoint URL must be configured.")
 
@@ -91,6 +92,7 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
         return self._transcribe_single(file_path)
 
     def _transcribe_single(self, file_path: Path, prompt: str = "") -> str:
+        logger.debug(f"Sending audio chunk {file_path.name} to OpenAI-compatible ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("OpenAI Compatible endpoint URL must be configured.")
 
@@ -140,6 +142,7 @@ class SpeakerAttributedOpenAICompatibleTranscriber(OpenAICompatibleTranscriber):
         return self._transcribe_single(file_path)
 
     def _transcribe_single(self, file_path: Path, prompt: str = "") -> str:
+        logger.debug(f"Sending audio chunk {file_path.name} to speaker-attributed OpenAI-compatible ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("OpenAI Compatible endpoint URL must be configured.")
 

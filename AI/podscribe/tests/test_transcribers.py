@@ -540,3 +540,75 @@ def test_speaker_attributed_transcribe_directory_rolling_context(tmp_path):
         # Third call should receive entire accumulated transcript so far
         assert calls[2][1]["prompt"] == "[Speaker 0]: Hello David\n\n[Speaker 1]: Hi Sarah"
         assert calls[2][1]["extra_body"] == {"diarize": True, "prefix_text": "[Speaker 0]: Hello David\n\n[Speaker 1]: Hi Sarah"}
+
+def test_hf_transcribe_debug_logging(tmp_path, caplog):
+    import logging
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_data")
+    
+    transcriber = HuggingFaceTranscriber(endpoint_url="https://api.hf.co", api_key="key", model="model")
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "hello"}
+        mock_client.post.return_value = mock_response
+        
+        # Test with INFO level (should NOT show debug log)
+        with caplog.at_level(logging.INFO):
+            transcriber.transcribe(audio_file)
+            assert not any("Sending audio chunk" in record.message for record in caplog.records)
+            
+        caplog.clear()
+        
+        # Test with DEBUG level (should show debug log)
+        with caplog.at_level(logging.DEBUG):
+            transcriber.transcribe(audio_file)
+            assert any("Sending audio chunk test.wav to Hugging Face ASR pipeline" in record.message for record in caplog.records)
+
+def test_openai_transcribe_debug_logging(tmp_path, caplog):
+    import logging
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_data")
+    
+    transcriber = OpenAICompatibleTranscriber(endpoint_url="https://api.openai.com/v1", api_key="key", model="model")
+    
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_client.audio.transcriptions.create.return_value = MagicMock(text="hello")
+        
+        # Test with INFO level (should NOT show debug log)
+        with caplog.at_level(logging.INFO):
+            transcriber.transcribe(audio_file)
+            assert not any("Sending audio chunk" in record.message for record in caplog.records)
+            
+        caplog.clear()
+        
+        # Test with DEBUG level (should show debug log)
+        with caplog.at_level(logging.DEBUG):
+            transcriber.transcribe(audio_file)
+            assert any("Sending audio chunk test.wav to OpenAI-compatible ASR pipeline" in record.message for record in caplog.records)
+
+def test_speaker_attributed_openai_transcribe_debug_logging(tmp_path, caplog):
+    import logging
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_data")
+    
+    transcriber = SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url="https://api.openai.com/v1", api_key="key", model="model")
+    
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_client.audio.transcriptions.create.return_value = MagicMock(text="hello", segments=[])
+        
+        # Test with INFO level (should NOT show debug log)
+        with caplog.at_level(logging.INFO):
+            transcriber.transcribe(audio_file)
+            assert not any("Sending audio chunk" in record.message for record in caplog.records)
+            
+        caplog.clear()
+        
+        # Test with DEBUG level (should show debug log)
+        with caplog.at_level(logging.DEBUG):
+            transcriber.transcribe(audio_file)
+            assert any("Sending audio chunk test.wav to speaker-attributed OpenAI-compatible ASR pipeline" in record.message for record in caplog.records)

@@ -87,7 +87,7 @@ def test_orchestrator_run_full_success(mock_config, tmp_path):
         
         # --- Verifications ---
         # 1. Preprocessor should have been called
-        mock_preprocessor.preprocess.assert_called_once_with(input_file)
+        mock_preprocessor.preprocess.assert_called_once_with(input_file, duration=120.0)
         
         # 2. Transcriber should have been called with the preprocessed file
         mock_transcriber.transcribe.assert_called_once_with(preprocessed_file)
@@ -268,7 +268,7 @@ def test_orchestrator_run_handles_error_and_continues(mock_config, tmp_path):
         mock_preprocessor.get_duration.return_value = 120.0
         
         # Configure preprocessor to FAIL on file1, but succeed on file2
-        def preprocess_side_effect(file_path):
+        def preprocess_side_effect(file_path, duration=None):
             if file_path.name == "file1.mp3":
                 raise RuntimeError("Preprocessing failed for file1")
             return mock_config.output_dir / "preprocessed" / f"{file_path.stem}.wav"
@@ -426,7 +426,7 @@ def test_orchestrator_run_preprocessed_file_missing(mock_config, tmp_path):
          orchestrator.run()
 
          # Verify preprocess was called again to recreate the file!
-         mock_preprocessor.preprocess.assert_called_once_with(input_file)
+         mock_preprocessor.preprocess.assert_called_once_with(input_file, duration=120.0)
          state_mgr.load()
          assert state_mgr.get_entry("podcast.mp3")["preprocessed_path"] == str(new_preprocessed_file)
 
@@ -558,3 +558,192 @@ def test_orchestrator_run_raw_transcript_missing(mock_config, tmp_path):
          mock_transcriber.transcribe.assert_called_once()
          assert missing_raw_path.exists()
          assert missing_raw_path.read_text() == "new transcript"
+
+def test_orchestrator_run_stage_transcribe(mock_config, tmp_path):
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio_content")
+    
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe.return_value = "raw transcript text"
+        mock_init_t.return_value = mock_transcriber
+        
+        mock_post_processor = MagicMock()
+        mock_init_p.return_value = mock_post_processor
+        
+        mock_preprocessor = mock_preprocessor_class.return_value
+        preprocessed_file = mock_config.output_dir / "preprocessed" / "podcast_16k_mono.wav"
+        mock_preprocessor.preprocess.return_value = preprocessed_file
+        mock_preprocessor.get_duration.return_value = 120.0
+        
+        # Run with stage="transcribe"
+        orchestrator = Orchestrator(mock_config, stage="transcribe")
+        orchestrator.run()
+        
+        # Verifications
+        mock_preprocessor.preprocess.assert_called_once_with(input_file, duration=120.0)
+        mock_transcriber.transcribe.assert_called_once_with(preprocessed_file)
+        mock_post_processor.post_process.assert_not_called()
+        
+        # Intermediate raw transcript should be saved
+        raw_transcript_file = mock_config.output_dir / "raw_transcripts" / "podcast_raw.txt"
+        assert raw_transcript_file.exists()
+        assert raw_transcript_file.read_text() == "raw transcript text"
+        
+        # Final transcript should NOT be saved
+        final_transcript_file = mock_config.output_dir / "podcast_final.md"
+        assert not final_transcript_file.exists()
+        
+        # State should be "transcribed"
+        state_file = mock_config.output_dir / "state.json"
+        assert state_file.exists()
+        import json
+        with open(state_file, "r") as f:
+            state = json.load(f)
+            assert state["podcast.mp3"]["status"] == "transcribed"
+            assert state["podcast.mp3"]["preprocessed_path"] == str(preprocessed_file)
+            assert state["podcast.mp3"]["raw_transcript_path"] == str(raw_transcript_file)
+            assert state["podcast.mp3"]["final_transcript_path"] == ""
+
+def test_orchestrator_run_stage_postprocess_success(mock_config, tmp_path):
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio_content")
+    
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+        mock_transcriber = MagicMock()
+        mock_init_t.return_value = mock_transcriber
+        
+        mock_post_processor = MagicMock()
+        mock_post_processor.post_process.return_value = ("polished markdown text", TokenUsage(10, 5, 15))
+        mock_init_p.return_value = mock_post_processor
+        
+        mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 120.0
+        
+        # Setup pre-existing raw transcript
+        raw_transcript_file = mock_config.output_dir / "raw_transcripts" / "podcast_raw.txt"
+        raw_transcript_file.parent.mkdir(parents=True, exist_ok=True)
+        raw_transcript_file.write_text("saved raw transcript")
+        
+        # Run with stage="postprocess"
+        orchestrator = Orchestrator(mock_config, stage="postprocess")
+        orchestrator.run()
+        
+        # Verifications
+        mock_preprocessor.preprocess.assert_not_called()
+        mock_transcriber.transcribe.assert_not_called()
+        mock_post_processor.post_process.assert_called_once_with(
+            "saved raw transcript",
+            "Format this: {{TRANSCRIPT}}"
+        )
+        
+        # Final transcript should be saved
+        final_transcript_file = mock_config.output_dir / "podcast_final.md"
+        assert final_transcript_file.exists()
+        assert final_transcript_file.read_text() == "polished markdown text"
+        
+        # State should be "completed"
+        state_file = mock_config.output_dir / "state.json"
+        assert state_file.exists()
+        import json
+        with open(state_file, "r") as f:
+            state = json.load(f)
+            assert state["podcast.mp3"]["status"] == "completed"
+            assert state["podcast.mp3"]["raw_transcript_path"] == str(raw_transcript_file)
+            assert state["podcast.mp3"]["final_transcript_path"] == str(final_transcript_file)
+
+def test_orchestrator_run_stage_postprocess_missing_raw(mock_config, tmp_path):
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio_content")
+    
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+        mock_transcriber = MagicMock()
+        mock_init_t.return_value = mock_transcriber
+        mock_post_processor = MagicMock()
+        mock_init_p.return_value = mock_post_processor
+        mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 120.0
+        
+        # Run with stage="postprocess" (raw transcript is NOT created)
+        orchestrator = Orchestrator(mock_config, stage="postprocess")
+        orchestrator.run()
+        
+        # Verifications
+        mock_preprocessor.preprocess.assert_not_called()
+        mock_transcriber.transcribe.assert_not_called()
+        mock_post_processor.post_process.assert_not_called()
+        
+        # State should be "failed"
+        state_file = mock_config.output_dir / "state.json"
+        assert state_file.exists()
+        import json
+        with open(state_file, "r") as f:
+            state = json.load(f)
+            assert state["podcast.mp3"]["status"] == "failed"
+            assert "Post-processing setup: Raw transcript not found" in state["podcast.mp3"]["error"]
+
+def test_orchestrator_run_dependencies_check_missing_ffmpeg(mock_config):
+    # Setup mock config with preprocess enabled and stage 'all' (default)
+    mock_config.preprocess_enabled = True
+    
+    with patch.object(Orchestrator, "_init_transcriber"), \
+         patch.object(Orchestrator, "_init_post_processor"), \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+         
+        mock_preprocessor = mock_preprocessor_class.return_value
+        # Simulate ffmpeg NOT available
+        mock_preprocessor.is_ffmpeg_available.return_value = False
+        
+        orchestrator = Orchestrator(mock_config)
+        
+        with pytest.raises(RuntimeError, match="FFmpeg executable 'ffmpeg' not found, but preprocessing is enabled"):
+            orchestrator.run()
+
+def test_orchestrator_run_dependencies_check_missing_ffmpeg_but_disabled(mock_config):
+    # Setup mock config with preprocess DISABLED
+    mock_config.preprocess_enabled = False
+    
+    with patch.object(Orchestrator, "_init_transcriber"), \
+         patch.object(Orchestrator, "_init_post_processor"), \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class, \
+         patch.object(Orchestrator, "find_files", return_value=[]):
+         
+        mock_preprocessor = mock_preprocessor_class.return_value
+        # Simulate ffmpeg NOT available
+        mock_preprocessor.is_ffmpeg_available.return_value = False
+        
+        orchestrator = Orchestrator(mock_config)
+        # Should NOT raise RuntimeError because preprocessing is disabled
+        orchestrator.run()
+
+def test_orchestrator_run_dependencies_check_missing_ffmpeg_stage_postprocess(mock_config):
+    # Setup mock config with preprocess enabled, but stage is 'postprocess'
+    mock_config.preprocess_enabled = True
+    
+    with patch.object(Orchestrator, "_init_transcriber"), \
+         patch.object(Orchestrator, "_init_post_processor"), \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class, \
+         patch.object(Orchestrator, "find_files", return_value=[]):
+         
+        mock_preprocessor = mock_preprocessor_class.return_value
+        # Simulate ffmpeg NOT available
+        mock_preprocessor.is_ffmpeg_available.return_value = False
+        
+        orchestrator = Orchestrator(mock_config, stage="postprocess")
+        # Should NOT raise RuntimeError because stage is 'postprocess' (FFmpeg not needed)
+        orchestrator.run()

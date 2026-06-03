@@ -120,7 +120,13 @@ class AudioPreprocessor:
 
         return split_points
 
-    def preprocess(self, file_path: Path) -> Path:
+    def _format_duration(self, seconds: float) -> str:
+        hrs = int(seconds // 3600)
+        mins = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hrs:02d}:{mins:02d}:{secs:02d} ({seconds:.2f}s)"
+
+    def preprocess(self, file_path: Path, duration: float | None = None) -> Path:
         """
         Converts audio file to 16kHz, mono, WAV using FFmpeg.
         If chunking is enabled, splits the audio at silence midpoints and returns
@@ -141,6 +147,8 @@ class AudioPreprocessor:
         if not self.chunking_enabled:
             # Standard single-file preprocessing
             output_path = self.preprocess_dir / f"{file_path.stem}_16k_mono.wav"
+            total_duration = duration if duration is not None else self.get_duration(file_path)
+            logger.info(f"Preprocessing {file_path.name} (Duration: {self._format_duration(total_duration)}, Chunks: 1) -> {output_path.name}")
             cmd = [
                 self.ffmpeg_path,
                 "-y",
@@ -149,7 +157,6 @@ class AudioPreprocessor:
                 "-ac", "1",
                 str(output_path)
             ]
-            logger.info(f"Preprocessing {file_path.name} -> {output_path.name}")
             try:
                 subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
             except subprocess.CalledProcessError as e:
@@ -166,6 +173,9 @@ class AudioPreprocessor:
         # Detect silence midpoints and total duration
         midpoints, total_duration = self._detect_silence_midpoints(file_path)
         split_points = self._calculate_split_points(midpoints, total_duration)
+        num_chunks = len(split_points) + 1
+
+        logger.info(f"Preprocessing {file_path.name} (Duration: {self._format_duration(total_duration)}, Chunks: {num_chunks})")
 
         if not split_points:
             # Less than max duration: downmix to single chunk
@@ -191,7 +201,7 @@ class AudioPreprocessor:
                 "-ac", "1",
                 str(output_dir / "chunk_%03d.wav")
             ]
-            logger.info(f"Splitting {file_path.name} into {len(split_points) + 1} chunks inside {output_dir.name}...")
+            logger.info(f"Splitting {file_path.name} into {num_chunks} chunks inside {output_dir.name}...")
 
         try:
             subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)

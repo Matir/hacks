@@ -52,7 +52,7 @@ def test_preprocess_success(tmp_path):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
             
-            result = preprocessor.preprocess(input_file)
+            result = preprocessor.preprocess(input_file, duration=120.0)
             
             assert result == expected_output
             
@@ -88,7 +88,7 @@ def test_preprocess_failure(tmp_path):
             )
             
             with pytest.raises(RuntimeError, match="FFmpeg preprocessing failed for audio.mp3: Some FFmpeg error"):
-                preprocessor.preprocess(input_file)
+                preprocessor.preprocess(input_file, duration=120.0)
 
 def test_detect_silence_midpoints():
     preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
@@ -298,3 +298,9 @@ def test_get_duration_failure():
         
         duration = preprocessor.get_duration(Path("audio.mp3"))
         assert duration == 0.0
+
+def test_format_duration():
+    preprocessor = AudioPreprocessor(enabled=True, ffmpeg_path="ffmpeg", output_dir=Path("output"))
+    assert preprocessor._format_duration(0.0) == "00:00:00 (0.00s)"
+    assert preprocessor._format_duration(65.5) == "00:01:05 (65.50s)"
+    assert preprocessor._format_duration(3665.123) == "01:01:05 (3665.12s)"
