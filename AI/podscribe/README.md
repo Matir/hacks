@@ -74,6 +74,12 @@ endpoint_url = "https://api-inference.huggingface.co/models/ibm-granite/granite-
 model = "ibm-granite/granite-speech-4.1-2b-plus"
 api_key_env = "HF_API_KEY"
 
+# Example for CrispASR:
+# provider = "crispasr"
+# endpoint_url = "https://api.crispasr.ai/v1"
+# model = "crisp-model"
+# api_key_env = "CRISP_API_KEY"
+
 [post_processor]
 provider = "openai_compatible"
 endpoint_url = "https://openrouter.ai/api/v1"

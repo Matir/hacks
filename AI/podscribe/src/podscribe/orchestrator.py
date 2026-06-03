@@ -6,7 +6,7 @@ from typing import List
 from podscribe.config import Config
 from podscribe.state import StateManager
 from podscribe.preprocessor import AudioPreprocessor
-from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, BaseTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, BaseTranscriber
 from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor, TokenUsage
 from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
 from podscribe.rss_fetcher import RSSFetcher
@@ -21,15 +21,15 @@ class Orchestrator:
         if stage not in ("all", "transcribe", "postprocess"):
             raise ValueError(f"Invalid stage: {stage}. Must be 'all', 'transcribe', or 'postprocess'.")
         self.stage = stage
-        
+
         # Resolve directories
         self.input_dir = Path(self.config.input_dir)
         self.output_dir = Path(self.config.output_dir)
         self.raw_transcripts_dir = self.output_dir / "raw_transcripts"
-        
+
         # Initialize state manager
         self.state_manager = StateManager(self.output_dir)
-        
+
         # Initialize preprocessor
         self.preprocessor = AudioPreprocessor(
             enabled=self.config.preprocess_enabled,
@@ -40,11 +40,11 @@ class Orchestrator:
             silence_threshold_db=self.config.silence_threshold_db,
             silence_duration=self.config.silence_duration
         )
-        
+
         # Initialize clients
         self.transcriber = self._init_transcriber()
         self.post_processor = self._init_post_processor()
-        
+
         # Load prompt template
         self.prompt_template = self._load_prompt_template()
 
@@ -56,12 +56,15 @@ class Orchestrator:
 
         if provider == "huggingface":
             if self.config.enable_speaker_attribution:
-                logger.warning("Speaker attribution is not natively supported on raw HuggingFace API. Using standard transcriber.")
+                logger.info("Using speaker-attributed HuggingFace transcriber (assuming endpoint returns segments or chunks with speaker labels).")
+                return SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
             return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
         elif provider == "openai_compatible":
             if self.config.enable_speaker_attribution:
                 return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
             return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
+        elif provider == "crispasr":
+            return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model)
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
 
@@ -91,7 +94,7 @@ class Orchestrator:
         if not self.input_dir.exists():
             logger.warning(f"Input directory does not exist: {self.input_dir}")
             return []
-        
+
         files = []
         for file_path in self.input_dir.iterdir():
             if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
@@ -132,11 +135,11 @@ class Orchestrator:
         for file_path in files:
             relative_path = file_path.name
             logger.info(f"--- Processing: {relative_path} ---")
-            
+
             try:
                 # 1. Calculate Hash
                 file_hash = self.state_manager.get_file_hash(file_path)
-                
+
                 # Check if already processed for the target stage
                 entry = self.state_manager.get_entry(relative_path)
                 should_skip = False
@@ -155,7 +158,7 @@ class Orchestrator:
 
                 # Retrieve or initialize state entry
                 entry = self.state_manager.get_entry(relative_path)
-                
+
                 # If file has changed, reset state to start fresh
                 if entry.get("hash") != file_hash:
                     logger.info(f"File changed (or new). Resetting state for {relative_path}.")
@@ -173,7 +176,7 @@ class Orchestrator:
                 # Get and store audio duration
                 audio_duration = self.preprocessor.get_duration(file_path)
                 self.state_manager.update_entry(relative_path, audio_duration=audio_duration)
- 
+
                 working_file = file_path
 
                 # 2. Preprocess (if needed)
@@ -216,7 +219,7 @@ class Orchestrator:
                     if self.state_manager.get_entry(relative_path).get("status") == "preprocessed":
                         try:
                             raw_transcript = self.transcriber.transcribe(working_file)
-                            
+
                             # Save intermediate transcript
                             with open(raw_transcript_path, "w") as f:
                                 f.write(raw_transcript)
@@ -253,7 +256,7 @@ class Orchestrator:
                         if raw_transcript_path.exists():
                             with open(raw_transcript_path, "r") as f:
                                 raw_transcript = f.read()
-                            
+
                             # If status was new or preprocessed, promote to transcribed since we verified the raw transcript exists
                             current_status = self.state_manager.get_entry(relative_path).get("status")
                             if current_status in ("new", "preprocessed"):
@@ -273,12 +276,12 @@ class Orchestrator:
                     if self.state_manager.get_entry(relative_path).get("status") == "transcribed":
                         try:
                             final_transcript, token_usage = self.post_processor.post_process(raw_transcript, self.prompt_template)
-                            
+
                             # Save final transcript
                             final_transcript_path = self.output_dir / f"{file_path.stem}_final.md"
                             with open(final_transcript_path, "w") as f:
                                 f.write(final_transcript)
-     
+
                             self.state_manager.update_entry(
                                 relative_path,
                                 status="completed",
@@ -313,47 +316,47 @@ class Orchestrator:
         total_post_processing_cost = 0.0
         total_transcription_duration = 0.0
         total_transcription_cost = 0.0
- 
+
         for file_path in files:
             entry = self.state_manager.get_entry(file_path.name)
             status = entry.get("status")
-            
+
             # Transcription Stats (applicable if status is transcribed or completed)
             if status in ("transcribed", "completed"):
                 transcribed_files += 1
                 duration = entry.get("audio_duration", 0.0)
                 total_transcription_duration += duration
-                
+
                 provider = self.config.transcriber_provider
                 endpoint = self.config.transcriber_endpoint
                 t_cost = calculate_transcription_cost(provider, duration, endpoint)
                 total_transcription_cost += t_cost
-            
+
             # LLM Stats (applicable if status is completed)
             if status == "completed":
                 completed_files += 1
-                
+
                 usage_dict = entry.get("token_usage", {})
                 prompt = usage_dict.get("prompt_tokens", 0)
                 completion = usage_dict.get("completion_tokens", 0)
                 total = usage_dict.get("total_tokens", 0)
-                
+
                 total_prompt_tokens += prompt
                 total_completion_tokens += completion
                 total_tokens += total
-                
+
                 model = self.config.post_processor_model
                 cost = calculate_post_processing_cost(model, prompt, completion)
                 total_post_processing_cost += cost
- 
+
         total_cost = total_post_processing_cost + total_transcription_cost
-        
+
         # Convert duration to readable format (HH:MM:SS)
         hrs = int(total_transcription_duration // 3600)
         mins = int((total_transcription_duration % 3600) // 60)
         secs = int(total_transcription_duration % 60)
         duration_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
- 
+
         logger.info("==================================================")
         logger.info("                PODSCRIBE REPORT                  ")
         logger.info("==================================================")

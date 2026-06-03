@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import httpx
 import pytest
-from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber
 
 # ----------------------------------------------------------------------
 # Hugging Face Transcriber Tests
@@ -612,3 +612,192 @@ def test_speaker_attributed_openai_transcribe_debug_logging(tmp_path, caplog):
         with caplog.at_level(logging.DEBUG):
             transcriber.transcribe(audio_file)
             assert any("Sending audio chunk test.wav to speaker-attributed OpenAI-compatible ASR pipeline" in record.message for record in caplog.records)
+
+def test_speaker_attributed_hf_transcriber_init():
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api-inference.huggingface.co/models/model",
+        api_key="hf_key",
+        model="model"
+    )
+    assert transcriber.endpoint_url == "https://api-inference.huggingface.co/models/model"
+    assert transcriber.api_key == "hf_key"
+    assert transcriber.model == "model"
+
+def test_speaker_attributed_hf_transcribe_success_segments(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "segments": [
+                {"speaker": 0, "text": "Hello"},
+                {"speaker": 1, "text": "Hi there"},
+                {"speaker": 0, "text": "How are you?"}
+            ]
+        }
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Speaker 0]: Hello\n\n[Speaker 1]: Hi there\n\n[Speaker 0]: How are you?"
+
+def test_speaker_attributed_hf_transcribe_success_chunks(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "chunks": [
+                {"speaker": "SPEAKER_A", "text": "Line one"},
+                {"speaker": "SPEAKER_B", "text": "Line two"},
+                {"speaker": "SPEAKER_A", "text": "Line three"}
+            ]
+        }
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "[SPEAKER_A]: Line one\n\n[SPEAKER_B]: Line two\n\n[SPEAKER_A]: Line three"
+
+def test_speaker_attributed_hf_transcribe_fallback(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "raw text response without speaker attribution"}
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "raw text response without speaker attribution"
+
+# ----------------------------------------------------------------------
+# CrispASR Transcriber Tests
+# ----------------------------------------------------------------------
+
+def test_crispasr_transcribe_success_single_file(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = CrispASRTranscriber(
+        endpoint_url="https://api.crispasr.ai/v1",
+        api_key="crisp-key",
+        model="crisp-model"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        
+        # Mock raw response
+        mock_raw_response = MagicMock()
+        mock_raw_response.http_response.json.return_value = {
+            "text": "Hello world from CrispASR",
+            "speaker": "Alice"
+        }
+        
+        mock_client.audio.transcriptions.with_raw_response.create.return_value = mock_raw_response
+
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Alice]: Hello world from CrispASR"
+        
+        mock_openai_class.assert_called_once_with(
+            base_url="https://api.crispasr.ai/v1",
+            api_key="crisp-key"
+        )
+        
+        call_args = mock_client.audio.transcriptions.with_raw_response.create.call_args[1]
+        assert call_args["model"] == "crisp-model"
+        assert call_args["response_format"] == "json"
+
+def test_crispasr_transcribe_success_directory(tmp_path):
+    dir_path = tmp_path / "chunks"
+    dir_path.mkdir()
+    (dir_path / "chunk_001.wav").write_bytes(b"audio1")
+    (dir_path / "chunk_002.wav").write_bytes(b"audio2")
+    (dir_path / "chunk_003.wav").write_bytes(b"audio3")
+
+    transcriber = CrispASRTranscriber(
+        endpoint_url="https://api.crispasr.ai/v1",
+        api_key="crisp-key",
+        model="crisp-model"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        
+        # Mock successive raw responses
+        resp1 = MagicMock()
+        resp1.http_response.json.return_value = {"text": "Hello", "speaker": "Alice"}
+        
+        resp2 = MagicMock()
+        resp2.http_response.json.return_value = {"text": "How are you?", "speaker": "Alice"}
+        
+        # Speaker change
+        resp3 = MagicMock()
+        resp3.http_response.json.return_value = {"text": "I am fine.", "speaker": "Bob"}
+        
+        mock_client.audio.transcriptions.with_raw_response.create.side_effect = [resp1, resp2, resp3]
+
+        result = transcriber.transcribe(dir_path)
+        # Alice's segments should be merged, Bob's should be separate
+        assert result == "[Alice]: Hello How are you?\n\n[Bob]: I am fine."
+        assert mock_client.audio.transcriptions.with_raw_response.create.call_count == 3
+
+def test_crispasr_transcribe_no_speaker(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = CrispASRTranscriber(
+        endpoint_url="https://api.crispasr.ai/v1",
+        api_key="crisp-key",
+        model="crisp-model"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        
+        mock_raw_response = MagicMock()
+        # Missing speaker tag
+        mock_raw_response.http_response.json.return_value = {
+            "text": "Hello world no speaker"
+        }
+        
+        mock_client.audio.transcriptions.with_raw_response.create.return_value = mock_raw_response
+
+        result = transcriber.transcribe(audio_file)
+        assert result == "Hello world no speaker"
+
+def test_crispasr_transcribe_failure(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = CrispASRTranscriber(
+        endpoint_url="https://api.crispasr.ai/v1",
+        api_key="crisp-key",
+        model="crisp-model"
+    )
+
+    with patch("podscribe.transcribers.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_client.audio.transcriptions.with_raw_response.create.side_effect = Exception("Crisp Error")
+
+        with pytest.raises(RuntimeError, match="CrispASR transcription failed: Crisp Error"):
+            transcriber.transcribe(audio_file)

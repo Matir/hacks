@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm", ".mp4"}
 MEDIA_NS = "http://search.yahoo.com/mrss/"
+ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 
 
 class RSSFetcher:
@@ -30,16 +31,29 @@ class RSSFetcher:
             except Exception as e:
                 logger.error(f"Failed to remove leftover temporary file {temp_file}: {e}")
 
-    def _sanitize_filename(self, name: str) -> str:
-        name = re.sub(r"[^\w\s.-]", "", name)
-        name = re.sub(r"\s+", "_", name.strip())
-        return name[:200]
+    def _slugify(self, text: str) -> str:
+        # Convert to lowercase
+        text = text.lower()
+        # Remove non-alphanumeric (except hyphens, underscores, and spaces)
+        text = re.sub(r"[^\w\s-]", "", text)
+        # Replace whitespace, underscores, and hyphens with a single hyphen
+        text = re.sub(r"[\s_-]+", "-", text)
+        # Strip leading/trailing hyphens
+        text = text.strip("-")
+        return text[:200]
 
     def _filename_from_url(self, url: str) -> str | None:
         path = Path(urlparse(url).path)
         if path.suffix.lower() in AUDIO_EXTENSIONS:
             return path.name
         return None
+
+    def _extension_from_url(self, url: str) -> str:
+        path = Path(urlparse(url).path)
+        suffix = path.suffix.lower()
+        if suffix in AUDIO_EXTENSIONS:
+            return suffix
+        return ".mp3"
 
     def fetch_episodes(self, feed_url: str, max_episodes: int | None = None) -> list[dict]:
         """Parse an RSS feed and return a list of episode dicts (title, url, filename)."""
@@ -56,17 +70,28 @@ class RSSFetcher:
 
         episodes = []
         for item in channel.findall("item"):
-            title = (item.findtext("title") or "").strip()
+            title = item.findtext("title")
+            title = (title or "").strip()
+            if not title:
+                title = item.findtext(f"{{{ITUNES_NS}}}title")
+                title = (title or "").strip()
             media_url = self._extract_media_url(item)
             if not media_url:
                 continue
 
-            filename = self._filename_from_url(media_url)
+            ext = self._extension_from_url(media_url)
+            filename = ""
+            if title:
+                slug = self._slugify(title)
+                if slug:
+                    filename = f"{slug}{ext}"
+            
             if not filename:
-                safe_title = self._sanitize_filename(title) if title else "episode"
-                if not safe_title:
-                    safe_title = "episode"
-                filename = f"{safe_title}.mp3"
+                url_filename = self._filename_from_url(media_url)
+                if url_filename:
+                    filename = url_filename
+                else:
+                    filename = f"episode{ext}"
 
 
             episodes.append({"title": title, "url": media_url, "filename": filename})

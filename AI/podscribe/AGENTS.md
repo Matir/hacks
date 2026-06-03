@@ -41,7 +41,7 @@ This document defines the logical "Agents" that make up the transcription and po
     *   Supports speaker diarization/attribution mode based on user configuration, automatically invoking segment-level transcription APIs and reconstructing dialogues tagged with speaker IDs.
 *   **Tools:**
     *   `httpx` / `requests`: For API communication.
-    *   Swappable API Client Backends (`HuggingFaceTranscriber`, `OpenAICompatibleTranscriber`, `SpeakerAttributedOpenAICompatibleTranscriber`).
+    *   Swappable API Client Backends (`HuggingFaceTranscriber`, `OpenAICompatibleTranscriber`, `SpeakerAttributedOpenAICompatibleTranscriber`, `CrispASRTranscriber`).
 
 ---
 

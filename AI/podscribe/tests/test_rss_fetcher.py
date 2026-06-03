@@ -8,13 +8,18 @@ from podscribe.rss_fetcher import RSSFetcher
 # Configure logging for tests to see the outputs if needed
 logging.basicConfig(level=logging.INFO)
 
-def test_sanitize_filename():
+def test_slugify():
     fetcher = RSSFetcher(Path("dummy_dir"))
-    assert fetcher._sanitize_filename("Episode 1: Hello World!") == "Episode_1_Hello_World"
-    assert fetcher._sanitize_filename("What's Up?") == "Whats_Up"
+    assert fetcher._slugify("Episode 1: Hello World!") == "episode-1-hello-world"
+    assert fetcher._slugify("What's Up?") == "whats-up"
+    assert fetcher._slugify("episode_final_mix") == "episode-final-mix"
     # Trim length
     long_title = "a" * 300
-    assert len(fetcher._sanitize_filename(long_title)) == 200
+    assert len(fetcher._slugify(long_title)) == 200
+    
+    # Non-ASCII characters
+    assert fetcher._slugify("Episode 1: Café & Résumé") == "episode-1-café-résumé"
+    assert fetcher._slugify("中文标题") == "中文标题"
 
 def test_filename_from_url():
     fetcher = RSSFetcher(Path("dummy_dir"))
@@ -75,11 +80,76 @@ def test_fetch_episodes_success():
         assert len(episodes) == 2
         assert episodes[0]["title"] == "Episode 1: Standard Enclosure"
         assert episodes[0]["url"] == "https://example.com/ep1.mp3"
-        assert episodes[0]["filename"] == "ep1.mp3"
+        assert episodes[0]["filename"] == "episode-1-standard-enclosure.mp3"
         
         assert episodes[1]["title"] == "Episode 2: Media Content"
         assert episodes[1]["url"] == "https://example.com/ep2.m4a"
-        assert episodes[1]["filename"] == "ep2.m4a"
+        assert episodes[1]["filename"] == "episode-2-media-content.m4a"
+
+def test_fetch_episodes_itunes_title():
+    feed_url = "https://example.com/podcast.xml"
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+      <channel>
+        <title>Test Podcast</title>
+        <item>
+          <itunes:title>Episode 1: iTunes Title Only</itunes:title>
+          <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" />
+        </item>
+        <item>
+          <title>Episode 2: Standard Title</title>
+          <itunes:title>Episode 2: iTunes Title</itunes:title>
+          <enclosure url="https://example.com/ep2.mp3" type="audio/mpeg" />
+        </item>
+      </channel>
+    </rss>
+    """
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.text = mock_xml
+        mock_client.get.return_value = mock_response
+        
+        fetcher = RSSFetcher(Path("dummy_dir"))
+        episodes = fetcher.fetch_episodes(feed_url)
+        
+        assert len(episodes) == 2
+        # Should use itunes:title if standard title is missing
+        assert episodes[0]["title"] == "Episode 1: iTunes Title Only"
+        assert episodes[0]["filename"] == "episode-1-itunes-title-only.mp3"
+        
+        # Should prefer standard title if both are present
+        assert episodes[1]["title"] == "Episode 2: Standard Title"
+        assert episodes[1]["filename"] == "episode-2-standard-title.mp3"
+
+def test_fetch_episodes_whitespace_title():
+    feed_url = "https://example.com/podcast.xml"
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+      <channel>
+        <title>Test Podcast</title>
+        <item>
+          <title>   </title>
+          <itunes:title>Episode 1: Real Title</itunes:title>
+          <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" />
+        </item>
+      </channel>
+    </rss>
+    """
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.text = mock_xml
+        mock_client.get.return_value = mock_response
+        
+        fetcher = RSSFetcher(Path("dummy_dir"))
+        episodes = fetcher.fetch_episodes(feed_url)
+        
+        assert len(episodes) == 1
+        assert episodes[0]["title"] == "Episode 1: Real Title"
+        assert episodes[0]["filename"] == "episode-1-real-title.mp3"
 
 def test_download_missing_success(tmp_path):
     episodes = [
