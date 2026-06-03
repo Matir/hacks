@@ -101,7 +101,7 @@ Multiple feeds are supported — add additional `[[rss.feeds]]` blocks. On each 
 1.  Drop your media files (supports `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.webm`, and video `.mp4`) into the `input/` directory.
 2.  Execute the pipeline:
     ```bash
-    uv run python main.py
+    uv run podscribe
     ```
 
 ---
