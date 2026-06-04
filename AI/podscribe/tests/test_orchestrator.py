@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from podscribe.config import Config
 from podscribe.orchestrator import Orchestrator
-from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRCLITranscriber
 from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, TokenUsage
 
 # Setup logging
@@ -31,6 +31,7 @@ def mock_config(tmp_path):
     config.get_post_processor_api_key.return_value = "key"
     config.post_processor_temperature = 0.2
     config.rss_feeds = [] # Skip RSS by default
+    config.prompt_context = {}
     return config
 
 def test_orchestrator_find_files(mock_config):
@@ -100,7 +101,8 @@ def test_orchestrator_run_full_success(mock_config, tmp_path):
         # 4. Post-processor should have been called with raw transcript and prompt template
         mock_post_processor.post_process.assert_called_once_with(
             "raw transcript text",
-            "Format this: {{TRANSCRIPT}}"
+            "Format this: {{TRANSCRIPT}}",
+            context={"filename": "podcast.mp3"}
         )
         
         # 5. Final transcript should be saved
@@ -235,7 +237,8 @@ def test_orchestrator_run_resumes_from_transcribed(mock_config, tmp_path):
         # 2. Post-processor should be called with the read transcript
         mock_post_processor.post_process.assert_called_once_with(
             "saved raw transcript",
-            "Format this: {{TRANSCRIPT}}"
+            "Format this: {{TRANSCRIPT}}",
+            context={"filename": "podcast.mp3"}
         )
         
         # 3. Final output saved
@@ -325,6 +328,20 @@ def test_orchestrator_init_transcribers(mock_config):
     with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
         orchestrator = Orchestrator(mock_config)
         assert isinstance(orchestrator.transcriber, SpeakerAttributedOpenAICompatibleTranscriber)
+
+    # 5. Test CrispASR CLI init
+    mock_config.transcriber_provider = "crispasr_cli"
+    mock_config.transcriber_crispasr_path = "/path/to/crispasr"
+    mock_config.transcriber_backend = "whisper"
+    mock_config.transcriber_diarize_method = "pyannote"
+    mock_config.transcriber_model = "my-model.gguf"
+    with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
+        orchestrator = Orchestrator(mock_config)
+        assert isinstance(orchestrator.transcriber, CrispASRCLITranscriber)
+        assert orchestrator.transcriber.binary_path == "/path/to/crispasr"
+        assert orchestrator.transcriber.model == "my-model.gguf"
+        assert orchestrator.transcriber.backend == "whisper"
+        assert orchestrator.transcriber.diarize_method == "pyannote"
 
 def test_orchestrator_init_post_processors(mock_config):
     # 1. Test Gemini init
@@ -646,7 +663,8 @@ def test_orchestrator_run_stage_postprocess_success(mock_config, tmp_path):
         mock_transcriber.transcribe.assert_not_called()
         mock_post_processor.post_process.assert_called_once_with(
             "saved raw transcript",
-            "Format this: {{TRANSCRIPT}}"
+            "Format this: {{TRANSCRIPT}}",
+            context={"filename": "podcast.mp3"}
         )
         
         # Final transcript should be saved

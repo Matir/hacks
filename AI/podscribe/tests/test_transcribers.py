@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import httpx
 import pytest
-from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber
 
 # ----------------------------------------------------------------------
 # Hugging Face Transcriber Tests
@@ -915,3 +915,142 @@ def test_crispasr_transcribe_debug_logging(tmp_path, caplog):
             transcriber.transcribe(audio_file)
             assert any("CrispASR Request: url=https://api.crispasr.ai/v1, model=crisp-model, response_format=verbose_json, diarize=True, language=en, file=test.wav" in record.message for record in caplog.records)
             assert any("CrispASR Response: {'text': 'Hello', 'speaker': 'Alice'}" in record.message for record in caplog.records)
+
+
+# ----------------------------------------------------------------------
+# CrispASR CLI Transcriber Tests
+# ----------------------------------------------------------------------
+
+def test_crispasr_cli_init():
+    t = CrispASRCLITranscriber(
+        binary_path="/usr/bin/crispasr",
+        model="model.gguf",
+        backend="whisper",
+        diarize_method="pyannote"
+    )
+    assert t.binary_path == "/usr/bin/crispasr"
+    assert t.model == "model.gguf"
+    assert t.backend == "whisper"
+    assert t.diarize_method == "pyannote"
+
+def test_crispasr_cli_init_defaults():
+    t = CrispASRCLITranscriber(binary_path="", model="", backend="", diarize_method="")
+    assert t.binary_path == "crispasr"
+    assert t.model == "auto"
+    assert t.backend == "auto"
+    assert t.diarize_method == "pyannote"
+
+def test_detect_model_family():
+    from podscribe.transcribers import _detect_model_family
+    assert _detect_model_family("some-parakeet-model.gguf", "auto") == "parakeet"
+    assert _detect_model_family("auto", "parakeet") == "parakeet"
+    assert _detect_model_family("whisper-tiny.gguf", "auto") == "whisper"
+    assert _detect_model_family("auto", "whisper") == "whisper"
+    assert _detect_model_family("unknown", "auto") == "default"
+
+def test_crispasr_cli_transcribe_success_diarize(tmp_path):
+    audio_file = tmp_path / "audio.wav"
+    audio_file.write_bytes(b"audio")
+
+    transcriber = CrispASRCLITranscriber(
+        binary_path="crispasr",
+        model="parakeet-model",
+        backend="parakeet",
+        diarize_method="pyannote"
+    )
+
+    def side_effect(cmd, *args, **kwargs):
+        of_idx = cmd.index("-of")
+        output_prefix = cmd[of_idx + 1]
+        json_path = Path(f"{output_prefix}.json")
+        mock_data = {
+            "text": "Hello world.",
+            "segments": [
+                {"text": "Hello", "speaker": "Alice"},
+                {"text": "world.", "speaker": "Alice"}
+            ]
+        }
+        import json
+        json_path.write_text(json.dumps(mock_data))
+        return MagicMock(returncode=0, stdout="OK", stderr="")
+
+    with patch("subprocess.run", side_effect=side_effect) as mock_run:
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Alice]: Hello world."
+        
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "crispasr"
+        assert "-m" in cmd
+        assert cmd[cmd.index("-m") + 1] == "parakeet-model"
+        assert "--backend" in cmd
+        assert cmd[cmd.index("--backend") + 1] == "parakeet"
+        assert "-f" in cmd
+        assert cmd[cmd.index("-f") + 1] == str(audio_file)
+        
+        # Diarize flags
+        assert "--diarize" in cmd
+        assert "--diarize-method" in cmd
+        assert cmd[cmd.index("--diarize-method") + 1] == "pyannote"
+        assert "--sherpa-segment-model" in cmd
+        assert cmd[cmd.index("--sherpa-segment-model") + 1] == "auto"
+        assert "--diarize-embedder" in cmd
+        assert cmd[cmd.index("--diarize-embedder") + 1] == "auto"
+
+def test_crispasr_cli_transcribe_success_no_diarize(tmp_path):
+    audio_file = tmp_path / "audio.wav"
+    audio_file.write_bytes(b"audio")
+
+    transcriber = CrispASRCLITranscriber(
+        binary_path="crispasr",
+        model="whisper-model",
+        backend="whisper",
+        diarize_method="none"
+    )
+
+    def side_effect(cmd, *args, **kwargs):
+        of_idx = cmd.index("-of")
+        output_prefix = cmd[of_idx + 1]
+        json_path = Path(f"{output_prefix}.json")
+        mock_data = {
+            "text": "Hello world without diarization.",
+            "segments": [
+                {"text": "Hello world without diarization."}
+            ]
+        }
+        import json
+        json_path.write_text(json.dumps(mock_data))
+        return MagicMock(returncode=0, stdout="OK", stderr="")
+
+    with patch("subprocess.run", side_effect=side_effect) as mock_run:
+        result = transcriber.transcribe(audio_file)
+        assert result == "Hello world without diarization."
+        
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        # Diarize flags should be omitted
+        assert "--diarize" not in cmd
+        assert "--diarize-method" not in cmd
+
+def test_crispasr_cli_transcribe_failure_exit_code(tmp_path):
+    audio_file = tmp_path / "audio.wav"
+    audio_file.write_bytes(b"audio")
+
+    transcriber = CrispASRCLITranscriber(binary_path="crispasr", model="model", backend="backend", diarize_method="pyannote")
+
+    import subprocess
+    # subprocess.run should raise CalledProcessError when check=True and exit code is non-zero
+    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(returncode=1, cmd="crispasr", stderr="CLI Error")):
+        with pytest.raises(RuntimeError, match="CrispASR CLI failed: CLI Error"):
+            transcriber.transcribe(audio_file)
+
+def test_crispasr_cli_transcribe_failure_missing_json(tmp_path):
+    audio_file = tmp_path / "audio.wav"
+    audio_file.write_bytes(b"audio")
+
+    transcriber = CrispASRCLITranscriber(binary_path="crispasr", model="model", backend="backend", diarize_method="pyannote")
+
+    # subprocess.run succeeds but does NOT write JSON file
+    with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")) as mock_run:
+        with pytest.raises(FileNotFoundError, match="CrispASR CLI did not produce expected JSON file"):
+            transcriber.transcribe(audio_file)

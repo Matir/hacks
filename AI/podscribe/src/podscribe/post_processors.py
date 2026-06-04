@@ -32,9 +32,20 @@ class TokenUsage:
 
 class BasePostProcessor(abc.ABC):
     @abc.abstractmethod
-    def post_process(self, transcript: str, prompt_template: str) -> tuple[str, TokenUsage]:
+    def post_process(self, transcript: str, prompt_template: str, context: dict = None) -> tuple[str, TokenUsage]:
         """Post-process the transcript using the LLM and return the polished text and token usage."""
         pass
+
+    def _render_prompt(self, transcript: str, prompt_template: str, context: dict = None) -> str:
+        from jinja2 import Template
+        template = Template(prompt_template)
+        render_context = {
+            "transcript": transcript,
+            "TRANSCRIPT": transcript,  # Backwards compatibility
+        }
+        if context:
+            render_context.update(context)
+        return template.render(**render_context)
 
 class GeminiPostProcessor(BasePostProcessor):
     def __init__(self, model: str, api_key: str, temperature: float):
@@ -42,19 +53,17 @@ class GeminiPostProcessor(BasePostProcessor):
         self.api_key = api_key
         self.temperature = temperature
 
-    def post_process(self, transcript: str, prompt_template: str) -> tuple[str, TokenUsage]:
+    def post_process(self, transcript: str, prompt_template: str, context: dict = None) -> tuple[str, TokenUsage]:
         if not self.model:
             raise ValueError("Gemini model must be configured.")
 
         logger.info(f"Sending request to Gemini: {self.model}")
         try:
             # Initialize Gemini client
-            # If api_key is empty, it will try to look up GEMINI_API_KEY in env automatically,
-            # but passing it explicitly is safer.
             client = genai.Client(api_key=self.api_key or None)
             
-            # Prepare prompt by injecting transcript
-            prompt = prompt_template.replace("{{TRANSCRIPT}}", transcript)
+            # Prepare prompt by rendering template
+            prompt = self._render_prompt(transcript, prompt_template, context)
 
             config = types.GenerateContentConfig(
                 temperature=self.temperature,
@@ -93,7 +102,7 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
         self.model = model
         self.temperature = temperature
 
-    def post_process(self, transcript: str, prompt_template: str) -> tuple[str, TokenUsage]:
+    def post_process(self, transcript: str, prompt_template: str, context: dict = None) -> tuple[str, TokenUsage]:
         if not self.endpoint_url:
             raise ValueError("OpenAI-compatible endpoint URL must be configured.")
         if not self.model:
@@ -101,13 +110,12 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
 
         logger.info(f"Sending request to OpenAI-compatible LLM ({self.model}) via: {self.endpoint_url}")
         try:
-            # Works for OpenAI, OpenRouter, Local vLLM, DeepSeek, etc.
             client = OpenAI(
                 base_url=self.endpoint_url,
                 api_key=self.api_key or "dummy-key"
             )
 
-            prompt = prompt_template.replace("{{TRANSCRIPT}}", transcript)
+            prompt = self._render_prompt(transcript, prompt_template, context)
 
             response = client.chat.completions.create(
                 model=self.model,

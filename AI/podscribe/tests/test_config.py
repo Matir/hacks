@@ -39,6 +39,10 @@ def test_config_load_valid(tmp_path):
 
     [[rss.feeds]]
     url = "https://example.com/feed2.rss"
+
+    [prompt_context]
+    podcast_name = "My Podcast"
+    host = "John Doe"
     """
     config_file = tmp_path / "config.toml"
     config_file.write_text(config_content)
@@ -83,6 +87,9 @@ def test_config_load_valid(tmp_path):
     assert feeds[1]["url"] == "https://example.com/feed2.rss"
     assert "max_episodes" not in feeds[1]
 
+    # Verify prompt_context
+    assert config.prompt_context == {"podcast_name": "My Podcast", "host": "John Doe"}
+
 def test_config_defaults(tmp_path):
     # Empty config
     config_file = tmp_path / "config.toml"
@@ -106,6 +113,7 @@ def test_config_defaults(tmp_path):
     assert config.post_processor_endpoint == ""
     assert config.post_processor_temperature == 0.2
     assert config.rss_feeds == []
+    assert config.prompt_context == {}
 
 def test_config_missing_file():
     with pytest.raises(FileNotFoundError):

@@ -69,6 +69,18 @@ class Config:
         return bool(self.data.get("transcriber", {}).get("enable_speaker_attribution", False))
 
     @property
+    def transcriber_crispasr_path(self) -> str:
+        return str(self.data.get("transcriber", {}).get("crispasr_path", "crispasr"))
+
+    @property
+    def transcriber_backend(self) -> str:
+        return str(self.data.get("transcriber", {}).get("backend", "auto"))
+
+    @property
+    def transcriber_diarize_method(self) -> str:
+        return str(self.data.get("transcriber", {}).get("diarize_method", "pyannote"))
+
+    @property
     def language(self) -> str:
         return str(self.data.get("transcriber", {}).get("language", "en"))
 
@@ -99,3 +111,7 @@ class Config:
     @property
     def rss_feeds(self) -> list[dict]:
         return list(self.data.get("rss", {}).get("feeds", []))
+
+    @property
+    def prompt_context(self) -> Dict[str, Any]:
+        return dict(self.data.get("prompt_context", {}))

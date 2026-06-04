@@ -26,7 +26,7 @@ def count_words_and_segments(transcript: str) -> tuple[int, int]:
 from podscribe.config import Config
 from podscribe.state import StateManager
 from podscribe.preprocessor import AudioPreprocessor
-from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, BaseTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber, BaseTranscriber
 from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor, TokenUsage
 from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
 from podscribe.rss_fetcher import RSSFetcher
@@ -86,6 +86,16 @@ class Orchestrator:
             return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
         elif provider == "crispasr":
             return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
+        elif provider == "crispasr_cli":
+            crispasr_path = self.config.transcriber_crispasr_path
+            backend = self.config.transcriber_backend
+            diarize_method = self.config.transcriber_diarize_method
+            return CrispASRCLITranscriber(
+                binary_path=crispasr_path,
+                model=model or "auto",
+                backend=backend,
+                diarize_method=diarize_method
+            )
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
 
@@ -314,7 +324,13 @@ class Orchestrator:
                 if self.stage in ("all", "postprocess"):
                     if self.state_manager.get_entry(relative_path).get("status") == "transcribed":
                         try:
-                            final_transcript, token_usage = self.post_processor.post_process(raw_transcript, self.prompt_template)
+                            context = {
+                                "filename": file_path.name,
+                                **self.config.prompt_context
+                            }
+                            final_transcript, token_usage = self.post_processor.post_process(
+                                raw_transcript, self.prompt_template, context=context
+                            )
 
                             # Save final transcript
                             final_transcript_path = self.output_dir / f"{file_path.stem}_final.md"

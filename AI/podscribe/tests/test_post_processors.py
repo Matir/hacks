@@ -238,3 +238,60 @@ def test_openai_post_process_failure():
         
         with pytest.raises(RuntimeError, match="OpenAI-compatible post-processing failed: API Error"):
             proc.post_process("raw", "temp {{TRANSCRIPT}}")
+
+def test_gemini_post_process_with_context():
+    proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="gem_key", temperature=0.3)
+    prompt_template = "Clean this: {{TRANSCRIPT}} for {{podcast_name}} hosted by {{host}}."
+    raw_transcript = "uh hello like world"
+    context = {
+        "podcast_name": "Tech Talk",
+        "host": "Alice"
+    }
+    
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
+        mock_client = mock_genai_client_class.return_value
+        mock_models = mock_client.models
+        mock_response = MagicMock(text="Hello World")
+        mock_response.usage_metadata = MagicMock(prompt_token_count=10, candidates_token_count=5, total_token_count=15)
+        mock_models.generate_content.return_value = mock_response
+        
+        text, usage = proc.post_process(raw_transcript, prompt_template, context=context)
+        
+        assert text == "Hello World"
+        mock_models.generate_content.assert_called_once()
+        call_args = mock_models.generate_content.call_args[1]
+        assert call_args["contents"] == "Clean this: uh hello like world for Tech Talk hosted by Alice."
+
+def test_openai_post_process_with_context():
+    proc = OpenAICompatiblePostProcessor(
+        endpoint_url="https://openrouter.ai/api/v1",
+        api_key="op-key",
+        model="meta-llama/llama-3-70b-instruct",
+        temperature=0.5
+    )
+    prompt_template = "Format: {{TRANSCRIPT}} for {{podcast_name}}."
+    raw_transcript = "raw transcript data"
+    context = {
+        "podcast_name": "Tech Talk"
+    }
+    
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class:
+        mock_client = mock_openai_class.return_value
+        mock_chat = mock_client.chat
+        mock_response = MagicMock()
+        mock_response.usage = MagicMock(prompt_tokens=20, completion_tokens=10, total_tokens=30)
+        mock_choice = MagicMock()
+        mock_choice.message.content = "formatted output"
+        mock_response.choices = [mock_choice]
+        mock_chat.completions.create.return_value = mock_response
+        
+        text, usage = proc.post_process(raw_transcript, prompt_template, context=context)
+        
+        assert text == "formatted output"
+        mock_chat.completions.create.assert_called_once_with(
+            model="meta-llama/llama-3-70b-instruct",
+            messages=[
+                {"role": "user", "content": "Format: raw transcript data for Tech Talk."}
+            ],
+            temperature=0.5
+        )

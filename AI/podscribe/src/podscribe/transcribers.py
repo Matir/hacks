@@ -368,3 +368,114 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
         except Exception as e:
             logger.error(f"CrispASR transcription failed: {e}")
             raise RuntimeError(f"CrispASR transcription failed: {e}") from e
+
+CRISPASR_MODEL_FAMILY_SETTINGS = {
+    "parakeet": {
+        "cmd_template": '"{binary_path}" -m "{model}" --backend "{backend}" -f "{file_path}" {diarize_flags} -ojf -of "{output_path}"',
+        "diarize_flags": '--diarize --diarize-method "{diarize_method}" --sherpa-segment-model auto --diarize-embedder auto',
+        "json_segments_key": "segments",
+        "json_text_key": "text",
+        "json_speaker_key": "speaker",
+    },
+    "whisper": {
+        "cmd_template": '"{binary_path}" -m "{model}" --backend "{backend}" -f "{file_path}" {diarize_flags} -ojf -of "{output_path}"',
+        "diarize_flags": '--diarize --diarize-method "{diarize_method}" --sherpa-segment-model auto --diarize-embedder auto',
+        "json_segments_key": "segments",
+        "json_text_key": "text",
+        "json_speaker_key": "speaker",
+    },
+    "default": {
+        "cmd_template": '"{binary_path}" -m "{model}" --backend "{backend}" -f "{file_path}" {diarize_flags} -ojf -of "{output_path}"',
+        "diarize_flags": '--diarize --diarize-method "{diarize_method}" --sherpa-segment-model auto --diarize-embedder auto',
+        "json_segments_key": "segments",
+        "json_text_key": "text",
+        "json_speaker_key": "speaker",
+    }
+}
+
+def _detect_model_family(model: str, backend: str) -> str:
+    model_lower = model.lower() if model else ""
+    backend_lower = backend.lower() if backend else ""
+    
+    if "parakeet" in backend_lower or "parakeet" in model_lower:
+        return "parakeet"
+    if "whisper" in backend_lower or "whisper" in model_lower:
+        return "whisper"
+    
+    return "default"
+
+class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
+    def __init__(self, binary_path: str, model: str, backend: str, diarize_method: str):
+        self.binary_path = binary_path or "crispasr"
+        self.model = model or "auto"
+        self.backend = backend or "auto"
+        self.diarize_method = diarize_method or "pyannote"
+        
+    def _transcribe_single(self, file_path: Path) -> str:
+        import subprocess
+        import tempfile
+        import json
+        import shlex
+        
+        family = _detect_model_family(self.model, self.backend)
+        settings = CRISPASR_MODEL_FAMILY_SETTINGS.get(family, CRISPASR_MODEL_FAMILY_SETTINGS["default"])
+        
+        with tempfile.TemporaryDirectory(prefix="podscribe_crispasr_") as tmpdir:
+            output_prefix = Path(tmpdir) / "transcribed"
+            json_path = Path(tmpdir) / "transcribed.json"
+            
+            diarize_flags = ""
+            if self.diarize_method != "none":
+                diarize_flags = settings["diarize_flags"].format(
+                    diarize_method=self.diarize_method
+                )
+                
+            cmd_str = settings["cmd_template"].format(
+                binary_path=self.binary_path,
+                model=self.model,
+                backend=self.backend,
+                file_path=str(file_path),
+                diarize_flags=diarize_flags,
+                output_path=str(output_prefix)
+            )
+            
+            cmd = shlex.split(cmd_str)
+                
+            logger.info(f"Running CrispASR CLI: {' '.join(cmd)}")
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                logger.debug(f"CrispASR CLI stdout: {result.stdout}")
+                logger.debug(f"CrispASR CLI stderr: {result.stderr}")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"CrispASR CLI failed with exit code {e.returncode}")
+                logger.error(f"CrispASR CLI stderr: {e.stderr}")
+                raise RuntimeError(f"CrispASR CLI failed: {e.stderr}") from e
+                
+            if not json_path.exists():
+                raise FileNotFoundError(f"CrispASR CLI did not produce expected JSON file at {json_path}")
+                
+            with open(json_path, "r") as f:
+                data = json.load(f)
+                
+            if self.diarize_method == "none":
+                text_key = settings.get("json_text_key", "text")
+                if text_key in data:
+                    return data[text_key].strip()
+                segments_key = settings.get("json_segments_key", "segments")
+                segments = data.get(segments_key, [])
+                return " ".join([seg.get(text_key, "").strip() for seg in segments])
+            else:
+                segments_key = settings.get("json_segments_key", "segments")
+                segments = data.get(segments_key, [])
+                
+                mapped_segments = []
+                text_key = settings.get("json_segment_text_key") or settings.get("json_text_key", "text")
+                speaker_key = settings.get("json_segment_speaker_key") or settings.get("json_speaker_key", "speaker")
+                
+                for seg in segments:
+                    mapped_segments.append({
+                        "speaker": seg.get(speaker_key),
+                        "text": seg.get(text_key, "")
+                    })
+                    
+                return self.format_speaker_segments(mapped_segments)
