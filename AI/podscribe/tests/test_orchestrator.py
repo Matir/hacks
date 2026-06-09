@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from podscribe.config import Config
 from podscribe.orchestrator import Orchestrator
-from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRCLITranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRCLITranscriber, VibeVoiceASRTranscriber
 from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, TokenUsage
 
 # Setup logging
@@ -342,6 +342,14 @@ def test_orchestrator_init_transcribers(mock_config):
         assert orchestrator.transcriber.model == "my-model.gguf"
         assert orchestrator.transcriber.backend == "whisper"
         assert orchestrator.transcriber.diarize_method == "pyannote"
+
+    # 6. Test VibeVoice init
+    mock_config.transcriber_provider = "vibevoice"
+    mock_config.hotwords = "hello, world"
+    with patch.object(Orchestrator, "_load_prompt_template", return_value=""):
+        orchestrator = Orchestrator(mock_config)
+        assert isinstance(orchestrator.transcriber, VibeVoiceASRTranscriber)
+        assert orchestrator.transcriber.hotwords == "hello, world"
 
 def test_orchestrator_init_post_processors(mock_config):
     # 1. Test Gemini init

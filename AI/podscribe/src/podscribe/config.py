@@ -84,6 +84,10 @@ class Config:
     def language(self) -> str:
         return str(self.data.get("transcriber", {}).get("language", "en"))
 
+    @property
+    def hotwords(self) -> str:
+        return str(self.data.get("transcriber", {}).get("hotwords", ""))
+
     def get_transcriber_api_key(self) -> str:
         env_var = self.data.get("transcriber", {}).get("api_key_env", "HF_API_KEY")
         return os.environ.get(env_var, "")

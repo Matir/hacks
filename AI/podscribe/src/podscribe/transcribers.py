@@ -1,4 +1,5 @@
 import abc
+import base64
 import inspect
 import logging
 from pathlib import Path
@@ -479,3 +480,58 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
                     })
                     
                 return self.format_speaker_segments(mapped_segments)
+
+class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
+    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", hotwords: str = ""):
+        super().__init__(endpoint_url, api_key, model, language)
+        self.hotwords = hotwords
+
+    def _transcribe_single(self, file_path: Path) -> str:
+        logger.debug(f"Sending audio chunk {file_path.name} to VibeVoice ASR pipeline")
+        if not self.endpoint_url:
+            raise ValueError("VibeVoice endpoint URL must be configured.")
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        logger.info(f"Sending request to VibeVoice: {self.endpoint_url}")
+        try:
+            with open(file_path, "rb") as f:
+                audio_bytes = f.read()
+            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+            payload = {
+                "inputs": audio_b64,
+                "parameters": {}
+            }
+            if self.hotwords:
+                payload["parameters"]["hotwords"] = self.hotwords
+
+            with httpx.Client(timeout=300.0) as client:
+                response = client.post(
+                    self.endpoint_url,
+                    headers=headers,
+                    json=payload
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"VibeVoice Error: {response.status_code} - {response.text}")
+                    response.raise_for_status()
+
+                result = response.json()
+
+                if isinstance(result, dict):
+                    if "result" in result:
+                        return result["result"]
+                    elif "text" in result:
+                        return result["text"]
+                
+                logger.warning(f"Unexpected VibeVoice response structure: {result}")
+                return str(result)
+
+        except Exception as e:
+            logger.error(f"VibeVoice transcription failed: {e}")
+            raise RuntimeError(f"VibeVoice transcription failed: {e}") from e

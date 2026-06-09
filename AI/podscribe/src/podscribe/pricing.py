@@ -25,10 +25,43 @@ TRANSCRIPTION_PRICING = {
     "openai_compatible": 0.0,  # Assuming self-hosted (local vLLM/Whisper)
 }
 
-def calculate_post_processing_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+def calculate_post_processing_cost(
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    provider: str = "",
+    endpoint_url: str = ""
+) -> float:
     """Calculate the cost of post-processing in USD."""
     if not model:
         return 0.0
+
+    try:
+        from genai_prices import Usage, calc_price
+
+        provider_id = None
+        provider_lower = provider.lower() if provider else ""
+        endpoint_lower = endpoint_url.lower() if endpoint_url else ""
+
+        if provider_lower == "gemini":
+            provider_id = "google"
+        elif provider_lower == "openai_compatible":
+            if "openrouter.ai" in endpoint_lower:
+                provider_id = "openrouter"
+            elif "api.openai.com" in endpoint_lower:
+                provider_id = "openai"
+
+        usage = Usage(input_tokens=prompt_tokens, output_tokens=completion_tokens)
+        price_calculation = calc_price(
+            usage=usage,
+            model_ref=model,
+            provider_id=provider_id
+        )
+        return float(price_calculation.total_price)
+    except LookupError as e:
+        logger.debug(f"Model not found in genai-prices, falling back to local pricing: {e}")
+    except Exception as e:
+        logger.warning(f"Error calling genai-prices: {e}. Falling back to local pricing.")
 
     # Try to find a matching model key (case-insensitive, substring match)
     pricing = None

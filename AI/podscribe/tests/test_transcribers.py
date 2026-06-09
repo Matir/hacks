@@ -1,5 +1,6 @@
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+import base64
 import httpx
 import pytest
 from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber
@@ -1053,4 +1054,94 @@ def test_crispasr_cli_transcribe_failure_missing_json(tmp_path):
     # subprocess.run succeeds but does NOT write JSON file
     with patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")) as mock_run:
         with pytest.raises(FileNotFoundError, match="CrispASR CLI did not produce expected JSON file"):
+            transcriber.transcribe(audio_file)
+
+# ----------------------------------------------------------------------
+# VibeVoice ASR Transcriber Tests
+# ----------------------------------------------------------------------
+
+from podscribe.transcribers import VibeVoiceASRTranscriber
+
+def test_vibevoice_transcribe_success(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_bytes")
+
+    transcriber = VibeVoiceASRTranscriber(
+        endpoint_url="https://api.vibevoice.ai/transcribe",
+        api_key="vv-key",
+        model="vibevoice-model"
+    )
+
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": "transcribed text"}
+        mock_client.post.return_value = mock_response
+
+        result = transcriber.transcribe(audio_file)
+        assert result == "transcribed text"
+
+        mock_client.post.assert_called_once()
+        args, kwargs = mock_client.post.call_args
+        assert args[0] == "https://api.vibevoice.ai/transcribe"
+        assert kwargs["headers"] == {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer vv-key"
+        }
+        
+        # Verify base64 inputs
+        payload = kwargs["json"]
+        assert "inputs" in payload
+        decoded = base64.b64decode(payload["inputs"].encode("utf-8"))
+        assert decoded == b"fake_audio_bytes"
+        assert payload["parameters"] == {}
+
+def test_vibevoice_transcribe_with_hotwords(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_bytes")
+
+    transcriber = VibeVoiceASRTranscriber(
+        endpoint_url="https://api.vibevoice.ai/transcribe",
+        api_key="vv-key",
+        model="vibevoice-model",
+        hotwords="kubernetes, docker"
+    )
+
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": "transcribed text"}
+        mock_client.post.return_value = mock_response
+
+        result = transcriber.transcribe(audio_file)
+        assert result == "transcribed text"
+
+        payload = mock_client.post.call_args[1]["json"]
+        assert payload["parameters"]["hotwords"] == "kubernetes, docker"
+
+def test_vibevoice_transcribe_failure(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_bytes")
+
+    transcriber = VibeVoiceASRTranscriber(
+        endpoint_url="https://api.vibevoice.ai/transcribe",
+        api_key="vv-key",
+        model="vibevoice-model"
+    )
+
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            message="500 Error",
+            request=MagicMock(),
+            response=mock_response
+        )
+        mock_client.post.return_value = mock_response
+
+        with pytest.raises(RuntimeError, match="VibeVoice transcription failed"):
             transcriber.transcribe(audio_file)

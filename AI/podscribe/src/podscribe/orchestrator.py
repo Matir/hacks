@@ -26,7 +26,7 @@ def count_words_and_segments(transcript: str) -> tuple[int, int]:
 from podscribe.config import Config
 from podscribe.state import StateManager
 from podscribe.preprocessor import AudioPreprocessor
-from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber, BaseTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber, VibeVoiceASRTranscriber, BaseTranscriber
 from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor, TokenUsage
 from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
 from podscribe.rss_fetcher import RSSFetcher
@@ -95,6 +95,15 @@ class Orchestrator:
                 model=model or "auto",
                 backend=backend,
                 diarize_method=diarize_method
+            )
+        elif provider == "vibevoice":
+            hotwords = self.config.hotwords
+            return VibeVoiceASRTranscriber(
+                endpoint_url=endpoint,
+                api_key=api_key,
+                model=model,
+                language=language,
+                hotwords=hotwords
             )
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
@@ -425,7 +434,15 @@ class Orchestrator:
                 total_tokens += total
 
                 model = self.config.post_processor_model
-                cost = calculate_post_processing_cost(model, prompt, completion)
+                provider = self.config.post_processor_provider
+                endpoint = self.config.post_processor_endpoint
+                cost = calculate_post_processing_cost(
+                    model,
+                    prompt,
+                    completion,
+                    provider=provider,
+                    endpoint_url=endpoint
+                )
                 total_post_processing_cost += cost
 
         total_cost = total_post_processing_cost + total_transcription_cost
