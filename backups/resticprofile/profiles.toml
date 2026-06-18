@@ -1,0 +1,86 @@
+version = "1"
+
+[global]
+restic-lock-retry-after = "1m"
+
+# -----------------------------------------------------------------------------
+# TEMPLATES (Reusable Exclusion Lists)
+# Note: In resticprofile, list keys like 'exclude' overwrite rather than merge 
+# during inheritance. Using Go templates allows combining parent exclusions 
+# with additional profile-specific exclusions cleanly.
+# -----------------------------------------------------------------------------
+
+{{ define "common-excludes" }}
+  "*.tmp",
+  "*.temp",
+  "*.lock",
+  "*.bak",
+  "*~",
+  ".~lock.*",
+{{ end }}
+
+{{ define "mac-excludes" }}
+  {{ template "common-excludes" . }}
+  "**/Library/Caches",
+  "**/Library/Logs",
+  "**/.Trash",
+  "**/.DS_Store",
+  "**/.Spotlight-V100",
+  "**/.DocumentRevisions-V100",
+  "**/.fseventsd",
+{{ end }}
+
+# -----------------------------------------------------------------------------
+# PROFILES
+# -----------------------------------------------------------------------------
+
+# 1. common-exclusions
+# Base profile listing common temporary file names, lock file names, etc.
+[common-exclusions.backup]
+exclude = [
+  {{ template "common-excludes" . }}
+]
+
+# 2. mac-exclusions
+# Inherits from common-exclusions and adds Mac-specific system exclusion paths
+[mac-exclusions]
+inherit = "common-exclusions"
+
+[mac-exclusions.backup]
+exclude = [
+  {{ template "mac-excludes" . }}
+]
+
+# 3. mac-david
+# Selects /Users/david but uses mac-exclusions plus custom excluded directories
+[mac-david]
+inherit = "mac-exclusions"
+repository = "rclone:remote:/backup/mac-david"
+password-file = "key/password.txt"
+
+[mac-david.backup]
+source = [ "/Users/david" ]
+exclude = [
+  {{ template "mac-excludes" . }}
+  "/Users/david/Downloads",
+  "/Users/david/VirtualMachines",
+  "/Users/david/Library/Containers",
+]
+
+# 4. mac-david-external
+# Inherits source and exclude settings from mac-david but targets an external drive
+[mac-david-external]
+inherit = "mac-david"
+# Pre-backup check: verify volume (by Name or UUID) is mounted before running restic
+run-before = 'diskutil info "ExternalBackup" >/dev/null || (echo "Error: External backup drive not mounted" && exit 1)'
+repository = "/Volumes/ExternalBackup/restic-repo"
+
+# 5. mac-david-b2
+# Inherits source and exclude settings from mac-david but targets Backblaze B2
+[mac-david-b2]
+inherit = "mac-david"
+repository = "b2:my-b2-bucket:/mac-david"
+# Encryption password file
+password-file = "key/b2_password.txt"
+# Load B2 API credentials (B2_ACCOUNT_ID / B2_ACCOUNT_KEY) from an env file
+env-file = "key/b2_creds.env"
