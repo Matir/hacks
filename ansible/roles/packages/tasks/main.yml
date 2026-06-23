@@ -1,0 +1,13 @@
+---
+# Dispatch package installation tasks based on OS family
+- name: Install Debian-based packages
+  ansible.builtin.include_tasks: debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Install Arch-based packages
+  ansible.builtin.include_tasks: arch.yml
+  when: ansible_os_family == 'Archlinux'
+
+- name: Install MacOS packages
+  ansible.builtin.include_tasks: macos.yml
+  when: ansible_os_family == 'Darwin'

@@ -1,0 +1,7 @@
+---
+# Main tasks for common role
+- name: Include user management tasks
+  ansible.builtin.include_tasks: users.yml
+
+- name: Include skel deployment tasks
+  ansible.builtin.include_tasks: skel.yml

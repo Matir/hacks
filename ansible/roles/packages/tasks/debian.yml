@@ -1,0 +1,8 @@
+---
+- name: Update apt cache and install packages
+  ansible.builtin.apt:
+    name: "{{ ((common_packages.debian | default([])) + (role_packages.debian | default([]))) | unique }}"
+    state: present
+    update_cache: true
+  become: true
+  when: (((common_packages.debian | default([])) + (role_packages.debian | default([]))) | unique) | length > 0

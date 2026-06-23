@@ -1,0 +1,5 @@
+---
+# Default baseline users if not overridden in group_vars
+baseline_users:
+  - name: "{{ ansible_user_id }}"
+    shell: /bin/zsh

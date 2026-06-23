@@ -1,0 +1,8 @@
+---
+- name: Install Homebrew packages
+  community.general.homebrew:
+    name: "{{ ((common_packages.macos | default([])) + (role_packages.macos | default([]))) | unique }}"
+    state: present
+    update_homebrew: true
+  become: false
+  when: (((common_packages.macos | default([])) + (role_packages.macos | default([]))) | unique) | length > 0

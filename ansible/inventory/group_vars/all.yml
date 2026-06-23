@@ -1,0 +1,27 @@
+---
+# Common baseline user configuration across all hosts
+baseline_users:
+  - name: "{{ ansible_user_id }}"
+    shell: /bin/zsh
+
+# Common baseline packages to install on all systems
+common_packages:
+  debian:
+    - zsh
+    - zsh-syntax-highlighting
+    - vim
+    - tmux
+    - git
+    - git-lfs
+  arch:
+    - zsh
+    - zsh-syntax-highlighting
+    - vim
+    - tmux
+    - git
+    - git-lfs
+  macos:
+    # zsh, vim, and git come pre-installed natively on macOS
+    - zsh-syntax-highlighting
+    - tmux
+    - git-lfs

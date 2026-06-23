@@ -1,0 +1,11 @@
+---
+# Additional package groups for workstation role
+role_packages:
+  debian:
+    - htop
+    - build-essential
+  arch:
+    - htop
+    - base-devel
+  macos:
+    - htop

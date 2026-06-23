@@ -1,0 +1,9 @@
+---
+# Additional package groups for server role
+role_packages:
+  debian:
+    - htop
+    - ufw
+  arch:
+    - htop
+  macos: []

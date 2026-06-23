@@ -1,0 +1,30 @@
+---
+- name: Clone skel repository for each user
+  ansible.builtin.git:
+    repo: https://github.com/Matir/skel.git
+    dest: "~{{ item.name }}/.skel"
+    update: true
+  loop: "{{ baseline_users }}"
+  become: true
+  become_user: "{{ item.name }}"
+  register: skel_clone
+
+- name: Ensure .skel directory and files are owned by target user
+  ansible.builtin.file:
+    path: "~{{ item.name }}/.skel"
+    state: directory
+    owner: "{{ item.name }}"
+    recurse: true
+  loop: "{{ baseline_users }}"
+  become: true
+
+- name: Run skel install script as target user
+  ansible.builtin.command:
+    cmd: "./install.sh"
+    chdir: "~{{ item.item.name }}/.skel"
+  loop: "{{ skel_clone.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  become: true
+  become_user: "{{ item.item.name }}"
+  when: item.changed

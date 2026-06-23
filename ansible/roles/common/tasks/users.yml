@@ -1,0 +1,19 @@
+---
+- name: Ensure users are present and shell is set to zsh (Linux)
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    shell: "{{ item.shell | default('/bin/zsh') }}"
+    state: present
+    create_home: true
+  loop: "{{ baseline_users }}"
+  become: true
+  when: ansible_os_family != 'Darwin'
+
+- name: Ensure users are present and shell is set to zsh (macOS)
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    shell: "{{ item.shell | default('/bin/zsh') }}"
+    state: present
+  loop: "{{ baseline_users }}"
+  become: true
+  when: ansible_os_family == 'Darwin'

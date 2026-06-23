@@ -1,0 +1,11 @@
+---
+# Default package lists if not defined in group_vars
+common_packages:
+  debian: []
+  arch: []
+  macos: []
+
+role_packages:
+  debian: []
+  arch: []
+  macos: []

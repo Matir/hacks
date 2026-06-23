@@ -1,0 +1,8 @@
+---
+- name: Install pacman packages
+  community.general.pacman:
+    name: "{{ ((common_packages.arch | default([])) + (role_packages.arch | default([]))) | unique }}"
+    state: present
+    update_cache: true
+  become: true
+  when: (((common_packages.arch | default([])) + (role_packages.arch | default([]))) | unique) | length > 0

@@ -1,0 +1,7 @@
+---
+- name: Apply minimal baseline configuration to all hosts
+  hosts: all
+  gather_facts: true
+  roles:
+    - common
+    - packages
