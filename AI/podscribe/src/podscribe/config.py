@@ -119,3 +119,75 @@ class Config:
     @property
     def prompt_context(self) -> Dict[str, Any]:
         return dict(self.data.get("prompt_context", {}))
+
+    def dump(self) -> str:
+        lines = [
+            "==================================================",
+            "                PODSCRIBE CONFIGURATION           ",
+            "==================================================",
+            f"Config File:             {self.config_path}",
+            "",
+            "--- Paths ---",
+            f"Input Directory:         {self.input_dir}",
+            f"Output Directory:        {self.output_dir}",
+            f"Prompt Template:         {self.prompt_file}",
+            "",
+            "--- Preprocessing ---",
+            f"Enabled:                 {self.preprocess_enabled}",
+            f"FFmpeg Path:             {self.ffmpeg_path}",
+            f"Chunking Enabled:        {self.chunking_enabled}",
+            f"Max Chunk Duration:      {self.chunk_max_duration}s" if self.chunking_enabled else "Max Chunk Duration:      N/A",
+            f"Silence Threshold:       {self.silence_threshold_db} dB" if self.chunking_enabled else "Silence Threshold:       N/A",
+            f"Silence Duration:        {self.silence_duration}s" if self.chunking_enabled else "Silence Duration:        N/A",
+            "",
+            "--- Transcriber (ASR) ---",
+            f"Provider:                {self.transcriber_provider}",
+            f"Model:                   {self.transcriber_model}",
+            f"Endpoint URL:            {self.transcriber_endpoint}",
+            f"Speaker Attribution:     {self.enable_speaker_attribution}",
+            f"Language:                {self.language}",
+            f"API Key Env Var:         {self.data.get('transcriber', {}).get('api_key_env', 'HF_API_KEY')}",
+            f"API Key Present:         {'Yes' if self.get_transcriber_api_key() else 'No'}",
+        ]
+        
+        # Add provider-specific keys if they exist
+        if self.transcriber_provider == "crispasr_cli":
+            lines.extend([
+                f"CrispASR Path:           {self.transcriber_crispasr_path}",
+                f"CrispASR Backend:        {self.transcriber_backend}",
+                f"Diarize Method:          {self.transcriber_diarize_method}",
+            ])
+        elif self.transcriber_provider == "vibevoice":
+            lines.extend([
+                f"Hotwords:                {self.hotwords}",
+            ])
+
+        lines.extend([
+            "",
+            "--- Post-Processor (Editor) ---",
+            f"Provider:                {self.post_processor_provider}",
+            f"Model:                   {self.post_processor_model}",
+            f"Endpoint URL:            {self.post_processor_endpoint}",
+            f"Temperature:             {self.post_processor_temperature}",
+            f"API Key Env Var:         {self.data.get('post_processor', {}).get('api_key_env', 'GEMINI_API_KEY')}",
+            f"API Key Present:         {'Yes' if self.get_post_processor_api_key() else 'No'}",
+        ])
+        
+        if self.rss_feeds:
+            lines.extend([
+                "",
+                "--- RSS Feeds ---",
+            ])
+            for feed in self.rss_feeds:
+                lines.append(f"- URL: {feed.get('url')} (Max: {feed.get('max_episodes', 'Unlimited')})")
+
+        if self.prompt_context:
+            lines.extend([
+                "",
+                "--- Prompt Context ---",
+            ])
+            for k, v in self.prompt_context.items():
+                lines.append(f"{k}: {v}")
+
+        lines.append("==================================================")
+        return "\n".join(lines)

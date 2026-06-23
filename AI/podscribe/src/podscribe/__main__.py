@@ -59,9 +59,15 @@ def main():
     )
     parser.add_argument(
         "--log-level",
+        type=str.upper,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
         help="Set the logging level (default: INFO)"
+    )
+    parser.add_argument(
+        "--dump-config",
+        action="store_true",
+        help="Dump the resolved configuration and exit"
     )
     args = parser.parse_args()
 
@@ -80,6 +86,11 @@ def main():
         if "transcriber" not in config.data:
             config.data["transcriber"] = {}
         config.data["transcriber"]["language"] = args.language
+
+    # Handle configuration dumping
+    if args.dump_config:
+        print(config.dump())
+        sys.exit(0)
 
     # 3. Setup Logging (requires output directory from config)
     setup_logging(Path(config.output_dir), log_level_str=args.log_level)

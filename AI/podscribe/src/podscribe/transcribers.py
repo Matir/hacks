@@ -100,6 +100,17 @@ class HuggingFaceTranscriber(BaseTranscriber):
             return " ".join(results)
         return self._transcribe_single(file_path)
 
+    def _handle_error_response(self, response: httpx.Response, prefix: str = "HF"):
+        error_msg = response.text
+        try:
+            err_json = response.json()
+            if isinstance(err_json, dict) and "error" in err_json:
+                error_msg = err_json["error"]
+        except Exception:
+            pass
+        logger.error(f"{prefix} Error: {response.status_code} - {error_msg}")
+        response.raise_for_status()
+
     def _transcribe_single(self, file_path: Path) -> str:
         logger.debug(f"Sending audio chunk {file_path.name} to Hugging Face ASR pipeline")
         if not self.endpoint_url:
@@ -122,8 +133,7 @@ class HuggingFaceTranscriber(BaseTranscriber):
                 )
 
                 if response.status_code != 200:
-                    logger.error(f"HF Error: {response.status_code} - {response.text}")
-                    response.raise_for_status()
+                    self._handle_error_response(response, "HF")
 
                 result = response.json()
 
@@ -162,8 +172,7 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
                 )
 
                 if response.status_code != 200:
-                    logger.error(f"HF Error: {response.status_code} - {response.text}")
-                    response.raise_for_status()
+                    self._handle_error_response(response, "HF")
 
                 result = response.json()
 
@@ -518,8 +527,7 @@ class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
                 )
 
                 if response.status_code != 200:
-                    logger.error(f"VibeVoice Error: {response.status_code} - {response.text}")
-                    response.raise_for_status()
+                    self._handle_error_response(response, "VibeVoice")
 
                 result = response.json()
 

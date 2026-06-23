@@ -72,12 +72,13 @@ def test_hf_transcribe_failure(tmp_path):
     
     transcriber = HuggingFaceTranscriber(endpoint_url="https://api.hf.co", api_key="key", model="model")
     
-    with patch("httpx.Client") as mock_client_class:
+    with patch("httpx.Client") as mock_client_class, \
+         patch("podscribe.transcribers.logger") as mock_logger:
         mock_client = mock_client_class.return_value.__enter__.return_value
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
-        # raise_for_status raising HTTPStatusError is simulated
+        mock_response.json.side_effect = ValueError("No JSON")
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             message="500 Error",
             request=MagicMock(),
@@ -87,6 +88,33 @@ def test_hf_transcribe_failure(tmp_path):
         
         with pytest.raises(RuntimeError, match="Hugging Face transcription failed"):
             transcriber.transcribe(audio_file)
+            
+        mock_logger.error.assert_any_call("HF Error: 500 - Internal Server Error")
+
+def test_hf_transcribe_failure_with_json_error(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = HuggingFaceTranscriber(endpoint_url="https://api.hf.co", api_key="key", model="model")
+    
+    with patch("httpx.Client") as mock_client_class, \
+         patch("podscribe.transcribers.logger") as mock_logger:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {"error": "Model currently loading"}
+        mock_response.text = '{"error": "Model currently loading"}'
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            message="400 Bad Request",
+            request=MagicMock(),
+            response=mock_response
+        )
+        mock_client.post.return_value = mock_response
+        
+        with pytest.raises(RuntimeError, match="Hugging Face transcription failed"):
+            transcriber.transcribe(audio_file)
+            
+        mock_logger.error.assert_any_call("HF Error: 400 - Model currently loading")
 
 
 # ----------------------------------------------------------------------
@@ -1125,23 +1153,57 @@ def test_vibevoice_transcribe_failure(tmp_path):
     audio_file = tmp_path / "test.wav"
     audio_file.write_bytes(b"fake_audio_bytes")
 
+    
     transcriber = VibeVoiceASRTranscriber(
         endpoint_url="https://api.vibevoice.ai/transcribe",
         api_key="vv-key",
         model="vibevoice-model"
     )
-
-    with patch("httpx.Client") as mock_client_class:
+    
+    with patch("httpx.Client") as mock_client_class, \
+         patch("podscribe.transcribers.logger") as mock_logger:
         mock_client = mock_client_class.return_value.__enter__.return_value
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
+        mock_response.json.side_effect = ValueError("No JSON")
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             message="500 Error",
             request=MagicMock(),
             response=mock_response
         )
         mock_client.post.return_value = mock_response
-
+        
         with pytest.raises(RuntimeError, match="VibeVoice transcription failed"):
             transcriber.transcribe(audio_file)
+            
+        mock_logger.error.assert_any_call("VibeVoice Error: 500 - Internal Server Error")
+
+def test_vibevoice_transcribe_failure_with_json_error(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio_bytes")
+    
+    transcriber = VibeVoiceASRTranscriber(
+        endpoint_url="https://api.vibevoice.ai/transcribe",
+        api_key="vv-key",
+        model="vibevoice-model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class, \
+         patch("podscribe.transcribers.logger") as mock_logger:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 422
+        mock_response.json.return_value = {"error": "Invalid format parameters"}
+        mock_response.text = '{"error": "Invalid format parameters"}'
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            message="422 Unprocessable Entity",
+            request=MagicMock(),
+            response=mock_response
+        )
+        mock_client.post.return_value = mock_response
+        
+        with pytest.raises(RuntimeError, match="VibeVoice transcription failed"):
+            transcriber.transcribe(audio_file)
+            
+        mock_logger.error.assert_any_call("VibeVoice Error: 422 - Invalid format parameters")
