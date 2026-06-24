@@ -215,6 +215,7 @@ def test_config_dump_covers_all_properties(tmp_path):
         "transcriber_model": "Model:",
         "enable_speaker_attribution": "Speaker Attribution:",
         "language": "Language:",
+        "transcriber_timeout": "Timeout:",
         "post_processor_provider": "Provider:",
         "post_processor_model": "Model:",
         "post_processor_endpoint": "Endpoint URL:",

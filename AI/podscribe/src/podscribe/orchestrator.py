@@ -75,17 +75,19 @@ class Orchestrator:
         api_key = self.config.get_transcriber_api_key()
         language = self.config.language
 
+        timeout = self.config.transcriber_timeout
+
         if provider == "huggingface":
             if self.config.enable_speaker_attribution:
                 logger.info("Using speaker-attributed HuggingFace transcriber (assuming endpoint returns segments or chunks with speaker labels).")
-                return SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
-            return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
+                return SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+            return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
         elif provider == "openai_compatible":
             if self.config.enable_speaker_attribution:
-                return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
-            return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
+                return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+            return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
         elif provider == "crispasr":
-            return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language)
+            return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
         elif provider == "crispasr_cli":
             crispasr_path = self.config.transcriber_crispasr_path
             backend = self.config.transcriber_backend
@@ -103,7 +105,8 @@ class Orchestrator:
                 api_key=api_key,
                 model=model,
                 language=language,
-                hotwords=hotwords
+                hotwords=hotwords,
+                timeout=timeout
             )
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
