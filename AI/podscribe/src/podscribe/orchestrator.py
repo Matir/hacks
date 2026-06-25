@@ -26,7 +26,7 @@ def count_words_and_segments(transcript: str) -> tuple[int, int]:
 from podscribe.config import Config
 from podscribe.state import StateManager
 from podscribe.preprocessor import AudioPreprocessor
-from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber, VibeVoiceASRTranscriber, BaseTranscriber
+from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber, VibeVoiceASRTranscriber, AssemblyAITranscriber, BaseTranscriber
 from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor, TokenUsage
 from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
 from podscribe.rss_fetcher import RSSFetcher
@@ -104,6 +104,13 @@ class Orchestrator:
                 model=model,
                 language=language,
                 hotwords=hotwords
+            )
+        elif provider == "assemblyai":
+            return AssemblyAITranscriber(
+                api_key=api_key,
+                model=model,
+                language=language,
+                enable_speaker_attribution=self.config.enable_speaker_attribution
             )
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")

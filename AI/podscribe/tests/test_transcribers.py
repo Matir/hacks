@@ -3,7 +3,15 @@ from unittest.mock import patch, MagicMock
 import base64
 import httpx
 import pytest
-from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber
+from podscribe.transcribers import (
+    HuggingFaceTranscriber,
+    SpeakerAttributedHuggingFaceTranscriber,
+    OpenAICompatibleTranscriber,
+    SpeakerAttributedOpenAICompatibleTranscriber,
+    CrispASRTranscriber,
+    CrispASRCLITranscriber,
+    AssemblyAITranscriber
+)
 
 # ----------------------------------------------------------------------
 # Hugging Face Transcriber Tests
@@ -356,16 +364,15 @@ def test_speaker_attributed_transcribe_success_objects(tmp_path):
         mock_response = MagicMock()
         
         # Return a mock segments list where segments are objects
-        seg1 = MagicMock()
-        seg1.speaker = None
-        seg1.speaker_id = "Speaker A"
-        seg1.text = "Hello"
+        class MockSegment:
+            def __init__(self, speaker=None, speaker_id=None, speaker_label=None, text=""):
+                self.speaker = speaker
+                self.speaker_id = speaker_id
+                self.speaker_label = speaker_label
+                self.text = text
 
-        seg2 = MagicMock()
-        seg2.speaker = None
-        seg2.speaker_id = None
-        seg2.speaker_label = "Speaker B"
-        seg2.text = "Hey"
+        seg1 = MockSegment(speaker_id="Speaker A", text="Hello")
+        seg2 = MockSegment(speaker_label="Speaker B", text="Hey")
 
         mock_response.segments = [seg1, seg2]
         mock_client.audio.transcriptions.create.return_value = mock_response
@@ -768,6 +775,99 @@ def test_speaker_attributed_hf_transcribe_fallback(tmp_path):
         
         result = transcriber.transcribe(audio_file)
         assert result == "raw text response without speaker attribution"
+
+def test_speaker_attributed_hf_transcribe_success_capitalized_keys(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "segments": [
+                {"Start": 1905.76, "End": 1906.32, "Speaker": 1, "Content": "Bye."},
+                {"Start": 1907.12, "End": 1908.40, "Speaker": 2, "Content": "Hello!"},
+                {"Start": 1908.90, "End": 1909.10, "Speaker": 1, "Content": "How are you?"}
+            ]
+        }
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Speaker 1]: Bye.\n\n[Speaker 2]: Hello!\n\n[Speaker 1]: How are you?"
+
+def test_speaker_attributed_hf_transcribe_success_nested_custom_key(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "output": [
+                {"Speaker": "Alice", "Content": "Welcome"},
+                {"Speaker": "Bob", "Content": "Thanks!"}
+            ]
+        }
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Alice]: Welcome\n\n[Bob]: Thanks!"
+
+def test_speaker_attributed_hf_transcribe_success_direct_list(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [
+            {"Speaker": "Alice", "Content": "One"},
+            {"Speaker": "Bob", "Content": "Two"}
+        ]
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "[Alice]: One\n\n[Bob]: Two"
+
+def test_speaker_attributed_hf_transcribe_success_user_payload(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+    
+    transcriber = SpeakerAttributedHuggingFaceTranscriber(
+        endpoint_url="https://api.hf.co", api_key="key", model="model"
+    )
+    
+    with patch("httpx.Client") as mock_client_class:
+        mock_client = mock_client_class.return_value.__enter__.return_value
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        # Exact payload structure from the user
+        mock_response.json.return_value = {
+            "result": [
+                {"Start": 1905.76, "End": 1906.32, "Speaker": 1, "Content": "Bye."},
+                {"Start": 1905.76, "End": 1906.32, "Speaker": 1, "Content": "Bye also."}
+            ]
+        }
+        mock_client.post.return_value = mock_response
+        
+        result = transcriber.transcribe(audio_file)
+        # Since both segments are Speaker 1, they should be merged into a single dialogue block
+        assert result == "[Speaker 1]: Bye. Bye also."
 
 # ----------------------------------------------------------------------
 # CrispASR Transcriber Tests
@@ -1207,3 +1307,152 @@ def test_vibevoice_transcribe_failure_with_json_error(tmp_path):
             transcriber.transcribe(audio_file)
             
         mock_logger.error.assert_any_call("VibeVoice Error: 422 - Invalid format parameters")
+
+
+# ----------------------------------------------------------------------
+# AssemblyAI Transcriber Tests
+# ----------------------------------------------------------------------
+
+def test_assemblyai_transcriber_init():
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        model="universal-3-pro",
+        language="es",
+        enable_speaker_attribution=True
+    )
+    assert transcriber.api_key == "aai-key"
+    assert transcriber.model == "universal-3-pro"
+    assert transcriber.language == "es"
+    assert transcriber.enable_speaker_attribution is True
+
+def test_assemblyai_transcriber_missing_key():
+    transcriber = AssemblyAITranscriber(
+        api_key="",
+        model="universal-3-pro"
+    )
+    with pytest.raises(ValueError, match="AssemblyAI API key must be configured"):
+        transcriber.transcribe(Path("dummy.wav"))
+
+def test_assemblyai_transcribe_success_speaker_labels(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        model="universal-3-pro",
+        language="en"
+    )
+
+    with patch("assemblyai.settings") as mock_settings, \
+         patch("assemblyai.Transcriber") as mock_transcriber_class:
+        
+        mock_transcriber = mock_transcriber_class.return_value
+        mock_transcript = MagicMock()
+        
+        import assemblyai as aai
+        mock_transcript.status = aai.TranscriptStatus.completed
+        
+        # Mocking utterances
+        class MockUtterance:
+            def __init__(self, speaker, text):
+                self.speaker = speaker
+                self.text = text
+                
+        mock_transcript.utterances = [
+            MockUtterance("A", "Hello David"),
+            MockUtterance("B", "Hi Sarah"),
+            MockUtterance("A", "Welcome back")
+        ]
+        
+        mock_transcriber.transcribe.return_value = mock_transcript
+        
+        result = transcriber.transcribe(audio_file)
+        
+        assert result == "[A]: Hello David\n\n[B]: Hi Sarah\n\n[A]: Welcome back"
+        
+        # Verify API Key was set
+        assert mock_settings.api_key == "aai-key"
+        
+        # Verify config was built correctly
+        mock_transcriber_class.assert_called_once()
+        config_arg = mock_transcriber_class.call_args[1]["config"]
+        assert config_arg.speech_models == ["universal-3-pro", "universal-2"]
+        assert config_arg.speaker_labels is True
+        assert config_arg.language_code == "en"
+        assert not hasattr(config_arg, "language_detection") or getattr(config_arg, "language_detection") is None
+
+def test_assemblyai_transcribe_success_no_speaker_labels(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        model="universal-3-pro",
+        language="en",
+        enable_speaker_attribution=False
+    )
+
+    with patch("assemblyai.Transcriber") as mock_transcriber_class:
+        mock_transcriber = mock_transcriber_class.return_value
+        mock_transcript = MagicMock()
+        
+        import assemblyai as aai
+        mock_transcript.status = aai.TranscriptStatus.completed
+        mock_transcript.text = "Just raw transcript text without speakers."
+        mock_transcript.utterances = None
+        
+        mock_transcriber.transcribe.return_value = mock_transcript
+        
+        result = transcriber.transcribe(audio_file)
+        assert result == "Just raw transcript text without speakers."
+        
+        config_arg = mock_transcriber_class.call_args[1]["config"]
+        assert config_arg.speaker_labels is None
+
+def test_assemblyai_transcribe_auto_language(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        model="universal-3-pro",
+        language="auto"
+    )
+
+    with patch("assemblyai.Transcriber") as mock_transcriber_class:
+        mock_transcriber = mock_transcriber_class.return_value
+        mock_transcript = MagicMock()
+        
+        import assemblyai as aai
+        mock_transcript.status = aai.TranscriptStatus.completed
+        mock_transcript.text = "Hello"
+        mock_transcript.utterances = None
+        mock_transcriber.transcribe.return_value = mock_transcript
+        
+        transcriber.transcribe(audio_file)
+        
+        config_arg = mock_transcriber_class.call_args[1]["config"]
+        assert config_arg.language_detection is True
+        assert not hasattr(config_arg, "language_code") or getattr(config_arg, "language_code") is None
+
+def test_assemblyai_transcribe_failure(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        model="universal-3-pro"
+    )
+
+    with patch("assemblyai.Transcriber") as mock_transcriber_class:
+        mock_transcriber = mock_transcriber_class.return_value
+        mock_transcript = MagicMock()
+        
+        import assemblyai as aai
+        mock_transcript.status = aai.TranscriptStatus.error
+        mock_transcript.error = "Invalid audio file format"
+        
+        mock_transcriber.transcribe.return_value = mock_transcript
+        
+        with pytest.raises(RuntimeError, match="AssemblyAI transcription failed: Invalid audio file format"):
+            transcriber.transcribe(audio_file)

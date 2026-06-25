@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 from openai import OpenAI
 import re
+import assemblyai as aai
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +45,33 @@ class SpeakerAttributedMixin:
             if isinstance(segment, dict):
                 speaker = segment.get("speaker")
                 if speaker is None:
+                    speaker = segment.get("Speaker")
+                if speaker is None:
                     speaker = segment.get("speaker_id")
                 if speaker is None:
                     speaker = segment.get("speaker_label")
-                text = segment.get("text", "").strip()
+                
+                text = segment.get("text")
+                if text is None:
+                    text = segment.get("Content")
+                if text is None:
+                    text = segment.get("content")
+                text = (text or "").strip()
             else:
                 speaker = getattr(segment, "speaker", None)
+                if speaker is None:
+                    speaker = getattr(segment, "Speaker", None)
                 if speaker is None:
                     speaker = getattr(segment, "speaker_id", None)
                 if speaker is None:
                     speaker = getattr(segment, "speaker_label", None)
-                text = getattr(segment, "text", "").strip()
+                
+                text = getattr(segment, "text", None)
+                if text is None:
+                    text = getattr(segment, "Content", None)
+                if text is None:
+                    text = getattr(segment, "content", None)
+                text = (text or "").strip()
 
             if not text:
                 continue
@@ -180,6 +197,14 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
                 segments = None
                 if isinstance(result, dict):
                     segments = result.get("segments") or result.get("chunks")
+                    if not segments:
+                        # Fallback: scan for any list of dicts in the values
+                        for val in result.values():
+                            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                                segments = val
+                                break
+                elif isinstance(result, list):
+                    segments = result
 
                 if segments:
                     return self.format_speaker_segments(segments)
@@ -543,3 +568,62 @@ class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
         except Exception as e:
             logger.error(f"VibeVoice transcription failed: {e}")
             raise RuntimeError(f"VibeVoice transcription failed: {e}") from e
+
+
+class AssemblyAITranscriber(SpeakerAttributedMixin, BaseTranscriber):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "universal-3-pro",
+        language: str = "en",
+        enable_speaker_attribution: bool = True,
+    ):
+        self.api_key = api_key
+        self.model = model or "universal-3-pro"
+        self.language = language
+        self.enable_speaker_attribution = enable_speaker_attribution
+
+    def _transcribe_single(self, file_path: Path) -> str:
+        logger.debug(f"Sending audio file {file_path.name} to AssemblyAI")
+        if not self.api_key:
+            raise ValueError("AssemblyAI API key must be configured.")
+
+        # Configure the AssemblyAI client settings
+        aai.settings.api_key = self.api_key
+
+        # Build fallback list
+        speech_models = [self.model]
+        if self.model == "universal-3-pro" and "universal-2" not in speech_models:
+            speech_models.append("universal-2")
+
+        # Set up configuration parameters
+        config_params = {
+            "speech_models": speech_models,
+            "speaker_labels": self.enable_speaker_attribution,
+        }
+
+        if self.language and self.language.lower() != "auto":
+            config_params["language_code"] = self.language
+        else:
+            config_params["language_detection"] = True
+
+        config = aai.TranscriptionConfig(**config_params)
+
+        try:
+            transcriber = aai.Transcriber(config=config)
+            transcript = transcriber.transcribe(str(file_path))
+
+            if transcript.status == aai.TranscriptStatus.error:
+                logger.error(f"AssemblyAI Error: {transcript.error}")
+                raise RuntimeError(
+                    f"AssemblyAI transcription failed: {transcript.error}"
+                )
+
+            if self.enable_speaker_attribution and transcript.utterances:
+                return self.format_speaker_segments(transcript.utterances)
+
+            return transcript.text or ""
+
+        except Exception as e:
+            logger.error(f"AssemblyAI transcription failed: {e}")
+            raise RuntimeError(f"AssemblyAI transcription failed: {e}") from e

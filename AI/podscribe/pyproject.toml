@@ -9,6 +9,7 @@ description = "Audio Transcription & Post-Processing Pipeline"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "assemblyai",
     "genai-prices>=0.0.62",
     "google-genai>=2.6.0",
     "httpx>=0.28.1",
