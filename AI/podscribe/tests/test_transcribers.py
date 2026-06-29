@@ -51,11 +51,11 @@ def test_hf_transcribe_success(tmp_path):
         result = transcriber.transcribe(audio_file)
         
         assert result == "hello world transcript"
-        mock_client.post.assert_called_once_with(
-            endpoint,
-            headers={"Authorization": "Bearer hf_key"},
-            content=b"fake_audio_data"
-        )
+        mock_client.post.assert_called_once()
+        call_args, call_kwargs = mock_client.post.call_args
+        assert call_args[0] == endpoint
+        assert call_kwargs["headers"] == {"Authorization": "Bearer hf_key"}
+        assert hasattr(call_kwargs["content"], "read")
 
 def test_hf_transcribe_list_response(tmp_path):
     audio_file = tmp_path / "test.wav"
@@ -171,7 +171,8 @@ def test_openai_transcribe_success(tmp_path):
         assert result == "openai transcript output"
         mock_openai_class.assert_called_once_with(
             base_url="https://api.baseten.co/v1",
-            api_key="my-key"
+            api_key="my-key",
+            timeout=300.0
         )
         # Verify create arguments
         mock_transcriptions.create.assert_called_once()
@@ -226,7 +227,8 @@ def test_openai_transcribe_dummy_key_fallback(tmp_path):
         # Should use "dummy-key" fallback
         mock_openai_class.assert_called_once_with(
             base_url="http://localhost:8000/v1",
-            api_key="dummy-key"
+            api_key="dummy-key",
+            timeout=300.0
         )
 
 def test_hf_transcribe_unexpected_response(tmp_path):
@@ -900,7 +902,8 @@ def test_crispasr_transcribe_success_single_file(tmp_path):
         
         mock_openai_class.assert_called_once_with(
             base_url="https://api.crispasr.ai/v1",
-            api_key="crisp-key"
+            api_key="crisp-key",
+            timeout=300.0
         )
         
         call_args = mock_client.audio.transcriptions.with_raw_response.create.call_args[1]

@@ -23,6 +23,8 @@ enable_speaker_attribution = false
 endpoint_url = "https://api-inference.huggingface.co/models/ibm-granite/granite-speech-4.1-2b-plus"
 model = "ibm-granite/granite-speech-4.1-2b-plus"
 api_key_env = "HF_API_KEY"
+# Timeout in seconds for transcription API calls (e.g. increase for cold starts or large files)
+# timeout = 600
 
 # Example for Baseten / OpenAI Compatible:
 # provider = "openai_compatible"

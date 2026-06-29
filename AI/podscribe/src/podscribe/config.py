@@ -88,6 +88,10 @@ class Config:
     def hotwords(self) -> str:
         return str(self.data.get("transcriber", {}).get("hotwords", ""))
 
+    @property
+    def transcriber_timeout(self) -> float:
+        return float(self.data.get("transcriber", {}).get("timeout", 300.0))
+
     def get_transcriber_api_key(self) -> str:
         env_var = self.data.get("transcriber", {}).get("api_key_env", "HF_API_KEY")
         return os.environ.get(env_var, "")
@@ -148,6 +152,7 @@ class Config:
             f"Language:                {self.language}",
             f"API Key Env Var:         {self.data.get('transcriber', {}).get('api_key_env', 'HF_API_KEY')}",
             f"API Key Present:         {'Yes' if self.get_transcriber_api_key() else 'No'}",
+            f"Timeout:                 {self.transcriber_timeout}s",
         ]
         
         # Add provider-specific keys if they exist

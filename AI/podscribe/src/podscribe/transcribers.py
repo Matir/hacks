@@ -4,11 +4,33 @@ import inspect
 import logging
 from pathlib import Path
 import httpx
+import openai
 from openai import OpenAI
 import re
 import assemblyai as aai
 
 logger = logging.getLogger(__name__)
+
+def is_transcription_retryable_exception(exception: Exception) -> bool:
+    # Unwrap RuntimeError if it was wrapped
+    cause = exception.__cause__ if isinstance(exception, RuntimeError) and exception.__cause__ else exception
+
+    # Check httpx exceptions
+    if isinstance(cause, (httpx.TimeoutException, httpx.NetworkError)):
+        return True
+
+    if isinstance(cause, httpx.HTTPStatusError):
+        # 429 (Rate Limit), 502 (Bad Gateway), 503 (Service Unavailable), 504 (Gateway Timeout)
+        return cause.response.status_code in (429, 502, 503, 504)
+
+    # Check OpenAI exceptions
+    if isinstance(cause, (openai.APITimeoutError, openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError)):
+        return True
+    if isinstance(cause, openai.APIStatusError):
+        if cause.status_code in (429, 502, 503, 504):
+            return True
+
+    return False
 
 class BaseTranscriber(abc.ABC):
     @abc.abstractmethod
@@ -50,7 +72,7 @@ class SpeakerAttributedMixin:
                     speaker = segment.get("speaker_id")
                 if speaker is None:
                     speaker = segment.get("speaker_label")
-                
+
                 text = segment.get("text")
                 if text is None:
                     text = segment.get("Content")
@@ -65,7 +87,7 @@ class SpeakerAttributedMixin:
                     speaker = getattr(segment, "speaker_id", None)
                 if speaker is None:
                     speaker = getattr(segment, "speaker_label", None)
-                
+
                 text = getattr(segment, "text", None)
                 if text is None:
                     text = getattr(segment, "Content", None)
@@ -101,11 +123,12 @@ class SpeakerAttributedMixin:
         return "\n\n".join(lines)
 
 class HuggingFaceTranscriber(BaseTranscriber):
-    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en"):
+    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", timeout: float = 300.0):
         self.endpoint_url = endpoint_url
         self.api_key = api_key
         self.model = model
         self.language = language
+        self.timeout = timeout
 
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
@@ -128,6 +151,12 @@ class HuggingFaceTranscriber(BaseTranscriber):
         logger.error(f"{prefix} Error: {response.status_code} - {error_msg}")
         response.raise_for_status()
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_transcription_retryable_exception)
+    )
     def _transcribe_single(self, file_path: Path) -> str:
         logger.debug(f"Sending audio chunk {file_path.name} to Hugging Face ASR pipeline")
         if not self.endpoint_url:
@@ -138,35 +167,46 @@ class HuggingFaceTranscriber(BaseTranscriber):
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         logger.info(f"Sending request to Hugging Face: {self.endpoint_url}")
+        response: Optional[httpx.Response] = None
         try:
-            with open(file_path, "rb") as f:
-                audio_data = f.read()
+            with open(file_path, "rb") as audio_file:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(
+                        self.endpoint_url,
+                        headers=headers,
+                        content=audio_file
+                    )
 
-            with httpx.Client(timeout=300.0) as client:
-                response = client.post(
-                    self.endpoint_url,
-                    headers=headers,
-                    content=audio_data
-                )
+            if response is None:
+                raise ValueError("expected a response object")
 
-                if response.status_code != 200:
-                    self._handle_error_response(response, "HF")
+            if response.status_code != 200:
+                self._handle_error_response(response, "HF")
 
-                result = response.json()
+            result = response.json()
 
-                if isinstance(result, dict) and "text" in result:
-                    return result["text"]
-                elif isinstance(result, list) and len(result) > 0 and "text" in result[0]:
-                    return result[0]["text"]
-                else:
-                    logger.warning(f"Unexpected HF response structure: {result}")
-                    return str(result)
+            if isinstance(result, dict) and "text" in result:
+                return result["text"]
+            elif isinstance(result, list) and len(result) > 0 and "text" in result[0]:
+                return result[0]["text"]
+            else:
+                logger.warning(f"Unexpected HF response structure: {result}")
+                return str(result)
 
         except Exception as e:
-            logger.error(f"Hugging Face transcription failed: {e}")
+            if is_transcription_retryable_exception(e):
+                logger.warning(f"Hugging Face transcription attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"Hugging Face transcription failed: {e}")
             raise RuntimeError(f"Hugging Face transcription failed: {e}") from e
 
 class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFaceTranscriber):
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_transcription_retryable_exception)
+    )
     def _transcribe_single(self, file_path: Path) -> str:
         logger.debug(f"Sending audio chunk {file_path.name} to speaker-attributed Hugging Face ASR pipeline")
         if not self.endpoint_url:
@@ -178,15 +218,13 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
 
         logger.info(f"Sending request to speaker-attributed Hugging Face: {self.endpoint_url}")
         try:
-            with open(file_path, "rb") as f:
-                audio_data = f.read()
-
-            with httpx.Client(timeout=300.0) as client:
-                response = client.post(
-                    self.endpoint_url,
-                    headers=headers,
-                    content=audio_data
-                )
+            with open(file_path, "rb") as audio_file:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(
+                        self.endpoint_url,
+                        headers=headers,
+                        content=audio_file
+                    )
 
                 if response.status_code != 200:
                     self._handle_error_response(response, "HF")
@@ -219,11 +257,14 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
                     return str(result)
 
         except Exception as e:
-            logger.error(f"Speaker attributed Hugging Face transcription failed: {e}")
+            if is_transcription_retryable_exception(e):
+                logger.warning(f"Speaker attributed Hugging Face transcription attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"Speaker attributed Hugging Face transcription failed: {e}")
             raise RuntimeError(f"Speaker attributed Hugging Face transcription failed: {e}") from e
 
 class OpenAICompatibleTranscriber(BaseTranscriber):
-    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en"):
+    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", timeout: float = 300.0):
         if endpoint_url:
             endpoint_url = endpoint_url.rstrip("/")
             if endpoint_url.endswith("/audio/transcriptions"):
@@ -233,6 +274,7 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
         self.api_key = api_key
         self.model = model
         self.language = language
+        self.timeout = timeout
 
     def transcribe(self, file_path: Path) -> str:
         if file_path.is_dir():
@@ -246,6 +288,12 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
             return " ".join(results)
         return self._transcribe_single(file_path)
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_transcription_retryable_exception)
+    )
     def _transcribe_single(self, file_path: Path, prompt: str = "") -> str:
         logger.debug(f"Sending audio chunk {file_path.name} to OpenAI-compatible ASR pipeline")
         if not self.endpoint_url:
@@ -255,7 +303,8 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
         try:
             client = OpenAI(
                 base_url=self.endpoint_url,
-                api_key=self.api_key or "dummy-key"
+                api_key=self.api_key or "dummy-key",
+                timeout=self.timeout
             )
 
             extra_body = {}
@@ -281,10 +330,19 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
                 return str(transcript_response)
 
         except Exception as e:
-            logger.error(f"OpenAI-compatible transcription failed: {e}")
+            if is_transcription_retryable_exception(e):
+                logger.warning(f"OpenAI-compatible transcription attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"OpenAI-compatible transcription failed: {e}")
             raise RuntimeError(f"OpenAI-compatible transcription failed: {e}") from e
 
 class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenAICompatibleTranscriber):
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_transcription_retryable_exception)
+    )
     def _transcribe_single(self, file_path: Path, prompt: str = "") -> str:
         logger.debug(f"Sending audio chunk {file_path.name} to speaker-attributed OpenAI-compatible ASR pipeline")
         if not self.endpoint_url:
@@ -294,7 +352,8 @@ class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenA
         try:
             client = OpenAI(
                 base_url=self.endpoint_url,
-                api_key=self.api_key or "dummy-key"
+                api_key=self.api_key or "dummy-key",
+                timeout=self.timeout
             )
 
             extra_body = {"diarize": True}
@@ -329,7 +388,10 @@ class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenA
             return self.format_speaker_segments(segments)
 
         except Exception as e:
-            logger.error(f"Speaker attributed OpenAI-compatible transcription failed: {e}")
+            if is_transcription_retryable_exception(e):
+                logger.warning(f"Speaker attributed OpenAI-compatible transcription attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"Speaker attributed OpenAI-compatible transcription failed: {e}")
             raise RuntimeError(f"Speaker attributed OpenAI-compatible transcription failed: {e}") from e
 
 class CrispASRTranscriber(OpenAICompatibleTranscriber):
@@ -340,12 +402,12 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
             results = []
             current_speaker = None
             current_text = []
-            
+
             for chunk in chunks:
                 text, speaker = self._transcribe_single_crisp(chunk)
                 if not text:
                     continue
-                
+
                 if current_speaker is None:
                     current_speaker = speaker
                     current_text.append(text)
@@ -355,15 +417,21 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
                     results.append(f"[{current_speaker}]: {' '.join(current_text)}")
                     current_speaker = speaker
                     current_text = [text]
-            
+
             if current_speaker is not None and current_text:
                 results.append(f"[{current_speaker}]: {' '.join(current_text)}")
-                
+
             return "\n\n".join(results)
-        
+
         text, speaker = self._transcribe_single_crisp(file_path)
         return f"[{speaker}]: {text}"
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_transcription_retryable_exception)
+    )
     def _transcribe_single_crisp(self, file_path: Path) -> tuple[str, str]:
         logger.debug(f"Sending audio chunk {file_path.name} to CrispASR pipeline")
         if not self.endpoint_url:
@@ -382,7 +450,8 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
         try:
             client = OpenAI(
                 base_url=self.endpoint_url,
-                api_key=self.api_key or "dummy-key"
+                api_key=self.api_key or "dummy-key",
+                timeout=self.timeout
             )
 
             with open(file_path, "rb") as audio_file:
@@ -393,7 +462,7 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
                     extra_body={"diarize": True},
                     language=self.language
                 )
-                
+
                 response_json = raw_response.http_response.json()
                 logger.debug(f"CrispASR Response: {response_json}")
                 text = response_json.get("text", "").strip()
@@ -401,7 +470,10 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
                 return text, speaker
 
         except Exception as e:
-            logger.error(f"CrispASR transcription failed: {e}")
+            if is_transcription_retryable_exception(e):
+                logger.warning(f"CrispASR transcription attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"CrispASR transcription failed: {e}")
             raise RuntimeError(f"CrispASR transcription failed: {e}") from e
 
 CRISPASR_MODEL_FAMILY_SETTINGS = {
@@ -431,12 +503,12 @@ CRISPASR_MODEL_FAMILY_SETTINGS = {
 def _detect_model_family(model: str, backend: str) -> str:
     model_lower = model.lower() if model else ""
     backend_lower = backend.lower() if backend else ""
-    
+
     if "parakeet" in backend_lower or "parakeet" in model_lower:
         return "parakeet"
     if "whisper" in backend_lower or "whisper" in model_lower:
         return "whisper"
-    
+
     return "default"
 
 class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
@@ -445,26 +517,26 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
         self.model = model or "auto"
         self.backend = backend or "auto"
         self.diarize_method = diarize_method or "pyannote"
-        
+
     def _transcribe_single(self, file_path: Path) -> str:
         import subprocess
         import tempfile
         import json
         import shlex
-        
+
         family = _detect_model_family(self.model, self.backend)
         settings = CRISPASR_MODEL_FAMILY_SETTINGS.get(family, CRISPASR_MODEL_FAMILY_SETTINGS["default"])
-        
+
         with tempfile.TemporaryDirectory(prefix="podscribe_crispasr_") as tmpdir:
             output_prefix = Path(tmpdir) / "transcribed"
             json_path = Path(tmpdir) / "transcribed.json"
-            
+
             diarize_flags = ""
             if self.diarize_method != "none":
                 diarize_flags = settings["diarize_flags"].format(
                     diarize_method=self.diarize_method
                 )
-                
+
             cmd_str = settings["cmd_template"].format(
                 binary_path=self.binary_path,
                 model=self.model,
@@ -473,9 +545,9 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
                 diarize_flags=diarize_flags,
                 output_path=str(output_prefix)
             )
-            
+
             cmd = shlex.split(cmd_str)
-                
+
             logger.info(f"Running CrispASR CLI: {' '.join(cmd)}")
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -485,13 +557,13 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
                 logger.error(f"CrispASR CLI failed with exit code {e.returncode}")
                 logger.error(f"CrispASR CLI stderr: {e.stderr}")
                 raise RuntimeError(f"CrispASR CLI failed: {e.stderr}") from e
-                
+
             if not json_path.exists():
                 raise FileNotFoundError(f"CrispASR CLI did not produce expected JSON file at {json_path}")
-                
+
             with open(json_path, "r") as f:
                 data = json.load(f)
-                
+
             if self.diarize_method == "none":
                 text_key = settings.get("json_text_key", "text")
                 if text_key in data:
@@ -502,24 +574,30 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
             else:
                 segments_key = settings.get("json_segments_key", "segments")
                 segments = data.get(segments_key, [])
-                
+
                 mapped_segments = []
                 text_key = settings.get("json_segment_text_key") or settings.get("json_text_key", "text")
                 speaker_key = settings.get("json_segment_speaker_key") or settings.get("json_speaker_key", "speaker")
-                
+
                 for seg in segments:
                     mapped_segments.append({
                         "speaker": seg.get(speaker_key),
                         "text": seg.get(text_key, "")
                     })
-                    
+
                 return self.format_speaker_segments(mapped_segments)
 
 class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
-    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", hotwords: str = ""):
-        super().__init__(endpoint_url, api_key, model, language)
+    def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", hotwords: str = "", timeout: float = 300.0):
+        super().__init__(endpoint_url, api_key, model, language, timeout=timeout)
         self.hotwords = hotwords
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_transcription_retryable_exception)
+    )
     def _transcribe_single(self, file_path: Path) -> str:
         logger.debug(f"Sending audio chunk {file_path.name} to VibeVoice ASR pipeline")
         if not self.endpoint_url:
@@ -544,7 +622,7 @@ class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
             if self.hotwords:
                 payload["parameters"]["hotwords"] = self.hotwords
 
-            with httpx.Client(timeout=300.0) as client:
+            with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(
                     self.endpoint_url,
                     headers=headers,
@@ -561,12 +639,15 @@ class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
                         return result["result"]
                     elif "text" in result:
                         return result["text"]
-                
+
                 logger.warning(f"Unexpected VibeVoice response structure: {result}")
                 return str(result)
 
         except Exception as e:
-            logger.error(f"VibeVoice transcription failed: {e}")
+            if is_transcription_retryable_exception(e):
+                logger.warning(f"VibeVoice transcription attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"VibeVoice transcription failed: {e}")
             raise RuntimeError(f"VibeVoice transcription failed: {e}") from e
 
 

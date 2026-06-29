@@ -29,8 +29,8 @@ This document outlines remaining tasks to transition the prototype transcription
 ---
 
 ## Phase 3: Robustness & Production Hardening
-- [ ] **Add Retries and Rate-Limit Handling:** 
-    - [ ] Integrate backoff strategies (e.g. using `tenacity` which was installed via `uv`) to handle standard API rate limits (`429`) and transient connection errors.
+- [x] **Add Retries and Rate-Limit Handling:** 
+    - [x] Integrate backoff strategies (e.g. using `tenacity` which was installed via `uv`) to handle standard API rate limits (`429`) and transient connection errors.
 - [ ] **Support Large Files:** Add chunking or streaming if audio files exceed maximum payload limits of the selected Hugging Face endpoint.
 - [ ] **Verify Baseten / Modal Transition:**
     - [ ] If moving from HF prototype to production Baseten, deploy the Granite model using Truss.

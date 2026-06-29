@@ -382,6 +382,7 @@ def test_orchestrator_run_with_rss_feeds(mock_config):
     
     with patch.object(Orchestrator, "_init_transcriber"), \
          patch.object(Orchestrator, "_init_post_processor"), \
+         patch("podscribe.orchestrator.AudioPreprocessor"), \
          patch("podscribe.orchestrator.RSSFetcher") as mock_fetcher_class:
          
         mock_fetcher = mock_fetcher_class.return_value
