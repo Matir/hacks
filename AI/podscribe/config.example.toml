@@ -1,0 +1,142 @@
+# Podscribe Configuration Template
+# Copy this file to `config.toml` and customize it for your environment.
+
+# -----------------------------------------------------------------------------
+# Paths Configuration
+# -----------------------------------------------------------------------------
+[paths]
+# Directory where raw audio files (.mp3, .wav, .m4a, etc.) are placed
+input_dir = "input"
+
+# Directory where output transcripts and pipeline state will be saved
+output_dir = "output"
+
+# Path to the Markdown file containing LLM instructions for post-processing/editing
+prompt_file = "prompts/post_process.md"
+
+
+# -----------------------------------------------------------------------------
+# Audio Preprocessing Configuration
+# -----------------------------------------------------------------------------
+[preprocessing]
+# Set to false to bypass all local audio conversion and processing
+enabled = true
+
+# Path to the FFmpeg executable (use "ffmpeg" if it is in your system PATH)
+ffmpeg_path = "ffmpeg"
+
+# Enable splitting very long audio files into smaller chunks before transcription.
+# (Highly recommended if using APIs with file size/duration limits)
+chunking_enabled = false
+chunk_max_duration = 300       # Maximum chunk duration in seconds (5 minutes)
+silence_threshold_db = -30     # Quietness threshold in decibels to find pause points
+silence_duration = 0.5         # Minimum duration of silence in seconds to split on
+
+
+# -----------------------------------------------------------------------------
+# Transcriber (ASR) Configuration
+# -----------------------------------------------------------------------------
+[transcriber]
+# The active transcription provider. 
+# Supported values: "assemblyai", "huggingface", "openai_compatible", "crispasr", "vibevoice", "crispasr_cli"
+provider = "assemblyai"
+
+# Enable speaker diarization/attribution to label who spoke when (e.g. "[Speaker A]: ...")
+enable_speaker_attribution = true
+
+# The dominant language of the audio file.
+# Set to "auto" to enable automatic language detection (supported by assemblyai, huggingface).
+language = "en"
+
+
+# --- PROVIDER DETAILS (Configure the section corresponding to your provider) ---
+
+# 1. ASSEMBLYAI PROVIDER (Official SDK Integration)
+# Recommends universal-3-pro by default. Fallback lists are handled automatically.
+model = "universal-3-pro"
+api_key_env = "ASSEMBLYAI_API_KEY"
+
+
+# 2. HUGGING FACE PROVIDER (Direct API call or Dedicated Endpoint)
+# Uncomment and configure if using provider = "huggingface"
+# endpoint_url = "https://YOUR_HF_ENDPOINT_URL.endpoints.huggingface.cloud"
+# model = "Matir/VibeVoice-ASR-HF"
+# api_key_env = "HF_API_KEY"
+
+
+# 3. OPENAI COMPATIBLE PROVIDER (e.g., Baseten, Together.ai, custom server)
+# Uncomment and configure if using provider = "openai_compatible"
+# endpoint_url = "https://model-XXXXXXXX.baseten.co/v1"
+# model = "ibm-granite/granite-speech-4.1-2b-plus"
+# api_key_env = "BASETEN_API_KEY"
+
+
+# 4. CRISPASR PROVIDER (Segment-level ASR API with diarization)
+# Uncomment and configure if using provider = "crispasr"
+# endpoint_url = "https://api.crispasr.ai/v1"
+# model = "crisp-model"
+# api_key_env = "CRISP_API_KEY"
+
+
+# 5. VIBEVOICE PROVIDER (Hugging Face custom endpoint supporting hotwords/vocabulary boosting)
+# Uncomment and configure if using provider = "vibevoice"
+# endpoint_url = "https://YOUR_HF_ENDPOINT_URL.endpoints.huggingface.cloud"
+# model = "vibevoice-asr"
+# api_key_env = "HF_API_KEY"
+# hotwords = "kubernetes, docker, grpc, protobuf"
+
+
+# 6. CRISPASR CLI PROVIDER (Local native engine)
+# Uncomment and configure if using provider = "crispasr_cli"
+# crispasr_path = "crispasr"      # Path to local crispasr binary
+# backend = "auto"                # ASR backend engine (e.g., "auto", "onnx", "torch")
+# diarize_method = "pyannote"     # Diarization method (e.g., "pyannote", "none")
+
+
+# -----------------------------------------------------------------------------
+# Post-Processor (LLM Editor) Configuration
+# -----------------------------------------------------------------------------
+[post_processor]
+# The LLM provider to clean up, format, and polish raw transcripts.
+# Supported values: "gemini", "openai_compatible"
+provider = "gemini"
+
+# The LLM model to use for editing
+model = "gemini-2.5-flash"
+
+# Environment variable holding the API key
+api_key_env = "GEMINI_API_KEY"
+
+# Model temperature (lower values are more deterministic and follow instructions better)
+temperature = 0.2
+
+# --- Alternative Post-Processor: OpenAI Compatible (e.g., OpenRouter, OpenAI, local) ---
+# provider = "openai_compatible"
+# endpoint_url = "https://openrouter.ai/api/v1"
+# model = "google/gemini-2.5-pro"
+# api_key_env = "OPENROUTER_API_KEY"
+
+
+# -----------------------------------------------------------------------------
+# RSS Feeds (Optional Podcast Automation)
+# -----------------------------------------------------------------------------
+# Podscribe can automatically sync podcast episodes from RSS feeds into the input directory before running.
+# Uncomment to enable:
+# [[rss.feeds]]
+# url = "https://feeds.simplecast.com/54nAGcAz"
+# max_episodes = 3   # Only download the 3 most recent episodes
+
+# [[rss.feeds]]
+# url = "https://another-podcast-feed.com/rss"
+# max_episodes = 1   # Only download the latest episode
+
+
+# -----------------------------------------------------------------------------
+# Prompt Context (Custom template variables)
+# -----------------------------------------------------------------------------
+# Any key-value pairs added here will be passed as context variables to your markdown prompt template.
+# For example, if you reference `{{podcast_name}}` in your prompt file, it will be replaced by the value below.
+[prompt_context]
+podcast_name = "Tech Talks Weekly"
+host_name = "David & Sarah"
+target_audience = "Software Engineers"
