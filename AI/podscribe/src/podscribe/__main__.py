@@ -40,6 +40,7 @@ def setup_logging(output_dir: Path, log_level_str: str = "INFO"):
     root_logger.addHandler(file_handler)
 
 def main():
+    """Parse CLI arguments, verify authentication environment variables, and run the transcription orchestrator."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Audio Transcription & Post-Processing Pipeline")
     parser.add_argument(

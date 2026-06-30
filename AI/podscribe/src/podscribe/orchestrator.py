@@ -45,9 +45,12 @@ def count_words_and_segments(transcript: str) -> tuple[int, int]:
     return num_words, num_segments
 
 class Orchestrator:
+    """Coordinates the execution of the transcription and post-processing pipeline."""
+
     SUPPORTED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm", ".mp4"}
 
     def __init__(self, config: Config, stage: str = "all"):
+        """Initialize the pipeline orchestrator with configuration and target stage."""
         self.config = config
         if stage not in ("all", "transcribe", "postprocess"):
             raise ValueError(f"Invalid stage: {stage}. Must be 'all', 'transcribe', or 'postprocess'.")
@@ -80,6 +83,7 @@ class Orchestrator:
         self.prompt_template = self._load_prompt_template()
 
     def _init_transcriber(self) -> BaseTranscriber:
+        """Instantiate and configure the appropriate ASR transcriber provider based on config."""
         provider = self.config.transcriber_provider
         endpoint = self.config.transcriber_endpoint
         model = self.config.transcriber_model
@@ -132,6 +136,7 @@ class Orchestrator:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
 
     def _init_post_processor(self) -> BasePostProcessor:
+        """Instantiate and configure the appropriate LLM post-processor based on config."""
         provider = self.config.post_processor_provider
         model = self.config.post_processor_model
         endpoint = self.config.post_processor_endpoint
@@ -146,6 +151,7 @@ class Orchestrator:
             raise ValueError(f"Unsupported post-processor provider: {provider}")
 
     def _load_prompt_template(self) -> str:
+        """Load the post-processing LLM instructions from the configured markdown prompt file."""
         prompt_path = Path(self.config.prompt_file)
         if not prompt_path.exists():
             raise FileNotFoundError(f"Prompt template file not found: {prompt_path}")
@@ -179,6 +185,49 @@ class Orchestrator:
                     f"FFmpeg executable '{self.config.ffmpeg_path}' not found, but preprocessing is enabled. "
                     "Please install FFmpeg or set preprocess_enabled = false in config."
                 )
+
+    def _save_and_update_transcript_state(
+        self,
+        relative_path: str,
+        raw_transcript: str,
+        raw_transcript_path: Path,
+        promote_status: bool = False,
+    ) -> None:
+        """Save a raw transcript to disk and update word/segment counts and status in state."""
+        raw_transcript_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(raw_transcript_path, "w") as f:
+            f.write(raw_transcript)
+        num_words, num_segments = count_words_and_segments(raw_transcript)
+        update_kwargs = {
+            "raw_transcript_path": raw_transcript_path,
+            "num_words": num_words,
+            "num_segments": num_segments,
+        }
+        if promote_status:
+            update_kwargs["status"] = "transcribed"
+        self.state_manager.update_entry(relative_path, **update_kwargs)
+
+    def _load_existing_transcript(
+        self, relative_path: str, fallback_path: Path
+    ) -> tuple[str, Path] | None:
+        """Load an existing raw transcript from disk and promote state if present."""
+        saved_path_str = self.state_manager.get_entry(relative_path).get("raw_transcript_path")
+        raw_path = Path(saved_path_str) if saved_path_str else fallback_path
+        if raw_path.exists():
+            with open(raw_path, "r") as f:
+                raw_transcript = f.read()
+            num_words, num_segments = count_words_and_segments(raw_transcript)
+            current_status = self.state_manager.get_entry(relative_path).get("status")
+            update_kwargs = {
+                "raw_transcript_path": raw_path,
+                "num_words": num_words,
+                "num_segments": num_segments,
+            }
+            if current_status in ("new", "preprocessed", "failed"):
+                update_kwargs["status"] = "transcribed"
+            self.state_manager.update_entry(relative_path, **update_kwargs)
+            return raw_transcript, raw_path
+        return None
 
     def run(self):
         """Execute the pipeline on all discovered files."""
@@ -289,66 +338,30 @@ class Orchestrator:
                     if self.state_manager.get_entry(relative_path).get("status") == "preprocessed":
                         try:
                             raw_transcript = self.transcriber.transcribe(working_file)
-
-                            # Save intermediate transcript
-                            with open(raw_transcript_path, "w") as f:
-                                f.write(raw_transcript)
-
-                            num_words, num_segments = count_words_and_segments(raw_transcript)
-                            self.state_manager.update_entry(
-                                relative_path,
-                                status="transcribed",
-                                raw_transcript_path=raw_transcript_path,
-                                num_words=num_words,
-                                num_segments=num_segments
+                            self._save_and_update_transcript_state(
+                                relative_path, raw_transcript, raw_transcript_path, promote_status=True
                             )
                         except Exception as e:
                             self.state_manager.update_entry(relative_path, status="failed", error=f"Transcription: {str(e)}")
                             raise
                     else:
                         # Skip transcription, read saved file
-                        saved_path_str = self.state_manager.get_entry(relative_path).get("raw_transcript_path")
-                        if saved_path_str:
-                            raw_transcript_path = Path(saved_path_str)
-                        if raw_transcript_path.exists():
-                            with open(raw_transcript_path, "r") as f:
-                                raw_transcript = f.read()
+                        existing = self._load_existing_transcript(relative_path, raw_transcript_path)
+                        if existing:
+                            raw_transcript, raw_transcript_path = existing
                         else:
                             logger.warning(f"Raw transcript missing: {raw_transcript_path}. Re-running transcription.")
                             raw_transcript = self.transcriber.transcribe(working_file)
-                            with open(raw_transcript_path, "w") as f:
-                                f.write(raw_transcript)
-                        num_words, num_segments = count_words_and_segments(raw_transcript)
-                        current_status = self.state_manager.get_entry(relative_path).get("status")
-                        update_kwargs = {
-                            "raw_transcript_path": raw_transcript_path,
-                            "num_words": num_words,
-                            "num_segments": num_segments,
-                        }
-                        if current_status in ("new", "preprocessed", "failed"):
-                            update_kwargs["status"] = "transcribed"
-                        self.state_manager.update_entry(relative_path, **update_kwargs)
+                            self._save_and_update_transcript_state(
+                                relative_path, raw_transcript, raw_transcript_path, promote_status=False
+                            )
                 else:
                     # self.stage == "postprocess"
                     # Load the raw transcript. Do not run transcriber.
                     try:
-                        saved_path_str = self.state_manager.get_entry(relative_path).get("raw_transcript_path")
-                        if saved_path_str:
-                            raw_transcript_path = Path(saved_path_str)
-                        if raw_transcript_path.exists():
-                            with open(raw_transcript_path, "r") as f:
-                                raw_transcript = f.read()
-
-                            num_words, num_segments = count_words_and_segments(raw_transcript)
-                            current_status = self.state_manager.get_entry(relative_path).get("status")
-                            update_kwargs = {
-                                "raw_transcript_path": raw_transcript_path,
-                                "num_words": num_words,
-                                "num_segments": num_segments,
-                            }
-                            if current_status in ("new", "preprocessed", "failed"):
-                                update_kwargs["status"] = "transcribed"
-                            self.state_manager.update_entry(relative_path, **update_kwargs)
+                        existing = self._load_existing_transcript(relative_path, raw_transcript_path)
+                        if existing:
+                            raw_transcript, raw_transcript_path = existing
                         else:
                             raise FileNotFoundError(f"Raw transcript not found at {raw_transcript_path}. Cannot post-process without transcription.")
                     except Exception as e:

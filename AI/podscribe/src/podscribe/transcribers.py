@@ -13,6 +13,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 logger = logging.getLogger(__name__)
 
 def is_transcription_retryable_exception(exception: Exception) -> bool:
+    """Determine whether an exception during transcription should trigger a retry (e.g. rate limits, timeouts)."""
     # Unwrap RuntimeError if it was wrapped
     cause = exception.__cause__ if isinstance(exception, RuntimeError) and exception.__cause__ else exception
 
@@ -34,29 +35,40 @@ def is_transcription_retryable_exception(exception: Exception) -> bool:
     return False
 
 class BaseTranscriber(abc.ABC):
+    """Abstract base class defining the interface for all ASR transcribers."""
+
     @abc.abstractmethod
     def transcribe(self, file_path: Path) -> str:
         """Transcribe the audio file/directory and return the text transcript."""
         pass
 
+    def _transcribe_directory(
+        self, file_path: Path, join_char: str = " ", pass_prompt: bool = False
+    ) -> str:
+        """Transcribe all WAV chunk files in a directory sequentially and join their texts."""
+        logger.info(f"Processing chunks sequentially in directory: {file_path}")
+        chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
+        results = []
+        for chunk in chunks:
+            if pass_prompt and inspect.signature(self._transcribe_single).parameters.get("prompt"):
+                prompt = join_char.join(results) if results else ""
+                text = self._transcribe_single(chunk, prompt=prompt)
+            else:
+                text = self._transcribe_single(chunk)
+            results.append(text)
+        return join_char.join(results)
+
 class SpeakerAttributedMixin:
+    """Mixin providing sequential directory processing and speaker attribution formatting."""
+
     def transcribe(self, file_path: Path) -> str:
+        """Transcribe an audio file or sequentially process a directory of chunks with speaker labels."""
         if file_path.is_dir():
-            logger.info(f"Processing speaker-attributed chunks sequentially in directory: {file_path}")
-            chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
-            results = []
-            for chunk in chunks:
-                sig = inspect.signature(self._transcribe_single)
-                if "prompt" in sig.parameters:
-                    prompt = "\n\n".join(results) if results else ""
-                    text = self._transcribe_single(chunk, prompt=prompt)
-                else:
-                    text = self._transcribe_single(chunk)
-                results.append(text)
-            return "\n\n".join(results)
+            return self._transcribe_directory(file_path, join_char="\n\n", pass_prompt=True)
         return self._transcribe_single(file_path)
 
     def format_speaker_segments(self, segments: list) -> str:
+        """Format a list of raw segment dictionaries into a speaker-attributed dialogue transcript."""
         if not segments:
             return ""
 
@@ -124,7 +136,10 @@ class SpeakerAttributedMixin:
         return "\n\n".join(lines)
 
 class HuggingFaceTranscriber(BaseTranscriber):
+    """Transcriber client that connects to standard HuggingFace Inference API endpoints."""
+
     def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", timeout: float = 300.0):
+        """Initialize the HuggingFace API transcriber client."""
         self.endpoint_url = endpoint_url
         self.api_key = api_key
         self.model = model
@@ -132,16 +147,13 @@ class HuggingFaceTranscriber(BaseTranscriber):
         self.timeout = timeout
 
     def transcribe(self, file_path: Path) -> str:
+        """Transcribe an audio file or sequentially process a chunk directory."""
         if file_path.is_dir():
-            logger.info(f"Processing chunks sequentially in directory: {file_path}")
-            chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
-            results = []
-            for chunk in chunks:
-                results.append(self._transcribe_single(chunk))
-            return " ".join(results)
+            return self._transcribe_directory(file_path, join_char=" ", pass_prompt=False)
         return self._transcribe_single(file_path)
 
     def _handle_error_response(self, response: httpx.Response, prefix: str = "HF"):
+        """Extract and log structured API errors from HTTP responses."""
         error_msg = response.text
         try:
             err_json = response.json()
@@ -159,6 +171,7 @@ class HuggingFaceTranscriber(BaseTranscriber):
         retry=retry_if_exception(is_transcription_retryable_exception)
     )
     def _transcribe_single(self, file_path: Path) -> str:
+        """Send a single audio chunk to the HuggingFace ASR endpoint with exponential retry."""
         logger.debug(f"Sending audio chunk {file_path.name} to Hugging Face ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("Hugging Face endpoint URL must be configured.")
@@ -202,6 +215,7 @@ class HuggingFaceTranscriber(BaseTranscriber):
             raise RuntimeError(f"Hugging Face transcription failed: {e}") from e
 
 class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFaceTranscriber):
+    """HuggingFace transcriber that formats response segments with speaker attribution."""
     @retry(
         reraise=True,
         stop=stop_after_attempt(5),
@@ -209,6 +223,7 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
         retry=retry_if_exception(is_transcription_retryable_exception)
     )
     def _transcribe_single(self, file_path: Path) -> str:
+        """Send audio to a speaker-attributed HuggingFace endpoint and parse segment speaker labels."""
         logger.debug(f"Sending audio chunk {file_path.name} to speaker-attributed Hugging Face ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("Hugging Face endpoint URL must be configured.")
@@ -265,7 +280,10 @@ class SpeakerAttributedHuggingFaceTranscriber(SpeakerAttributedMixin, HuggingFac
             raise RuntimeError(f"Speaker attributed Hugging Face transcription failed: {e}") from e
 
 class OpenAICompatibleTranscriber(BaseTranscriber):
+    """Transcriber client utilizing the OpenAI Python SDK for /audio/transcriptions endpoints."""
+
     def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", timeout: float = 300.0):
+        """Initialize the OpenAI-compatible ASR client."""
         if endpoint_url:
             endpoint_url = endpoint_url.rstrip("/")
             if endpoint_url.endswith("/audio/transcriptions"):
@@ -278,15 +296,9 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
         self.timeout = timeout
 
     def transcribe(self, file_path: Path) -> str:
+        """Transcribe audio file or directory of chunks, passing prior transcript text as prompt."""
         if file_path.is_dir():
-            logger.info(f"Processing chunks sequentially in directory: {file_path}")
-            chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
-            results = []
-            for chunk in chunks:
-                prompt = " ".join(results) if results else ""
-                text = self._transcribe_single(chunk, prompt=prompt)
-                results.append(text)
-            return " ".join(results)
+            return self._transcribe_directory(file_path, join_char=" ", pass_prompt=True)
         return self._transcribe_single(file_path)
 
     @retry(
@@ -296,6 +308,7 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
         retry=retry_if_exception(is_transcription_retryable_exception)
     )
     def _transcribe_single(self, file_path: Path, prompt: str = "") -> str:
+        """Send a single audio chunk to the OpenAI-compatible endpoint with exponential retry."""
         logger.debug(f"Sending audio chunk {file_path.name} to OpenAI-compatible ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("OpenAI Compatible endpoint URL must be configured.")
@@ -338,6 +351,8 @@ class OpenAICompatibleTranscriber(BaseTranscriber):
             raise RuntimeError(f"OpenAI-compatible transcription failed: {e}") from e
 
 class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenAICompatibleTranscriber):
+    """OpenAI-compatible transcriber requesting diarization and parsing speaker labels."""
+
     @retry(
         reraise=True,
         stop=stop_after_attempt(5),
@@ -345,6 +360,7 @@ class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenA
         retry=retry_if_exception(is_transcription_retryable_exception)
     )
     def _transcribe_single(self, file_path: Path, prompt: str = "") -> str:
+        """Send audio chunk requesting verbose JSON with diarization enabled."""
         logger.debug(f"Sending audio chunk {file_path.name} to speaker-attributed OpenAI-compatible ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("OpenAI Compatible endpoint URL must be configured.")
@@ -396,7 +412,10 @@ class SpeakerAttributedOpenAICompatibleTranscriber(SpeakerAttributedMixin, OpenA
             raise RuntimeError(f"Speaker attributed OpenAI-compatible transcription failed: {e}") from e
 
 class CrispASRTranscriber(OpenAICompatibleTranscriber):
+    """Transcriber for specialized CrispASR OpenAI-compatible servers returning segment speaker IDs."""
+
     def transcribe(self, file_path: Path) -> str:
+        """Transcribe audio chunk or directory, merging consecutive chunks from the same speaker."""
         if file_path.is_dir():
             logger.info(f"Processing CrispASR chunks sequentially in directory: {file_path}")
             chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
@@ -434,6 +453,7 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
         retry=retry_if_exception(is_transcription_retryable_exception)
     )
     def _transcribe_single_crisp(self, file_path: Path) -> tuple[str, str]:
+        """Send a single chunk requesting verbose JSON and extract (text, speaker)."""
         logger.debug(f"Sending audio chunk {file_path.name} to CrispASR pipeline")
         if not self.endpoint_url:
             raise ValueError("CrispASR endpoint URL must be configured.")
@@ -502,6 +522,7 @@ CRISPASR_MODEL_FAMILY_SETTINGS = {
 }
 
 def _detect_model_family(model: str, backend: str) -> str:
+    """Identify the CLI model family ('parakeet', 'whisper', or 'default') from model and backend strings."""
     model_lower = model.lower() if model else ""
     backend_lower = backend.lower() if backend else ""
 
@@ -513,13 +534,17 @@ def _detect_model_family(model: str, backend: str) -> str:
     return "default"
 
 class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
+    """Transcriber executing local CrispASR command-line binary inside a temporary workspace."""
+
     def __init__(self, binary_path: str, model: str, backend: str, diarize_method: str):
+        """Initialize CLI transcriber parameters."""
         self.binary_path = binary_path or "crispasr"
         self.model = model or "auto"
         self.backend = backend or "auto"
         self.diarize_method = diarize_method or "pyannote"
 
     def _transcribe_single(self, file_path: Path) -> str:
+        """Execute local CrispASR CLI subprocess on a single chunk and parse output JSON."""
         import json
         import shlex
         import subprocess
@@ -589,7 +614,10 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
                 return self.format_speaker_segments(mapped_segments)
 
 class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
+    """Transcriber for VibeVoice endpoints accepting base64-encoded audio and optional hotwords."""
+
     def __init__(self, endpoint_url: str, api_key: str, model: str, language: str = "en", hotwords: str = "", timeout: float = 300.0):
+        """Initialize VibeVoice client parameters."""
         super().__init__(endpoint_url, api_key, model, language, timeout=timeout)
         self.hotwords = hotwords
 
@@ -600,6 +628,7 @@ class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
         retry=retry_if_exception(is_transcription_retryable_exception)
     )
     def _transcribe_single(self, file_path: Path) -> str:
+        """Encode audio to base64 and POST JSON payload to VibeVoice endpoint."""
         logger.debug(f"Sending audio chunk {file_path.name} to VibeVoice ASR pipeline")
         if not self.endpoint_url:
             raise ValueError("VibeVoice endpoint URL must be configured.")
@@ -653,6 +682,8 @@ class VibeVoiceASRTranscriber(HuggingFaceTranscriber):
 
 
 class AssemblyAITranscriber(SpeakerAttributedMixin, BaseTranscriber):
+    """Transcriber integrating with official AssemblyAI API, supporting prompts, keyterms, and diarization."""
+
     def __init__(
         self,
         api_key: str,
@@ -662,6 +693,7 @@ class AssemblyAITranscriber(SpeakerAttributedMixin, BaseTranscriber):
         prompt_file: str | Path = "prompts/assemblyai.md",
         keyterms_file: str | Path = "prompts/keyterms.txt",
     ):
+        """Initialize AssemblyAI parameters and prompt/keyterm paths."""
         self.api_key = api_key
         self.model = model or "universal-3-pro"
         self.language = language
@@ -670,6 +702,7 @@ class AssemblyAITranscriber(SpeakerAttributedMixin, BaseTranscriber):
         self.keyterms_file = Path(keyterms_file)
 
     def _transcribe_single(self, file_path: Path) -> str:
+        """Execute AssemblyAI transcription with prompt/keyterm boosting and return attributed text."""
         logger.debug(f"Sending audio file {file_path.name} to AssemblyAI")
         if not self.api_key:
             raise ValueError("AssemblyAI API key must be configured.")

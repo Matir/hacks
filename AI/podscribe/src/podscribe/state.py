@@ -5,13 +5,17 @@ from typing import Any, Dict
 
 
 class StateManager:
+    """Manages persistent JSON execution state and file hash tracking across pipeline invocations."""
+
     def __init__(self, output_dir: Path):
+        """Initialize state tracking file path and load existing state from disk."""
         self.output_dir = Path(output_dir)
         self.state_file = self.output_dir / "state.json"
         self.state: Dict[str, Any] = {}
         self.load()
 
     def load(self):
+        """Load state JSON file from disk, initializing an empty dict if missing or corrupt."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
         if self.state_file.exists():
             try:
@@ -24,6 +28,7 @@ class StateManager:
             self.state = {}
 
     def save(self):
+        """Persist current execution state dictionary to state.json formatted with indentation."""
         with open(self.state_file, "w") as f:
             json.dump(self.state, f, indent=2)
 
@@ -36,6 +41,7 @@ class StateManager:
         return hasher.hexdigest()
 
     def get_entry(self, relative_path: str) -> Dict[str, Any]:
+        """Retrieve state dictionary entry for a relative file path or return default initial state."""
         return self.state.get(relative_path, {
             "hash": "",
             "status": "new", # new, preprocessed, transcribed, completed, failed
@@ -52,6 +58,7 @@ class StateManager:
         })
 
     def update_entry(self, relative_path: str, **kwargs):
+        """Update fields on a file's state entry and immediately save state to disk."""
         entry = self.get_entry(relative_path)
         for k, v in kwargs.items():
             entry[k] = str(v) if isinstance(v, Path) else v
@@ -59,6 +66,7 @@ class StateManager:
         self.save()
 
     def is_completed(self, relative_path: str, current_hash: str) -> bool:
+        """Check whether a file has completed processing and matches the current file hash."""
         entry = self.state.get(relative_path)
         if not entry:
             return False

@@ -5,12 +5,16 @@ from typing import Any, Dict
 
 
 class Config:
+    """Parses and exposes pipeline settings from TOML configuration files."""
+
     def __init__(self, config_path: str | Path = "config.toml"):
+        """Initialize configuration reader and load TOML data."""
         self.config_path = Path(config_path)
         self.data: Dict[str, Any] = {}
         self.load()
 
     def load(self):
+        """Read and decode TOML configuration file from disk."""
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
@@ -165,6 +169,7 @@ class Config:
         return os.environ.get(env_var, "") if env_var else ""
 
     def get_required_auth_env_vars(self, stage: str = "all") -> list[tuple[str, str]]:
+        """Identify required authentication environment variables based on configured providers and target stage."""
         required = []
 
         if stage in ("all", "transcribe"):
@@ -204,6 +209,7 @@ class Config:
         return dict(self.data.get("prompt_context", {}))
 
     def dump(self) -> str:
+        """Render a formatted, human-readable summary of the current configuration."""
         lines = [
             "==================================================",
             "                PODSCRIBE CONFIGURATION           ",

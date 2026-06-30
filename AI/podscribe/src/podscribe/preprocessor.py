@@ -6,10 +6,25 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+def parse_ffmpeg_duration(line: str) -> float | None:
+    """Parse an FFmpeg stderr log line for a Duration string and return total seconds."""
+    match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?", line)
+    if match:
+        hrs = int(match.group(1))
+        mins = int(match.group(2))
+        secs = int(match.group(3))
+        decimals_str = match.group(4) or ""
+        fractional = int(decimals_str) / (10 ** len(decimals_str)) if decimals_str else 0.0
+        return hrs * 3600 + mins * 60 + secs + fractional
+    return None
+
 class AudioPreprocessor:
+    """Handles audio format standardization, silence detection, and chunking via FFmpeg."""
+
     def __init__(self, enabled: bool, ffmpeg_path: str, output_dir: Path,
                  chunking_enabled: bool = False, chunk_max_duration: int = 300,
                  silence_threshold_db: int = -30, silence_duration: float = 0.5):
+        """Initialize audio preprocessor parameters and output directories."""
         self.enabled = enabled
         self.ffmpeg_path = ffmpeg_path
         self.output_dir = Path(output_dir)
@@ -57,18 +72,9 @@ class AudioPreprocessor:
 
         for line in result.stderr.splitlines():
             # Parse duration with optional/arbitrary decimal precision
-            duration_match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?", line)
-            if duration_match:
-                hrs = int(duration_match.group(1))
-                mins = int(duration_match.group(2))
-                secs = int(duration_match.group(3))
-                if duration_match.group(4):
-                    decimals_str = duration_match.group(4)
-                    precision = len(decimals_str)
-                    fractional = int(decimals_str) / (10 ** precision)
-                else:
-                    fractional = 0.0
-                total_duration = hrs * 3600 + mins * 60 + secs + fractional
+            parsed_dur = parse_ffmpeg_duration(line)
+            if parsed_dur is not None:
+                total_duration = parsed_dur
 
             # Parse silence events chronologically
             start_match = re.search(r"silence_start: (\d+\.?\d*)", line)
@@ -95,12 +101,8 @@ class AudioPreprocessor:
 
         return sorted(midpoints), total_duration
 
-
     def _calculate_split_points(self, midpoints: list[float], total_duration: float) -> list[float]:
-        """
-        Calculates the optimal split times so that no segment exceeds self.chunk_max_duration,
-        cutting at silence midpoints where possible, otherwise doing hard cuts.
-        """
+        """Calculate optimal chunk split times respecting max duration and cutting at silence midpoints."""
         split_points = []
         last_split = 0.0
 
@@ -121,17 +123,29 @@ class AudioPreprocessor:
         return split_points
 
     def _format_duration(self, seconds: float) -> str:
+        """Format seconds into HH:MM:SS string representation."""
         hrs = int(seconds // 3600)
         mins = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
         return f"{hrs:02d}:{mins:02d}:{secs:02d} ({seconds:.2f}s)"
 
+    def _run_ffmpeg_convert(self, input_path: Path, output_path: Path, segment_times: list[float] | None = None, action: str = "preprocessing") -> None:
+        """Run FFmpeg to downsample audio to 16kHz mono WAV, optionally segmenting at specified split times."""
+        cmd = [self.ffmpeg_path, "-y", "-i", str(input_path)]
+        if segment_times:
+            cmd.extend([
+                "-f", "segment",
+                "-segment_times", ",".join(f"{t:.3f}" for t in segment_times),
+            ])
+        cmd.extend(["-ar", "16000", "-ac", "1", str(output_path)])
+        try:
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg command failed. Stderr: {e.stderr}")
+            raise RuntimeError(f"FFmpeg {action} failed for {input_path.name}: {e.stderr}") from e
+
     def preprocess(self, file_path: Path, duration: float | None = None) -> Path:
-        """
-        Converts audio file to 16kHz, mono, WAV using FFmpeg.
-        If chunking is enabled, splits the audio at silence midpoints and returns
-        a directory containing all generated chunk files.
-        """
+        """Convert audio file to 16kHz mono WAV, optionally chunking at silence boundaries."""
         if not self.enabled:
             logger.info("Preprocessing is disabled. Using original file path.")
             return file_path
@@ -149,19 +163,7 @@ class AudioPreprocessor:
             output_path = self.preprocess_dir / f"{file_path.stem}_16k_mono.wav"
             total_duration = duration if duration is not None else self.get_duration(file_path)
             logger.info(f"Preprocessing {file_path.name} (Duration: {self._format_duration(total_duration)}, Chunks: 1) -> {output_path.name}")
-            cmd = [
-                self.ffmpeg_path,
-                "-y",
-                "-i", str(file_path),
-                "-ar", "16000",
-                "-ac", "1",
-                str(output_path)
-            ]
-            try:
-                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-            except subprocess.CalledProcessError as e:
-                logger.error(f"FFmpeg failed. Stderr: {e.stderr}")
-                raise RuntimeError(f"FFmpeg preprocessing failed for {file_path.name}: {e.stderr}") from e
+            self._run_ffmpeg_convert(file_path, output_path, action="preprocessing")
             return output_path
 
         # Chunking-enabled pipeline
@@ -180,34 +182,13 @@ class AudioPreprocessor:
         if not split_points:
             # Less than max duration: downmix to single chunk
             output_path = output_dir / "chunk_000.wav"
-            cmd = [
-                self.ffmpeg_path,
-                "-y",
-                "-i", str(file_path),
-                "-ar", "16000",
-                "-ac", "1",
-                str(output_path)
-            ]
             logger.info(f"Preprocessing single chunk: {file_path.name} -> {output_path.name}")
+            self._run_ffmpeg_convert(file_path, output_path, action="preprocessing")
         else:
             # Split into silent segments
-            cmd = [
-                self.ffmpeg_path,
-                "-y",
-                "-i", str(file_path),
-                "-f", "segment",
-                "-segment_times", ",".join(f"{t:.3f}" for t in split_points),
-                "-ar", "16000",
-                "-ac", "1",
-                str(output_dir / "chunk_%03d.wav")
-            ]
+            output_pattern = output_dir / "chunk_%03d.wav"
             logger.info(f"Splitting {file_path.name} into {num_chunks} chunks inside {output_dir.name}...")
-
-        try:
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg chunking failed. Stderr: {e.stderr}")
-            raise RuntimeError(f"FFmpeg chunking failed for {file_path.name}: {e.stderr}") from e
+            self._run_ffmpeg_convert(file_path, output_pattern, segment_times=split_points, action="chunking")
 
         return output_dir
 
@@ -233,17 +214,9 @@ class AudioPreprocessor:
             )
             # Parse duration from stderr
             for line in result.stderr.splitlines():
-                duration_match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?", line)
-                if duration_match:
-                    hrs = int(duration_match.group(1))
-                    mins = int(duration_match.group(2))
-                    secs = int(duration_match.group(3))
-                    decimals_str = duration_match.group(4) if duration_match.group(4) else ""
-                    if decimals_str:
-                        fractional = int(decimals_str) / (10 ** len(decimals_str))
-                    else:
-                        fractional = 0.0
-                    return hrs * 3600 + mins * 60 + secs + fractional
+                parsed_dur = parse_ffmpeg_duration(line)
+                if parsed_dur is not None:
+                    return parsed_dur
         except Exception as e:
             logger.error(f"Failed to get audio duration for {file_path.name}: {e}")
 

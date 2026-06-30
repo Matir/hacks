@@ -14,7 +14,10 @@ ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 
 
 class RSSFetcher:
+    """Fetches podcast episode XML feeds and downloads audio media files to the input directory."""
+
     def __init__(self, input_dir: Path):
+        """Initialize the RSS fetcher and clean up interrupted download temporary files."""
         self.input_dir = input_dir
         self._cleanup_temp_files()
 
@@ -32,6 +35,7 @@ class RSSFetcher:
                 logger.error(f"Failed to remove leftover temporary file {temp_file}: {e}")
 
     def _slugify(self, text: str) -> str:
+        """Sanitize a text string into a URL and filesystem-safe filename slug."""
         # Convert to lowercase
         text = text.lower()
         # Remove non-alphanumeric (except hyphens, underscores, and spaces)
@@ -43,12 +47,14 @@ class RSSFetcher:
         return text[:200]
 
     def _filename_from_url(self, url: str) -> str | None:
+        """Extract audio filename directly from a URL path if it has a recognized audio extension."""
         path = Path(urlparse(url).path)
         if path.suffix.lower() in AUDIO_EXTENSIONS:
             return path.name
         return None
 
     def _extension_from_url(self, url: str) -> str:
+        """Determine audio file extension from URL path or fall back to .mp3."""
         path = Path(urlparse(url).path)
         suffix = path.suffix.lower()
         if suffix in AUDIO_EXTENSIONS:
@@ -102,6 +108,7 @@ class RSSFetcher:
         return episodes
 
     def _extract_media_url(self, item: ET.Element) -> str | None:
+        """Extract media stream URL from RSS item enclosure or media:content element."""
         enclosure = item.find("enclosure")
         if enclosure is not None:
             enc_type = enclosure.get("type", "")
