@@ -50,6 +50,11 @@ def test_calculate_transcription_cost():
     cost = calculate_transcription_cost("openai", 600)
     assert pytest.approx(cost) == 0.06
 
+    # assemblyai: 0.0035 / minute ($0.21 / hour)
+    # 10 minutes (600 seconds) = $0.035
+    cost_aai = calculate_transcription_cost("assemblyai", 600)
+    assert pytest.approx(cost_aai) == 0.035
+
     # Free provider
     assert calculate_transcription_cost("huggingface", 600) == 0.0
     assert calculate_transcription_cost("unknown", 600) == 0.0

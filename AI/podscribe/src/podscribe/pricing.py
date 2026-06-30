@@ -20,8 +20,9 @@ LLM_PRICING = {
 
 # Transcription pricing (per minute in USD)
 TRANSCRIPTION_PRICING = {
-    "openai": 0.006,          # OpenAI Whisper API
-    "huggingface": 0.0,       # Assuming self-hosted/free endpoint unless specified
+    "openai": 0.006,           # OpenAI Whisper API
+    "assemblyai": 0.0035,      # AssemblyAI Universal-3 Pro ($0.21/hr)
+    "huggingface": 0.0,        # Assuming self-hosted/free endpoint unless specified
     "openai_compatible": 0.0,  # Assuming self-hosted (local vLLM/Whisper)
 }
 

@@ -238,8 +238,13 @@ def test_config_dump_covers_all_properties(tmp_path):
         "hotwords": "Hotwords:"
     }
 
+    assemblyai_properties = {
+        "assemblyai_prompt_file": "AssemblyAI Prompt File:",
+        "assemblyai_keyterms_file": "AssemblyAI Keyterms File:"
+    }
+
     # 3. Verify that every property defined on Config is in exactly one mapping
-    all_mapped = {**general_properties, **crispasr_properties, **vibevoice_properties}
+    all_mapped = {**general_properties, **crispasr_properties, **vibevoice_properties, **assemblyai_properties}
     for prop in properties:
         assert prop in all_mapped, (
             f"Property '{prop}' is defined on Config but is not tracked in any test mapping. "
@@ -282,7 +287,7 @@ def test_config_dump_covers_all_properties(tmp_path):
     verify_dump(
         config_content=crispasr_content,
         expected_fields={**general_properties, **crispasr_properties},
-        unexpected_fields=vibevoice_properties
+        unexpected_fields={**vibevoice_properties, **assemblyai_properties}
     )
 
     # Scenario B: vibevoice provider
@@ -299,7 +304,7 @@ def test_config_dump_covers_all_properties(tmp_path):
     verify_dump(
         config_content=vibevoice_content,
         expected_fields={**general_properties, **vibevoice_properties},
-        unexpected_fields=crispasr_properties
+        unexpected_fields={**crispasr_properties, **assemblyai_properties}
     )
 
     # Scenario C: standard huggingface provider
@@ -316,5 +321,22 @@ def test_config_dump_covers_all_properties(tmp_path):
     verify_dump(
         config_content=huggingface_content,
         expected_fields=general_properties,
+        unexpected_fields={**crispasr_properties, **vibevoice_properties, **assemblyai_properties}
+    )
+
+    # Scenario D: assemblyai provider
+    assemblyai_content = """
+    [preprocessing]
+    chunking_enabled = true
+    [transcriber]
+    provider = "assemblyai"
+    [[rss.feeds]]
+    url = "https://example.com/feed.rss"
+    [prompt_context]
+    podcast_name = "My Podcast"
+    """
+    verify_dump(
+        config_content=assemblyai_content,
+        expected_fields={**general_properties, **assemblyai_properties},
         unexpected_fields={**crispasr_properties, **vibevoice_properties}
     )

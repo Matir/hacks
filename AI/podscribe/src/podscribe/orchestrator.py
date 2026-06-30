@@ -124,7 +124,9 @@ class Orchestrator:
                 api_key=api_key,
                 model=model,
                 language=language,
-                enable_speaker_attribution=self.config.enable_speaker_attribution
+                enable_speaker_attribution=self.config.enable_speaker_attribution,
+                prompt_file=self.config.assemblyai_prompt_file,
+                keyterms_file=self.config.assemblyai_keyterms_file,
             )
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")

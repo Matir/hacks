@@ -659,11 +659,15 @@ class AssemblyAITranscriber(SpeakerAttributedMixin, BaseTranscriber):
         model: str = "universal-3-pro",
         language: str = "en",
         enable_speaker_attribution: bool = True,
+        prompt_file: str | Path = "prompts/assemblyai.md",
+        keyterms_file: str | Path = "prompts/keyterms.txt",
     ):
         self.api_key = api_key
         self.model = model or "universal-3-pro"
         self.language = language
         self.enable_speaker_attribution = enable_speaker_attribution
+        self.prompt_file = Path(prompt_file)
+        self.keyterms_file = Path(keyterms_file)
 
     def _transcribe_single(self, file_path: Path) -> str:
         logger.debug(f"Sending audio file {file_path.name} to AssemblyAI")
@@ -688,6 +692,27 @@ class AssemblyAITranscriber(SpeakerAttributedMixin, BaseTranscriber):
             config_params["language_code"] = self.language
         else:
             config_params["language_detection"] = True
+
+        if self.prompt_file.exists() and self.prompt_file.is_file():
+            try:
+                prompt_content = self.prompt_file.read_text(encoding="utf-8").strip()
+                if prompt_content:
+                    config_params["prompt"] = prompt_content
+            except Exception as e:
+                logger.warning(f"Failed to read AssemblyAI prompt file {self.prompt_file}: {e}")
+
+        if self.keyterms_file.exists() and self.keyterms_file.is_file():
+            try:
+                keyterms = [
+                    line.strip()
+                    for line in self.keyterms_file.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                if keyterms:
+                    config_params["keyterms_prompt"] = keyterms
+                    config_params["word_boost"] = keyterms
+            except Exception as e:
+                logger.warning(f"Failed to read AssemblyAI keyterms file {self.keyterms_file}: {e}")
 
         config = aai.TranscriptionConfig(**config_params)
 

@@ -30,6 +30,24 @@ class Config:
         return Path(self.data.get("paths", {}).get("prompt_file", "prompts/post_process.md"))
 
     @property
+    def assemblyai_prompt_file(self) -> Path:
+        return Path(
+            self.data.get("paths", {}).get(
+                "assemblyai_prompt_file",
+                self.data.get("transcriber", {}).get("assemblyai_prompt_file", "prompts/assemblyai.md"),
+            )
+        )
+
+    @property
+    def assemblyai_keyterms_file(self) -> Path:
+        return Path(
+            self.data.get("paths", {}).get(
+                "assemblyai_keyterms_file",
+                self.data.get("transcriber", {}).get("assemblyai_keyterms_file", "prompts/keyterms.txt"),
+            )
+        )
+
+    @property
     def preprocess_enabled(self) -> bool:
         return bool(self.data.get("preprocessing", {}).get("enabled", True))
 
@@ -166,6 +184,11 @@ class Config:
         elif self.transcriber_provider == "vibevoice":
             lines.extend([
                 f"Hotwords:                {self.hotwords}",
+            ])
+        elif self.transcriber_provider == "assemblyai":
+            lines.extend([
+                f"AssemblyAI Prompt File:  {self.assemblyai_prompt_file}",
+                f"AssemblyAI Keyterms File:{self.assemblyai_keyterms_file}",
             ])
 
         lines.extend([

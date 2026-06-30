@@ -1462,3 +1462,65 @@ def test_assemblyai_transcribe_failure(tmp_path):
 
         with pytest.raises(RuntimeError, match="AssemblyAI transcription failed: Invalid audio file format"):
             transcriber.transcribe(audio_file)
+
+def test_assemblyai_prompt_and_keyterms_loaded(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    prompt_file = tmp_path / "assemblyai.md"
+    prompt_file.write_text("Custom prompt for ASR")
+
+    keyterms_file = tmp_path / "keyterms.txt"
+    keyterms_file.write_text("Podscribe\n\nAI Pipeline\n")
+
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        prompt_file=prompt_file,
+        keyterms_file=keyterms_file
+    )
+
+    with patch("assemblyai.Transcriber") as mock_transcriber_class:
+        mock_transcriber = mock_transcriber_class.return_value
+        mock_transcript = MagicMock()
+        import assemblyai as aai
+        mock_transcript.status = aai.TranscriptStatus.completed
+        mock_transcript.text = "Success"
+        mock_transcript.utterances = None
+        mock_transcriber.transcribe.return_value = mock_transcript
+
+        res = transcriber.transcribe(audio_file)
+        assert res == "Success"
+
+        config_arg = mock_transcriber_class.call_args[1]["config"]
+        assert config_arg.prompt == "Custom prompt for ASR"
+        assert config_arg.keyterms_prompt == ["Podscribe", "AI Pipeline"]
+        assert config_arg.word_boost == ["Podscribe", "AI Pipeline"]
+
+def test_assemblyai_prompt_and_keyterms_missing(tmp_path):
+    audio_file = tmp_path / "test.wav"
+    audio_file.write_bytes(b"fake_audio")
+
+    missing_prompt = tmp_path / "nonexistent_prompt.md"
+    missing_keyterms = tmp_path / "nonexistent_keyterms.txt"
+
+    transcriber = AssemblyAITranscriber(
+        api_key="aai-key",
+        prompt_file=missing_prompt,
+        keyterms_file=missing_keyterms
+    )
+
+    with patch("assemblyai.Transcriber") as mock_transcriber_class:
+        mock_transcriber = mock_transcriber_class.return_value
+        mock_transcript = MagicMock()
+        import assemblyai as aai
+        mock_transcript.status = aai.TranscriptStatus.completed
+        mock_transcript.text = "Success"
+        mock_transcript.utterances = None
+        mock_transcriber.transcribe.return_value = mock_transcript
+
+        res = transcriber.transcribe(audio_file)
+        assert res == "Success"
+
+        config_arg = mock_transcriber_class.call_args[1]["config"]
+        assert config_arg.prompt is None
+        assert config_arg.keyterms_prompt is None
