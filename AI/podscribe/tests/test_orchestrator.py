@@ -691,13 +691,57 @@ def test_orchestrator_run_stage_postprocess_success(mock_config, tmp_path):
 
         # State should be "completed"
         state_file = mock_config.output_dir / "state.json"
-        assert state_file.exists()
         import json
         with open(state_file, "r") as f:
             state = json.load(f)
             assert state["podcast.mp3"]["status"] == "completed"
             assert state["podcast.mp3"]["raw_transcript_path"] == str(raw_transcript_file)
             assert state["podcast.mp3"]["final_transcript_path"] == str(final_transcript_file)
+
+def test_orchestrator_run_stage_postprocess_when_failed_status(mock_config, tmp_path):
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio_content")
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+
+        mock_transcriber = MagicMock()
+        mock_init_t.return_value = mock_transcriber
+
+        mock_post_processor = MagicMock()
+        mock_post_processor.post_process.return_value = ("polished markdown text", TokenUsage(10, 5, 15))
+        mock_init_p.return_value = mock_post_processor
+
+        mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 120.0
+
+        raw_transcript_file = mock_config.output_dir / "raw_transcripts" / "podcast_raw.txt"
+        raw_transcript_file.parent.mkdir(parents=True, exist_ok=True)
+        raw_transcript_file.write_text("saved raw transcript")
+
+        # Create pre-existing state with status="failed" (e.g. from previous failed post-processing)
+        state_file = mock_config.output_dir / "state.json"
+        import hashlib
+        import json
+        file_hash = hashlib.sha256(input_file.read_bytes()).hexdigest()
+        state_file.write_text(json.dumps({
+            "podcast.mp3": {
+                "hash": file_hash,
+                "status": "failed",
+                "raw_transcript_path": str(raw_transcript_file)
+            }
+        }))
+
+        orchestrator = Orchestrator(mock_config, stage="postprocess")
+        orchestrator.run()
+
+        mock_post_processor.post_process.assert_called_once()
+        with open(state_file, "r") as f:
+            state = json.load(f)
+            assert state["podcast.mp3"]["status"] == "completed"
 
 def test_orchestrator_run_stage_postprocess_missing_raw(mock_config, tmp_path):
     input_dir = mock_config.input_dir

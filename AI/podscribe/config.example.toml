@@ -11,8 +11,17 @@ input_dir = "input"
 # Directory where output transcripts and pipeline state will be saved
 output_dir = "output"
 
+# Base directory where prompt templates and keyterm files are stored
+prompts_dir = "prompts"
+
 # Path to the Markdown file containing LLM instructions for post-processing/editing
 prompt_file = "prompts/post_process.md"
+
+# Optional path to a custom prompt Markdown file for AssemblyAI STT
+assemblyai_prompt_file = "prompts/assemblyai.md"
+
+# Optional path to a text file with keyterms/vocabulary for AssemblyAI STT (one term per line)
+assemblyai_keyterms_file = "prompts/keyterms.txt"
 
 
 # -----------------------------------------------------------------------------

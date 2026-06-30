@@ -207,6 +207,7 @@ def test_config_dump_covers_all_properties(tmp_path):
     general_properties = {
         "input_dir": "Input Directory:",
         "output_dir": "Output Directory:",
+        "prompts_dir": "Prompts Directory:",
         "prompt_file": "Prompt Template:",
         "preprocess_enabled": "Enabled:",
         "chunking_enabled": "Chunking Enabled:",
@@ -340,3 +341,22 @@ def test_config_dump_covers_all_properties(tmp_path):
         expected_fields={**general_properties, **assemblyai_properties},
         unexpected_fields={**crispasr_properties, **vibevoice_properties}
     )
+
+def test_get_required_auth_env_vars(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("""
+    [transcriber]
+    provider = "assemblyai"
+    [post_processor]
+    provider = "gemini"
+    """)
+    config = Config(config_file)
+    reqs = config.get_required_auth_env_vars(stage="all")
+    env_names = [r[0] for r in reqs]
+    assert "ASSEMBLYAI_API_KEY" in env_names
+    assert "GEMINI_API_KEY" in env_names
+
+    # Test stage-specific checks
+    transcribe_reqs = [r[0] for r in config.get_required_auth_env_vars(stage="transcribe")]
+    assert "ASSEMBLYAI_API_KEY" in transcribe_reqs
+    assert "GEMINI_API_KEY" not in transcribe_reqs

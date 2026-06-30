@@ -165,7 +165,14 @@ class Orchestrator:
         return files
 
     def check_dependencies(self):
-        """Verify that system dependencies are available if they will be needed."""
+        """Verify that system dependencies and required auth tokens are available."""
+        import os
+        for env_var, description in self.config.get_required_auth_env_vars(stage=self.stage):
+            if not os.environ.get(env_var):
+                raise RuntimeError(
+                    f"Environment variable '{env_var}' ({description}) is not set."
+                )
+
         if self.stage in ("all", "transcribe") and self.config.preprocess_enabled:
             if not self.preprocessor.is_ffmpeg_available():
                 raise RuntimeError(
@@ -312,12 +319,15 @@ class Orchestrator:
                             with open(raw_transcript_path, "w") as f:
                                 f.write(raw_transcript)
                         num_words, num_segments = count_words_and_segments(raw_transcript)
-                        self.state_manager.update_entry(
-                            relative_path,
-                            raw_transcript_path=raw_transcript_path,
-                            num_words=num_words,
-                            num_segments=num_segments
-                        )
+                        current_status = self.state_manager.get_entry(relative_path).get("status")
+                        update_kwargs = {
+                            "raw_transcript_path": raw_transcript_path,
+                            "num_words": num_words,
+                            "num_segments": num_segments,
+                        }
+                        if current_status in ("new", "preprocessed", "failed"):
+                            update_kwargs["status"] = "transcribed"
+                        self.state_manager.update_entry(relative_path, **update_kwargs)
                 else:
                     # self.stage == "postprocess"
                     # Load the raw transcript. Do not run transcriber.
@@ -330,22 +340,15 @@ class Orchestrator:
                                 raw_transcript = f.read()
 
                             num_words, num_segments = count_words_and_segments(raw_transcript)
-                            # If status was new or preprocessed, promote to transcribed since we verified the raw transcript exists
                             current_status = self.state_manager.get_entry(relative_path).get("status")
-                            if current_status in ("new", "preprocessed"):
-                                self.state_manager.update_entry(
-                                    relative_path,
-                                    status="transcribed",
-                                    raw_transcript_path=raw_transcript_path,
-                                    num_words=num_words,
-                                    num_segments=num_segments
-                                )
-                            else:
-                                self.state_manager.update_entry(
-                                    relative_path,
-                                    num_words=num_words,
-                                    num_segments=num_segments
-                                )
+                            update_kwargs = {
+                                "raw_transcript_path": raw_transcript_path,
+                                "num_words": num_words,
+                                "num_segments": num_segments,
+                            }
+                            if current_status in ("new", "preprocessed", "failed"):
+                                update_kwargs["status"] = "transcribed"
+                            self.state_manager.update_entry(relative_path, **update_kwargs)
                         else:
                             raise FileNotFoundError(f"Raw transcript not found at {raw_transcript_path}. Cannot post-process without transcription.")
                     except Exception as e:
@@ -354,7 +357,8 @@ class Orchestrator:
 
                 # 4. Post-process (if needed)
                 if self.stage in ("all", "postprocess"):
-                    if self.state_manager.get_entry(relative_path).get("status") == "transcribed":
+                    entry_status = self.state_manager.get_entry(relative_path).get("status")
+                    if entry_status in ("transcribed", "failed"):
                         try:
                             context = {
                                 "filename": file_path.name,

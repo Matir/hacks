@@ -26,24 +26,31 @@ class Config:
         return Path(self.data.get("paths", {}).get("output_dir", "output"))
 
     @property
+    def prompts_dir(self) -> Path:
+        return Path(self.data.get("paths", {}).get("prompts_dir", "prompts"))
+
+    @property
     def prompt_file(self) -> Path:
-        return Path(self.data.get("paths", {}).get("prompt_file", "prompts/post_process.md"))
+        default_path = self.prompts_dir / "post_process.md"
+        return Path(self.data.get("paths", {}).get("prompt_file", default_path))
 
     @property
     def assemblyai_prompt_file(self) -> Path:
+        default_path = self.prompts_dir / "assemblyai.md"
         return Path(
             self.data.get("paths", {}).get(
                 "assemblyai_prompt_file",
-                self.data.get("transcriber", {}).get("assemblyai_prompt_file", "prompts/assemblyai.md"),
+                self.data.get("transcriber", {}).get("assemblyai_prompt_file", default_path),
             )
         )
 
     @property
     def assemblyai_keyterms_file(self) -> Path:
+        default_path = self.prompts_dir / "keyterms.txt"
         return Path(
             self.data.get("paths", {}).get(
                 "assemblyai_keyterms_file",
-                self.data.get("transcriber", {}).get("assemblyai_keyterms_file", "prompts/keyterms.txt"),
+                self.data.get("transcriber", {}).get("assemblyai_keyterms_file", default_path),
             )
         )
 
@@ -111,9 +118,23 @@ class Config:
     def transcriber_timeout(self) -> float:
         return float(self.data.get("transcriber", {}).get("timeout", 300.0))
 
+    def get_transcriber_api_key_env(self) -> str | None:
+        if "api_key_env" in self.data.get("transcriber", {}):
+            return str(self.data["transcriber"]["api_key_env"])
+        provider = self.transcriber_provider.lower()
+        if provider == "assemblyai":
+            return "ASSEMBLYAI_API_KEY"
+        elif provider == "crispasr":
+            return "CRISPASR_API_KEY"
+        elif provider == "openai_compatible":
+            return "OPENAI_API_KEY"
+        elif provider == "crispasr_cli":
+            return None
+        return "HF_API_KEY"
+
     def get_transcriber_api_key(self) -> str:
-        env_var = self.data.get("transcriber", {}).get("api_key_env", "HF_API_KEY")
-        return os.environ.get(env_var, "")
+        env_var = self.get_transcriber_api_key_env()
+        return os.environ.get(env_var, "") if env_var else ""
 
     @property
     def post_processor_provider(self) -> str:
@@ -131,9 +152,48 @@ class Config:
     def post_processor_temperature(self) -> float:
         return float(self.data.get("post_processor", {}).get("temperature", 0.2))
 
+    def get_post_processor_api_key_env(self) -> str | None:
+        if "api_key_env" in self.data.get("post_processor", {}):
+            return str(self.data["post_processor"]["api_key_env"])
+        provider = self.post_processor_provider.lower()
+        if provider == "openai_compatible":
+            return "OPENAI_API_KEY"
+        return "GEMINI_API_KEY"
+
     def get_post_processor_api_key(self) -> str:
-        env_var = self.data.get("post_processor", {}).get("api_key_env", "GEMINI_API_KEY")
-        return os.environ.get(env_var, "")
+        env_var = self.get_post_processor_api_key_env()
+        return os.environ.get(env_var, "") if env_var else ""
+
+    def get_required_auth_env_vars(self, stage: str = "all") -> list[tuple[str, str]]:
+        required = []
+
+        if stage in ("all", "transcribe"):
+            t_provider = self.transcriber_provider.lower()
+            t_endpoint = self.transcriber_endpoint.lower()
+            is_local_t = t_endpoint.startswith("http://localhost") or t_endpoint.startswith("http://127.0.0.1")
+            env_var = self.get_transcriber_api_key_env()
+
+            if env_var:
+                if t_provider == "assemblyai":
+                    required.append((env_var, "AssemblyAI transcription API key"))
+                elif t_provider in ("huggingface", "vibevoice", "openai_compatible", "crispasr"):
+                    if "api_key_env" in self.data.get("transcriber", {}) or (t_endpoint and not is_local_t):
+                        required.append((env_var, f"{t_provider} transcription API key"))
+
+        if stage in ("all", "postprocess"):
+            p_provider = self.post_processor_provider.lower()
+            p_endpoint = self.post_processor_endpoint.lower()
+            is_local_p = p_endpoint.startswith("http://localhost") or p_endpoint.startswith("http://127.0.0.1")
+            env_var = self.get_post_processor_api_key_env()
+
+            if env_var:
+                if p_provider == "gemini":
+                    required.append((env_var, "Gemini post-processing API key"))
+                elif p_provider == "openai_compatible":
+                    if "api_key_env" in self.data.get("post_processor", {}) or (p_endpoint and not is_local_p):
+                        required.append((env_var, "OpenAI-compatible post-processing API key"))
+
+        return required
 
     @property
     def rss_feeds(self) -> list[dict]:
@@ -153,6 +213,7 @@ class Config:
             "--- Paths ---",
             f"Input Directory:         {self.input_dir}",
             f"Output Directory:        {self.output_dir}",
+            f"Prompts Directory:       {self.prompts_dir}",
             f"Prompt Template:         {self.prompt_file}",
             "",
             "--- Preprocessing ---",
@@ -169,7 +230,7 @@ class Config:
             f"Endpoint URL:            {self.transcriber_endpoint}",
             f"Speaker Attribution:     {self.enable_speaker_attribution}",
             f"Language:                {self.language}",
-            f"API Key Env Var:         {self.data.get('transcriber', {}).get('api_key_env', 'HF_API_KEY')}",
+            f"API Key Env Var:         {self.get_transcriber_api_key_env() or 'N/A'}",
             f"API Key Present:         {'Yes' if self.get_transcriber_api_key() else 'No'}",
             f"Timeout:                 {self.transcriber_timeout}s",
         ]
@@ -198,7 +259,7 @@ class Config:
             f"Model:                   {self.post_processor_model}",
             f"Endpoint URL:            {self.post_processor_endpoint}",
             f"Temperature:             {self.post_processor_temperature}",
-            f"API Key Env Var:         {self.data.get('post_processor', {}).get('api_key_env', 'GEMINI_API_KEY')}",
+            f"API Key Env Var:         {self.get_post_processor_api_key_env() or 'N/A'}",
             f"API Key Present:         {'Yes' if self.get_post_processor_api_key() else 'No'}",
         ])
 

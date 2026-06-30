@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -118,6 +119,19 @@ def main():
             sys.exit(1)
 
     logging.info("Starting Audio Transcription & Post-Processing Pipeline")
+
+    # Check if required environment variables for authentication are set before beginning work
+    missing_env_vars = []
+    for env_var, description in config.get_required_auth_env_vars(stage=args.stage):
+        if not os.environ.get(env_var):
+            missing_env_vars.append((env_var, description))
+
+    if missing_env_vars:
+        for env_var, description in missing_env_vars:
+            msg = f"Error: Environment variable '{env_var}' ({description}) is not set."
+            logging.error(msg)
+            print(msg, file=sys.stderr)
+        sys.exit(1)
 
     # 4. Run Orchestrator
     try:

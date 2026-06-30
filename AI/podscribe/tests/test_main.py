@@ -141,3 +141,21 @@ def test_main_rss_download_only_error(mock_load_dotenv, mock_config_class, mock_
             main()
 
     assert excinfo.value.code == 1
+
+@patch("podscribe.__main__.setup_logging")
+@patch("podscribe.__main__.Config")
+@patch("podscribe.__main__.load_dotenv")
+def test_main_missing_auth_token(mock_load_dotenv, mock_config_class, mock_setup_logging, tmp_path, monkeypatch):
+    mock_config = MagicMock(spec=Config)
+    mock_config.output_dir = str(tmp_path / "output")
+    mock_config.get_required_auth_env_vars.return_value = [("REQUIRED_SECRET_KEY", "test purpose")]
+    mock_config_class.return_value = mock_config
+
+    monkeypatch.delenv("REQUIRED_SECRET_KEY", raising=False)
+
+    test_args = ["podscribe", "--stage", "all"]
+    with patch.object(sys, "argv", test_args):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+    assert excinfo.value.code == 1
