@@ -1060,3 +1060,31 @@ def test_previously_transcribed_files_ignored_in_asr_stats(mock_init_t, mock_ini
     assert "Transcribed Files: 0" in log_text
     assert "$0.0000" in log_text
 
+
+@patch.object(Orchestrator, "_init_post_processor")
+@patch.object(Orchestrator, "_init_transcriber")
+def test_previously_postprocessed_files_ignored_in_llm_stats(mock_init_t, mock_init_p, mock_config, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+
+    orchestrator = Orchestrator(mock_config)
+
+    audio_file = Path(mock_config.input_dir) / "done_llm.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_text("dummy")
+
+    file_hash = orchestrator.state_manager.get_file_hash(audio_file)
+    orchestrator.state_manager.update_entry(
+        "done_llm.mp3",
+        hash=file_hash,
+        status="completed",
+        audio_duration=120.0,
+        token_usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+    )
+
+    orchestrator.run()
+
+    log_text = caplog.text
+    assert "Completed Files:   0" in log_text
+    assert "Total LLM Tokens:  0" in log_text
+

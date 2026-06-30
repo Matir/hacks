@@ -65,6 +65,7 @@ class Orchestrator:
         self.raw_transcripts_dir = self.output_dir / "raw_transcripts"
         self._lock = threading.Lock()
         self.transcribed_in_this_run: set[str] | None = None
+        self.postprocessed_in_this_run: set[str] | None = None
 
         # Initialize state manager
         self.state_manager = StateManager(self.output_dir)
@@ -404,6 +405,9 @@ class Orchestrator:
                     final_transcript_path=final_transcript_path,
                     token_usage=token_usage.to_dict()
                 )
+                if self.postprocessed_in_this_run is not None:
+                    with self._lock:
+                        self.postprocessed_in_this_run.add(relative_path)
                 logger.info(f"Successfully completed pipeline for {relative_path}")
             elif entry_status == "completed":
                 logger.info(f"Post-processing already completed for {relative_path}")
@@ -416,6 +420,7 @@ class Orchestrator:
     def run(self):
         """Execute the pipeline on all discovered files."""
         self.transcribed_in_this_run = set()
+        self.postprocessed_in_this_run = set()
         self.check_dependencies()
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -608,8 +613,12 @@ class Orchestrator:
                 total_words += num_words
                 total_segments += num_segments
 
-            # LLM Stats (applicable if status is completed)
-            if status == "completed":
+            # LLM Stats (applicable if status is completed and postprocessed in this run)
+            is_completed = status == "completed"
+            if self.postprocessed_in_this_run is not None:
+                is_completed = file_path.name in self.postprocessed_in_this_run
+
+            if is_completed:
                 completed_files += 1
 
                 usage_dict = entry.get("token_usage", {})
