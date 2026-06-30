@@ -242,6 +242,7 @@ class Orchestrator:
     def _prepare_and_preprocess_file(self, file_path: Path) -> Path | None:
         """Calculate hash, check skip conditions, probe duration, and preprocess an audio file."""
         relative_path = file_path.name
+        logger.info(f"--- Entering Stage: Preprocessing for {relative_path} ---")
 
         # 1. Calculate Hash
         file_hash = self.state_manager.get_file_hash(file_path)
@@ -326,7 +327,9 @@ class Orchestrator:
             if self.stage == "postprocess":
                 return
 
+            logger.info(f"--- Entering Stage: Transcription for {relative_path} ---")
             if self.state_manager.get_entry(relative_path).get("status") == "preprocessed":
+                logger.info(f"Transcriber: input={working_file.name}, output={raw_transcript_path.name}")
                 raw_transcript = self.transcriber.transcribe(working_file)
                 self._save_and_update_transcript_state(
                     relative_path, raw_transcript, raw_transcript_path, promote_status=True
@@ -336,6 +339,7 @@ class Orchestrator:
                 existing = self._load_existing_transcript(relative_path, raw_transcript_path)
                 if not existing:
                     logger.warning(f"Raw transcript missing: {raw_transcript_path}. Re-running transcription.")
+                    logger.info(f"Transcriber: input={working_file.name}, output={raw_transcript_path.name}")
                     raw_transcript = self.transcriber.transcribe(working_file)
                     self._save_and_update_transcript_state(
                         relative_path, raw_transcript, raw_transcript_path, promote_status=False
@@ -363,8 +367,11 @@ class Orchestrator:
                 return
             raw_transcript, _ = existing
 
+            logger.info(f"--- Entering Stage: Post-processing for {relative_path} ---")
             entry_status = self.state_manager.get_entry(relative_path).get("status")
             if entry_status in ("transcribed", "failed"):
+                final_transcript_path = self.output_dir / f"{file_path.stem}_final.md"
+                logger.info(f"Post-processor: input={raw_transcript_path.name}, output={final_transcript_path.name}")
                 context = {
                     "filename": file_path.name,
                     **self.config.prompt_context
@@ -443,16 +450,17 @@ class Orchestrator:
         if self.stage == "transcribe" and prepared_items:
             if t_workers > 1 and len(prepared_items) > 1:
                 logger.info(f"Transcribing {len(prepared_items)} files concurrently with ThreadPoolExecutor (workers={t_workers})")
-                with ThreadPoolExecutor(max_workers=t_workers) as executor:
+                with ThreadPoolExecutor(max_workers=t_workers, thread_name_prefix="transcribe") as executor:
                     list(executor.map(lambda item: self._run_transcription_for_file(item[0], item[1]), prepared_items))
             else:
                 for file_path, working_file in prepared_items:
                     self._run_transcription_for_file(file_path, working_file)
+            logger.info("All files have been transcribed.")
 
         elif self.stage == "postprocess" and prepared_items:
             if p_workers > 1 and len(prepared_items) > 1:
                 logger.info(f"Post-processing {len(prepared_items)} files concurrently with ThreadPoolExecutor (workers={p_workers})")
-                with ThreadPoolExecutor(max_workers=p_workers) as executor:
+                with ThreadPoolExecutor(max_workers=p_workers, thread_name_prefix="postprocess") as executor:
                     list(executor.map(lambda item: self._run_postprocessing_for_file(item[0]), prepared_items))
             else:
                 for file_path, _ in prepared_items:
@@ -462,14 +470,16 @@ class Orchestrator:
             if t_workers <= 1 and p_workers <= 1 and len(prepared_items) <= 1:
                 for file_path, working_file in prepared_items:
                     self._run_transcription_for_file(file_path, working_file)
+                logger.info("All files have been transcribed.")
+                for file_path, _ in prepared_items:
                     self._run_postprocessing_for_file(file_path)
             else:
                 logger.info(
                     f"Running pipelined execution with concurrent ThreadPoolExecutors "
                     f"(transcription_workers={t_workers}, postprocessing_workers={p_workers})"
                 )
-                with ThreadPoolExecutor(max_workers=t_workers) as t_executor, \
-                     ThreadPoolExecutor(max_workers=p_workers) as p_executor:
+                with ThreadPoolExecutor(max_workers=t_workers, thread_name_prefix="transcribe") as t_executor, \
+                     ThreadPoolExecutor(max_workers=p_workers, thread_name_prefix="postprocess") as p_executor:
 
                     postprocess_futures = []
 
@@ -490,6 +500,8 @@ class Orchestrator:
                                 postprocess_futures.append(p_future)
                         except Exception as e:
                             logger.error(f"Error in pipelined task dispatch: {e}")
+
+                    logger.info("All files have been transcribed.")
 
                     for p_future in as_completed(postprocess_futures):
                         try:

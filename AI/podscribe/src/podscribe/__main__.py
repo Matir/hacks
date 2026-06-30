@@ -20,8 +20,8 @@ def setup_logging(output_dir: Path, log_level_str: str = "INFO"):
     # Parse log level
     numeric_level = getattr(logging, log_level_str.upper(), logging.INFO)
 
-    # Define format
-    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    # Define format including thread name and thread ID for concurrency tracking
+    log_format = "%(asctime)s [%(levelname)s] [%(threadName)s:%(thread)d] %(name)s: %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
     formatter = logging.Formatter(log_format, datefmt=date_format)
 

@@ -163,6 +163,7 @@ class AudioPreprocessor:
             output_path = self.preprocess_dir / f"{file_path.stem}_16k_mono.wav"
             total_duration = duration if duration is not None else self.get_duration(file_path)
             logger.info(f"Preprocessing {file_path.name} (Duration: {self._format_duration(total_duration)}, Chunks: 1) -> {output_path.name}")
+            logger.info(f"Preprocessor: input={file_path.name}, output={output_path.name}")
             self._run_ffmpeg_convert(file_path, output_path, action="preprocessing")
             return output_path
 
@@ -190,6 +191,7 @@ class AudioPreprocessor:
             logger.info(f"Splitting {file_path.name} into {num_chunks} chunks inside {output_dir.name}...")
             self._run_ffmpeg_convert(file_path, output_pattern, segment_times=split_points, action="chunking")
 
+        logger.info(f"Preprocessor: input={file_path.name}, output={output_dir.name}")
         return output_dir
 
     def get_duration(self, file_path: Path) -> float:

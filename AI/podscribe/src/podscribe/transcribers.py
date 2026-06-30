@@ -59,7 +59,7 @@ class BaseTranscriber(abc.ABC):
                     return self._transcribe_single(chunk, prompt="")
                 return self._transcribe_single(chunk)
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="asr_chunk") as executor:
                 results = list(executor.map(worker, chunks))
             return join_char.join(results)
 
@@ -437,7 +437,7 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
             max_workers = getattr(self, "max_workers", 1)
             if max_workers > 1:
                 logger.info(f"Processing {len(chunks)} CrispASR chunks concurrently in directory: {file_path} (workers={max_workers})")
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="crisp_chunk") as executor:
                     chunk_results = list(executor.map(self._transcribe_single_crisp, chunks))
             else:
                 logger.info(f"Processing CrispASR chunks sequentially in directory: {file_path}")
