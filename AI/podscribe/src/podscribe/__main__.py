@@ -12,10 +12,15 @@ from podscribe.rss_fetcher import RSSFetcher
 
 # Environment variables loaded via python-dotenv
 
-def setup_logging(output_dir: Path, log_level_str: str = "INFO"):
-    """Configure logging to output to both stdout and a file."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    log_file = output_dir / "pipeline.log"
+def setup_logging(
+    output_dir: Path | None = None,
+    log_level_str: str = "INFO",
+    log_file: str | Path | None = None,
+    alsologtostderr: bool = False,
+):
+    """Configure logging to output to stdio or a log file."""
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     # Parse log level
     numeric_level = getattr(logging, log_level_str.upper(), logging.INFO)
@@ -28,16 +33,24 @@ def setup_logging(output_dir: Path, log_level_str: str = "INFO"):
     # Root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(numeric_level)
+    root_logger.handlers.clear()
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)
+    if log_file:
+        target_file = Path(log_file)
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(target_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
 
-    # File handler
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
+        if alsologtostderr:
+            stderr_handler = logging.StreamHandler(sys.stderr)
+            stderr_handler.setFormatter(formatter)
+            root_logger.addHandler(stderr_handler)
+    else:
+        # If no file is configured, log to stdout (alsologtostderr is a no-op)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
 
 def main():
     """Parse CLI arguments, verify authentication environment variables, and run the transcription orchestrator."""
@@ -65,6 +78,16 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
         help="Set the logging level (default: INFO)"
+    )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="Path to file to write logs to instead of stdio"
+    )
+    parser.add_argument(
+        "--alsologtostderr",
+        action="store_true",
+        help="Log to both stderr and log file (if configured)"
     )
     parser.add_argument(
         "--dump-config",
@@ -99,8 +122,13 @@ def main():
         print(config.dump())
         sys.exit(0)
 
-    # 3. Setup Logging (requires output directory from config)
-    setup_logging(Path(config.output_dir), log_level_str=args.log_level)
+    # 3. Setup Logging
+    setup_logging(
+        Path(config.output_dir),
+        log_level_str=args.log_level,
+        log_file=args.log_file,
+        alsologtostderr=args.alsologtostderr,
+    )
 
     if args.rss_download_only:
         if not config.rss_feeds:

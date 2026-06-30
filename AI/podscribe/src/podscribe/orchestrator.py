@@ -1,10 +1,12 @@
 import logging
 import re
+import threading
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from pathlib import Path
 from typing import List
 
+from podscribe.concurrency import LoggingThreadPoolExecutor as ThreadPoolExecutor
 from podscribe.config import Config
 from podscribe.post_processors import BasePostProcessor, GeminiPostProcessor, OpenAICompatiblePostProcessor
 from podscribe.preprocessor import AudioPreprocessor
@@ -61,6 +63,8 @@ class Orchestrator:
         self.input_dir = Path(self.config.input_dir)
         self.output_dir = Path(self.config.output_dir)
         self.raw_transcripts_dir = self.output_dir / "raw_transcripts"
+        self._lock = threading.Lock()
+        self.transcribed_in_this_run: set[str] | None = None
 
         # Initialize state manager
         self.state_manager = StateManager(self.output_dir)
@@ -280,9 +284,12 @@ class Orchestrator:
             )
             entry = self.state_manager.get_entry(relative_path)
 
-        # Get and store audio duration
-        audio_duration = self.preprocessor.get_duration(file_path)
-        self.state_manager.update_entry(relative_path, audio_duration=audio_duration)
+        # Get and store audio duration if needed
+        if entry.get("status") not in ("transcribed", "completed") and self.stage != "postprocess":
+            audio_duration = self.preprocessor.get_duration(file_path)
+            self.state_manager.update_entry(relative_path, audio_duration=audio_duration)
+        else:
+            audio_duration = entry.get("audio_duration", 0.0)
 
         working_file = file_path
 
@@ -331,6 +338,9 @@ class Orchestrator:
             if self.state_manager.get_entry(relative_path).get("status") == "preprocessed":
                 logger.info(f"Transcriber: input={working_file.name}, output={raw_transcript_path.name}")
                 raw_transcript = self.transcriber.transcribe(working_file)
+                if self.transcribed_in_this_run is not None:
+                    with self._lock:
+                        self.transcribed_in_this_run.add(relative_path)
                 self._save_and_update_transcript_state(
                     relative_path, raw_transcript, raw_transcript_path, promote_status=True
                 )
@@ -341,6 +351,9 @@ class Orchestrator:
                     logger.warning(f"Raw transcript missing: {raw_transcript_path}. Re-running transcription.")
                     logger.info(f"Transcriber: input={working_file.name}, output={raw_transcript_path.name}")
                     raw_transcript = self.transcriber.transcribe(working_file)
+                    if self.transcribed_in_this_run is not None:
+                        with self._lock:
+                            self.transcribed_in_this_run.add(relative_path)
                     self._save_and_update_transcript_state(
                         relative_path, raw_transcript, raw_transcript_path, promote_status=False
                     )
@@ -402,6 +415,7 @@ class Orchestrator:
 
     def run(self):
         """Execute the pipeline on all discovered files."""
+        self.transcribed_in_this_run = set()
         self.check_dependencies()
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -530,8 +544,12 @@ class Orchestrator:
             entry = self.state_manager.get_entry(file_path.name)
             status = entry.get("status")
 
-            # Transcription Stats (applicable if status is transcribed or completed)
-            if status in ("transcribed", "completed"):
+            # Transcription Stats (applicable if status is transcribed or completed and transcribed in this run)
+            is_transcribed = status in ("transcribed", "completed")
+            if self.transcribed_in_this_run is not None:
+                is_transcribed = file_path.name in self.transcribed_in_this_run
+
+            if is_transcribed:
                 transcribed_files += 1
                 duration = entry.get("audio_duration", 0.0)
                 total_transcription_duration += duration

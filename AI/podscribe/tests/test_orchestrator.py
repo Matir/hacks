@@ -1019,3 +1019,44 @@ def test_orchestrator_run_pipelined_parallel(mock_config):
         # Check that postprocessing happened
         assert len([e for e in events if e.startswith("end_postprocess_")]) == 2
 
+
+@patch("podscribe.orchestrator.AudioPreprocessor")
+@patch.object(Orchestrator, "_init_post_processor")
+@patch.object(Orchestrator, "_init_transcriber")
+def test_previously_transcribed_files_ignored_in_asr_stats(mock_init_t, mock_init_p, mock_preprocessor_class, mock_config, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+
+    mock_preprocessor = mock_preprocessor_class.return_value
+    mock_preprocessor.get_duration.return_value = 60.0
+
+    orchestrator = Orchestrator(mock_config)
+
+    # Pre-populate state with an already transcribed file
+    audio_file = Path(mock_config.input_dir) / "already_done.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_text("dummy")
+
+    raw_path = orchestrator.raw_transcripts_dir / "already_done_raw.txt"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text("Hello world.")
+
+    file_hash = orchestrator.state_manager.get_file_hash(audio_file)
+    orchestrator.state_manager.update_entry(
+        "already_done.mp3",
+        hash=file_hash,
+        status="transcribed",
+        audio_duration=120.0,
+        raw_transcript_path=str(raw_path)
+    )
+
+    orchestrator.run()
+
+    # Verify duration was NOT probed
+    mock_preprocessor.get_duration.assert_not_called()
+
+    # Verify summary report shows 0 transcribed files and $0.0000 ASR cost
+    log_text = caplog.text
+    assert "Transcribed Files: 0" in log_text
+    assert "$0.0000" in log_text
+

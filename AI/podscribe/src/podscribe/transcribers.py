@@ -2,7 +2,6 @@ import abc
 import base64
 import inspect
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import assemblyai as aai
@@ -10,6 +9,8 @@ import httpx
 import openai
 from openai import OpenAI
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+
+from podscribe.concurrency import LoggingThreadPoolExecutor as ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 

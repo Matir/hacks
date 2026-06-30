@@ -79,7 +79,9 @@ def test_main_log_level_case_insensitive(mock_load_dotenv, mock_setup_logging, m
         main()
 
     # Verify setup_logging was called with uppercase "DEBUG"
-    mock_setup_logging.assert_called_once_with(Path(mock_config.output_dir), log_level_str="DEBUG")
+    mock_setup_logging.assert_called_once_with(
+        Path(mock_config.output_dir), log_level_str="DEBUG", log_file=None, alsologtostderr=False
+    )
 
 @patch("podscribe.__main__.RSSFetcher")
 @patch("podscribe.__main__.setup_logging")
@@ -159,3 +161,36 @@ def test_main_missing_auth_token(mock_load_dotenv, mock_config_class, mock_setup
             main()
 
     assert excinfo.value.code == 1
+
+def test_setup_logging_no_file(tmp_path):
+    import logging
+
+    from podscribe.__main__ import setup_logging
+    root = logging.getLogger()
+    setup_logging(tmp_path, log_file=None, alsologtostderr=True)
+    # When no file is configured, logs to stdout only (alsologtostderr is a no-op)
+    assert len(root.handlers) == 1
+    assert isinstance(root.handlers[0], logging.StreamHandler)
+    assert root.handlers[0].stream == sys.stdout
+
+def test_setup_logging_with_file_no_stderr(tmp_path):
+    import logging
+
+    from podscribe.__main__ import setup_logging
+    log_file = tmp_path / "custom.log"
+    root = logging.getLogger()
+    setup_logging(tmp_path, log_file=log_file, alsologtostderr=False)
+    assert len(root.handlers) == 1
+    assert isinstance(root.handlers[0], logging.FileHandler)
+
+def test_setup_logging_with_file_and_stderr(tmp_path):
+    import logging
+
+    from podscribe.__main__ import setup_logging
+    log_file = tmp_path / "custom.log"
+    root = logging.getLogger()
+    setup_logging(tmp_path, log_file=log_file, alsologtostderr=True)
+    assert len(root.handlers) == 2
+    types = {type(h) for h in root.handlers}
+    assert logging.FileHandler in types
+    assert logging.StreamHandler in types

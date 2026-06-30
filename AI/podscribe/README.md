@@ -5,10 +5,11 @@ A modular, robust, and stateful Python command-line pipeline to ingest audio/vid
 ## Features
 
 -   **Modular Architecture:** Swappable components for ASR transcription hosts and text LLM providers.
--   **Native Speaker Attribution:** Pre-optimized to leverage the **IBM Granite Speech 4.1 2B Plus** model for producing speaker-tagged text directly without PyAnnote alignment. Also supports **CrispASR** which natively returns speaker-attributed text (utilizing `verbose_json` and `diarize: true` under the hood).
--   **Local Audio Preprocessing:** Integrated system `ffmpeg` utility automatically extracts audio tracks from video and downsamples media to optimal **16kHz mono WAV** files prior to upload, conserving bandwidth and reducing inference costs.
+-   **Native Speaker Attribution & AssemblyAI Support:** Pre-optimized to leverage the **IBM Granite Speech 4.1 2B Plus** model for producing speaker-tagged text directly without PyAnnote alignment. Also supports **CrispASR** and **AssemblyAI** (supporting speaker diarization, custom vocabulary keyterms, and prompting).
+-   **Pipelined Concurrency:** Employs multi-worker ThreadPool execution with queue depth monitoring to run post-processing concurrently as soon as each file completes transcription.
+-   **Local Audio Preprocessing & Chunking:** Integrated system `ffmpeg` utility automatically extracts audio tracks from video, downsamples media to optimal **16kHz mono WAV** files prior to upload, and can split long recordings on silence boundaries (`chunking_enabled`).
 -   **RSS / Podcast Feed Sync:** Automatically downloads new podcast episodes from any number of configured RSS feeds before processing begins. Episodes already present in the input directory are skipped, so re-running is always safe.
--   **Resilient State Management:** Uses a `state.json` registry to track processing status (`preprocessed`, `transcribed`, `completed`) and file MD5 hashes. Runs can be interrupted and safely resumed without repeating expensive transcription calls or duplicating work.
+-   **Resilient State Management:** Uses a `state.json` registry with thread-safe locking to track processing status (`preprocessed`, `transcribed`, `completed`) and file MD5 hashes. Runs can be interrupted and safely resumed without repeating expensive transcription calls or duplicating work.
 -   **OpenRouter & Gemini Out-of-the-Box:** Pre-configured support for OpenAI-compatible LLM routers (like OpenRouter) and direct Gemini SDK connections.
 -   **UV Environment Management:** Pre-configured using `uv` for fast package isolation and auto-managed CPython toolchains.
 
@@ -48,6 +49,9 @@ Open `.env` and insert your relevant API keys:
 # If using Hugging Face for transcribing
 HF_API_KEY="your-huggingface-token"
 
+# If using AssemblyAI for transcribing
+ASSEMBLYAI_API_KEY="your-assemblyai-key"
+
 # If using OpenRouter for post-processing
 OPENROUTER_API_KEY="your-openrouter-key"
 
@@ -62,11 +66,17 @@ Adjust the pipeline behaviors in `config.toml`. By default, it is set up to use 
 [paths]
 input_dir = "input"
 output_dir = "output"
+prompts_dir = "prompts"
 prompt_file = "prompts/post_process.md"
+
+[concurrency]
+transcription_workers = 2
+postprocessing_workers = 2
 
 [preprocessing]
 enabled = true
 ffmpeg_path = "ffmpeg"
+chunking_enabled = false
 
 [transcriber]
 provider = "huggingface"
@@ -74,11 +84,12 @@ endpoint_url = "https://api-inference.huggingface.co/models/ibm-granite/granite-
 model = "ibm-granite/granite-speech-4.1-2b-plus"
 api_key_env = "HF_API_KEY"
 
-# Example for CrispASR (always speaker-attributed):
-# provider = "crispasr"
-# endpoint_url = "https://api.crispasr.ai/v1"
-# model = "crisp-model"
-# api_key_env = "CRISP_API_KEY"
+# Example for AssemblyAI:
+# provider = "assemblyai"
+# enable_speaker_attribution = true
+# api_key_env = "ASSEMBLYAI_API_KEY"
+# assemblyai_prompt_file = "prompts/assemblyai_prompt.txt"
+# assemblyai_keyterms_file = "prompts/assemblyai_keyterms.txt"
 
 [post_processor]
 provider = "openai_compatible"
@@ -109,6 +120,15 @@ Multiple feeds are supported — add additional `[[rss.feeds]]` blocks. On each 
     ```bash
     uv run podscribe
     ```
+
+### CLI Flags
+- `--stage <all|transcribe|postprocess>`: Run only specific stages of the pipeline.
+- `--language <lang>`: Override the transcription language (e.g. `en`, `es`).
+- `--log-level <DEBUG|INFO|WARNING|ERROR>`: Set the logging verbosity.
+- `--log-file <path>`: Log output directly to a file instead of stdio.
+- `--alsologtostderr`: When `--log-file` is configured, also duplicate log output to stderr.
+- `--dump-config`: Print the resolved configuration dictionary and exit.
+- `--rss-download-only`: Only sync configured RSS podcast feeds and exit without running transcription.
 
 ---
 
