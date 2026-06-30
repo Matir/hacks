@@ -21,7 +21,7 @@ LLM_PRICING = {
 # Transcription pricing (per minute in USD)
 TRANSCRIPTION_PRICING = {
     "openai": 0.006,           # OpenAI Whisper API
-    "assemblyai": 0.0035,      # AssemblyAI Universal-3 Pro ($0.21/hr)
+    "assemblyai": 0.0035,      # AssemblyAI Universal-3 Pro base ($0.21/hr; +$0.02/hr diarization, +$0.05/hr prompt, +$0.05/hr keyterms)
     "huggingface": 0.0,        # Assuming self-hosted/free endpoint unless specified
     "openai_compatible": 0.0,  # Assuming self-hosted (local vLLM/Whisper)
 }
@@ -80,7 +80,14 @@ def calculate_post_processing_cost(
     output_cost = (completion_tokens / 1_000_000) * pricing["output"]
     return input_cost + output_cost
 
-def calculate_transcription_cost(provider: str, duration_seconds: float, endpoint_url: str = "") -> float:
+def calculate_transcription_cost(
+    provider: str,
+    duration_seconds: float,
+    endpoint_url: str = "",
+    enable_speaker_attribution: bool = False,
+    has_prompt: bool = False,
+    has_keyterms: bool = False,
+) -> float:
     """Calculate the cost of transcription in USD."""
     if not provider or duration_seconds <= 0:
         return 0.0
@@ -90,6 +97,18 @@ def calculate_transcription_cost(provider: str, duration_seconds: float, endpoin
     # If using openai_compatible but endpoint is official OpenAI, treat as openai pricing
     if provider_lower == "openai_compatible" and endpoint_url and "api.openai.com" in endpoint_url:
         provider_lower = "openai"
+
+    if provider_lower == "assemblyai":
+        # Base rate: $0.21/hr
+        hourly_rate = 0.21
+        if enable_speaker_attribution:
+            hourly_rate += 0.02
+        if has_prompt:
+            hourly_rate += 0.05
+        if has_keyterms:
+            hourly_rate += 0.05
+        duration_hours = duration_seconds / 3600.0
+        return duration_hours * hourly_rate
 
     rate_per_minute = TRANSCRIPTION_PRICING.get(provider_lower, 0.0)
     duration_minutes = duration_seconds / 60.0

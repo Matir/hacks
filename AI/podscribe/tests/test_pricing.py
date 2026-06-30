@@ -70,3 +70,12 @@ def test_calculate_transcription_cost():
     # Zero/negative duration
     assert calculate_transcription_cost("openai", 0) == 0.0
     assert calculate_transcription_cost("openai", -10) == 0.0
+
+    # AssemblyAI add-on pricing (base $0.21/hr, diarization +$0.02/hr, prompt +$0.05/hr, keyterms +$0.05/hr)
+    cost_aai_diarization = calculate_transcription_cost("assemblyai", 3600, enable_speaker_attribution=True)
+    assert pytest.approx(cost_aai_diarization) == 0.23
+
+    cost_aai_all_addons = calculate_transcription_cost(
+        "assemblyai", 3600, enable_speaker_attribution=True, has_prompt=True, has_keyterms=True
+    )
+    assert pytest.approx(cost_aai_all_addons) == 0.33

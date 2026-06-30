@@ -538,7 +538,34 @@ class Orchestrator:
 
                 provider = self.config.transcriber_provider
                 endpoint = self.config.transcriber_endpoint
-                t_cost = calculate_transcription_cost(provider, duration, endpoint)
+                enable_speaker_attribution = getattr(self.config, "enable_speaker_attribution", False)
+                has_prompt = False
+                has_keyterms = False
+                if provider == "assemblyai":
+                    prompt_file = getattr(self.config, "assemblyai_prompt_file", None)
+                    if prompt_file and prompt_file.exists() and prompt_file.is_file():
+                        try:
+                            if prompt_file.read_text(encoding="utf-8").strip():
+                                has_prompt = True
+                        except Exception:
+                            pass
+                    keyterms_file = getattr(self.config, "assemblyai_keyterms_file", None)
+                    if keyterms_file and keyterms_file.exists() and keyterms_file.is_file():
+                        try:
+                            keyterms = [line.strip() for line in keyterms_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+                            if keyterms:
+                                has_keyterms = True
+                        except Exception:
+                            pass
+
+                t_cost = calculate_transcription_cost(
+                    provider,
+                    duration,
+                    endpoint,
+                    enable_speaker_attribution=enable_speaker_attribution,
+                    has_prompt=has_prompt,
+                    has_keyterms=has_keyterms,
+                )
                 total_transcription_cost += t_cost
 
                 # Extract words and segments with fallback
