@@ -1,5 +1,6 @@
 import hashlib
 import json
+import threading
 from pathlib import Path
 from typing import Any, Dict
 
@@ -11,26 +12,29 @@ class StateManager:
         """Initialize state tracking file path and load existing state from disk."""
         self.output_dir = Path(output_dir)
         self.state_file = self.output_dir / "state.json"
+        self._lock = threading.RLock()
         self.state: Dict[str, Any] = {}
         self.load()
 
     def load(self):
         """Load state JSON file from disk, initializing an empty dict if missing or corrupt."""
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        if self.state_file.exists():
-            try:
-                with open(self.state_file, "r") as f:
-                    self.state = json.load(f)
-            except json.JSONDecodeError:
-                # If corrupt, start fresh
+        with self._lock:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            if self.state_file.exists():
+                try:
+                    with open(self.state_file, "r") as f:
+                        self.state = json.load(f)
+                except json.JSONDecodeError:
+                    # If corrupt, start fresh
+                    self.state = {}
+            else:
                 self.state = {}
-        else:
-            self.state = {}
 
     def save(self):
         """Persist current execution state dictionary to state.json formatted with indentation."""
-        with open(self.state_file, "w") as f:
-            json.dump(self.state, f, indent=2)
+        with self._lock:
+            with open(self.state_file, "w") as f:
+                json.dump(self.state, f, indent=2)
 
     def get_file_hash(self, file_path: Path) -> str:
         """Calculate MD5 hash of a file."""
@@ -42,32 +46,35 @@ class StateManager:
 
     def get_entry(self, relative_path: str) -> Dict[str, Any]:
         """Retrieve state dictionary entry for a relative file path or return default initial state."""
-        return self.state.get(relative_path, {
-            "hash": "",
-            "status": "new", # new, preprocessed, transcribed, completed, failed
-            "preprocessed_path": "",
-            "raw_transcript_path": "",
-            "final_transcript_path": "",
-            "error": "",
-            "audio_duration": 0.0,
-            "token_usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0
-            }
-        })
+        with self._lock:
+            return self.state.get(relative_path, {
+                "hash": "",
+                "status": "new", # new, preprocessed, transcribed, completed, failed
+                "preprocessed_path": "",
+                "raw_transcript_path": "",
+                "final_transcript_path": "",
+                "error": "",
+                "audio_duration": 0.0,
+                "token_usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0
+                }
+            }).copy()
 
     def update_entry(self, relative_path: str, **kwargs):
         """Update fields on a file's state entry and immediately save state to disk."""
-        entry = self.get_entry(relative_path)
-        for k, v in kwargs.items():
-            entry[k] = str(v) if isinstance(v, Path) else v
-        self.state[relative_path] = entry
-        self.save()
+        with self._lock:
+            entry = self.get_entry(relative_path)
+            for k, v in kwargs.items():
+                entry[k] = str(v) if isinstance(v, Path) else v
+            self.state[relative_path] = entry
+            self.save()
 
     def is_completed(self, relative_path: str, current_hash: str) -> bool:
         """Check whether a file has completed processing and matches the current file hash."""
-        entry = self.state.get(relative_path)
-        if not entry:
-            return False
-        return entry.get("status") == "completed" and entry.get("hash") == current_hash
+        with self._lock:
+            entry = self.state.get(relative_path)
+            if not entry:
+                return False
+            return entry.get("status") == "completed" and entry.get("hash") == current_hash

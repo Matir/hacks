@@ -208,6 +208,28 @@ class Config:
     def prompt_context(self) -> Dict[str, Any]:
         return dict(self.data.get("prompt_context", {}))
 
+    @property
+    def transcription_workers(self) -> int:
+        concurrency = self.data.get("concurrency", {})
+        transcriber = self.data.get("transcriber", {})
+        return int(
+            concurrency.get("transcription_workers",
+            concurrency.get("transcriber_workers",
+            transcriber.get("max_workers",
+            transcriber.get("workers", 1))))
+        )
+
+    @property
+    def postprocessing_workers(self) -> int:
+        concurrency = self.data.get("concurrency", {})
+        post_processor = self.data.get("post_processor", {})
+        return int(
+            concurrency.get("postprocessing_workers",
+            concurrency.get("post_processor_workers",
+            post_processor.get("max_workers",
+            post_processor.get("workers", 1))))
+        )
+
     def dump(self) -> str:
         """Render a formatted, human-readable summary of the current configuration."""
         lines = [
@@ -221,6 +243,10 @@ class Config:
             f"Output Directory:        {self.output_dir}",
             f"Prompts Directory:       {self.prompts_dir}",
             f"Prompt Template:         {self.prompt_file}",
+            "",
+            "--- Concurrency ---",
+            f"Transcription Workers:   {self.transcription_workers}",
+            f"Postprocessing Workers:  {self.postprocessing_workers}",
             "",
             "--- Preprocessing ---",
             f"Enabled:                 {self.preprocess_enabled}",

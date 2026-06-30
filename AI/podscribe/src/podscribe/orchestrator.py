@@ -1,6 +1,7 @@
 import logging
 import re
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List
 
@@ -92,22 +93,25 @@ class Orchestrator:
 
         timeout = self.config.transcriber_timeout
 
+        transcriber = None
         if provider == "huggingface":
             if self.config.enable_speaker_attribution:
                 logger.info("Using speaker-attributed HuggingFace transcriber (assuming endpoint returns segments or chunks with speaker labels).")
-                return SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
-            return HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+                transcriber = SpeakerAttributedHuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+            else:
+                transcriber = HuggingFaceTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
         elif provider == "openai_compatible":
             if self.config.enable_speaker_attribution:
-                return SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
-            return OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+                transcriber = SpeakerAttributedOpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+            else:
+                transcriber = OpenAICompatibleTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
         elif provider == "crispasr":
-            return CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
+            transcriber = CrispASRTranscriber(endpoint_url=endpoint, api_key=api_key, model=model, language=language, timeout=timeout)
         elif provider == "crispasr_cli":
             crispasr_path = self.config.transcriber_crispasr_path
             backend = self.config.transcriber_backend
             diarize_method = self.config.transcriber_diarize_method
-            return CrispASRCLITranscriber(
+            transcriber = CrispASRCLITranscriber(
                 binary_path=crispasr_path,
                 model=model or "auto",
                 backend=backend,
@@ -115,7 +119,7 @@ class Orchestrator:
             )
         elif provider == "vibevoice":
             hotwords = self.config.hotwords
-            return VibeVoiceASRTranscriber(
+            transcriber = VibeVoiceASRTranscriber(
                 endpoint_url=endpoint,
                 api_key=api_key,
                 model=model,
@@ -124,7 +128,7 @@ class Orchestrator:
                 timeout=timeout
             )
         elif provider == "assemblyai":
-            return AssemblyAITranscriber(
+            transcriber = AssemblyAITranscriber(
                 api_key=api_key,
                 model=model,
                 language=language,
@@ -134,6 +138,12 @@ class Orchestrator:
             )
         else:
             raise ValueError(f"Unsupported transcriber provider: {provider}")
+
+        try:
+            transcriber.max_workers = int(getattr(self.config, "transcription_workers", 1))
+        except (TypeError, ValueError):
+            transcriber.max_workers = 1
+        return transcriber
 
     def _init_post_processor(self) -> BasePostProcessor:
         """Instantiate and configure the appropriate LLM post-processor based on config."""
@@ -229,6 +239,160 @@ class Orchestrator:
             return raw_transcript, raw_path
         return None
 
+    def _prepare_and_preprocess_file(self, file_path: Path) -> Path | None:
+        """Calculate hash, check skip conditions, probe duration, and preprocess an audio file."""
+        relative_path = file_path.name
+
+        # 1. Calculate Hash
+        file_hash = self.state_manager.get_file_hash(file_path)
+
+        # Check if already processed for the target stage
+        entry = self.state_manager.get_entry(relative_path)
+        should_skip = False
+        if entry.get("hash") == file_hash:
+            status = entry.get("status")
+            if self.stage == "all" and status == "completed":
+                should_skip = True
+            elif self.stage == "transcribe" and status in ("transcribed", "completed"):
+                should_skip = True
+            elif self.stage == "postprocess" and status == "completed":
+                should_skip = True
+
+        if should_skip:
+            logger.info(f"Skipping {relative_path}: already processed for stage '{self.stage}' and unmodified.")
+            return None
+
+        # Retrieve or initialize state entry
+        entry = self.state_manager.get_entry(relative_path)
+
+        # If file has changed, reset state to start fresh
+        if entry.get("hash") != file_hash:
+            logger.info(f"File changed (or new). Resetting state for {relative_path}.")
+            self.state_manager.update_entry(
+                relative_path,
+                hash=file_hash,
+                status="new",
+                preprocessed_path="",
+                raw_transcript_path="",
+                final_transcript_path="",
+                error=""
+            )
+            entry = self.state_manager.get_entry(relative_path)
+
+        # Get and store audio duration
+        audio_duration = self.preprocessor.get_duration(file_path)
+        self.state_manager.update_entry(relative_path, audio_duration=audio_duration)
+
+        working_file = file_path
+
+        # 2. Preprocess (if needed)
+        if self.stage in ("all", "transcribe"):
+            if entry.get("status") in ("new", "failed"):
+                try:
+                    working_file = self.preprocessor.preprocess(file_path, duration=audio_duration)
+                    self.state_manager.update_entry(
+                        relative_path,
+                        status="preprocessed",
+                        preprocessed_path=working_file
+                    )
+                except Exception as e:
+                    self.state_manager.update_entry(relative_path, status="failed", error=f"Preprocessing: {str(e)}")
+                    raise
+
+            elif entry.get("preprocessed_path"):
+                # Skip preprocessing, use previous result
+                working_file = Path(entry["preprocessed_path"])
+                is_missing = False
+                if not working_file.exists():
+                    is_missing = True
+                elif working_file.is_dir():
+                    # Ensure chunk directory is not empty
+                    chunks = [f for f in working_file.iterdir() if f.is_file() and f.suffix.lower() == ".wav"]
+                    if not chunks:
+                        is_missing = True
+
+                if is_missing:
+                    logger.warning(f"Preprocessed file missing or empty chunk directory: {working_file}. Re-running.")
+                    working_file = self.preprocessor.preprocess(file_path, duration=audio_duration)
+                    self.state_manager.update_entry(relative_path, preprocessed_path=working_file)
+
+        return working_file
+
+    def _run_transcription_for_file(self, file_path: Path, working_file: Path) -> None:
+        """Run or load transcription for a single prepared audio file."""
+        relative_path = file_path.name
+        raw_transcript_path = self.raw_transcripts_dir / f"{file_path.stem}_raw.txt"
+        try:
+            if self.stage == "postprocess":
+                return
+
+            if self.state_manager.get_entry(relative_path).get("status") == "preprocessed":
+                raw_transcript = self.transcriber.transcribe(working_file)
+                self._save_and_update_transcript_state(
+                    relative_path, raw_transcript, raw_transcript_path, promote_status=True
+                )
+            else:
+                # Skip transcription, read saved file
+                existing = self._load_existing_transcript(relative_path, raw_transcript_path)
+                if not existing:
+                    logger.warning(f"Raw transcript missing: {raw_transcript_path}. Re-running transcription.")
+                    raw_transcript = self.transcriber.transcribe(working_file)
+                    self._save_and_update_transcript_state(
+                        relative_path, raw_transcript, raw_transcript_path, promote_status=False
+                    )
+        except Exception as e:
+            self.state_manager.update_entry(relative_path, status="failed", error=f"Transcription: {str(e)}")
+            logger.error(f"Transcription failed for {relative_path}: {e}")
+            logger.error(traceback.format_exc())
+
+    def _run_postprocessing_for_file(self, file_path: Path) -> None:
+        """Run post-processing for a single transcribed file."""
+        relative_path = file_path.name
+        raw_transcript_path = self.raw_transcripts_dir / f"{file_path.stem}_raw.txt"
+        entry_status = self.state_manager.get_entry(relative_path).get("status")
+
+        # If running full pipeline ("all"), only post-process if transcription succeeded
+        if self.stage == "all" and entry_status != "transcribed":
+            return
+
+        try:
+            existing = self._load_existing_transcript(relative_path, raw_transcript_path)
+            if not existing:
+                if self.stage == "postprocess":
+                    raise FileNotFoundError(f"Raw transcript not found at {raw_transcript_path}. Cannot post-process without transcription.")
+                return
+            raw_transcript, _ = existing
+
+            entry_status = self.state_manager.get_entry(relative_path).get("status")
+            if entry_status in ("transcribed", "failed"):
+                context = {
+                    "filename": file_path.name,
+                    **self.config.prompt_context
+                }
+                final_transcript, token_usage = self.post_processor.post_process(
+                    raw_transcript, self.prompt_template, context=context
+                )
+
+                # Save final transcript
+                final_transcript_path = self.output_dir / f"{file_path.stem}_final.md"
+                with open(final_transcript_path, "w") as f:
+                    f.write(final_transcript)
+
+                self.state_manager.update_entry(
+                    relative_path,
+                    status="completed",
+                    final_transcript_path=final_transcript_path,
+                    token_usage=token_usage.to_dict()
+                )
+                logger.info(f"Successfully completed pipeline for {relative_path}")
+            elif entry_status == "completed":
+                logger.info(f"Post-processing already completed for {relative_path}")
+        except Exception as e:
+            err_prefix = "Post-processing setup" if self.stage == "postprocess" and isinstance(e, FileNotFoundError) else "Post-processing"
+            self.state_manager.update_entry(relative_path, status="failed", error=f"{err_prefix}: {str(e)}")
+            logger.error(f"{err_prefix} failed for {relative_path}: {e}")
+            logger.error(traceback.format_exc())
+
     def run(self):
         """Execute the pipeline on all discovered files."""
         self.check_dependencies()
@@ -251,160 +415,87 @@ class Orchestrator:
 
         logger.info(f"Found {len(files)} files to process.")
 
+        # Phase 1: Prepare and Preprocess all files
+        prepared_items: list[tuple[Path, Path]] = []
         for file_path in files:
             relative_path = file_path.name
-            logger.info(f"--- Processing: {relative_path} ---")
-
+            logger.info(f"--- Preparing: {relative_path} ---")
             try:
-                # 1. Calculate Hash
-                file_hash = self.state_manager.get_file_hash(file_path)
-
-                # Check if already processed for the target stage
-                entry = self.state_manager.get_entry(relative_path)
-                should_skip = False
-                if entry.get("hash") == file_hash:
-                    status = entry.get("status")
-                    if self.stage == "all" and status == "completed":
-                        should_skip = True
-                    elif self.stage == "transcribe" and status in ("transcribed", "completed"):
-                        should_skip = True
-                    elif self.stage == "postprocess" and status == "completed":
-                        should_skip = True
-
-                if should_skip:
-                    logger.info(f"Skipping {relative_path}: already processed for stage '{self.stage}' and unmodified.")
-                    continue
-
-                # Retrieve or initialize state entry
-                entry = self.state_manager.get_entry(relative_path)
-
-                # If file has changed, reset state to start fresh
-                if entry.get("hash") != file_hash:
-                    logger.info(f"File changed (or new). Resetting state for {relative_path}.")
-                    self.state_manager.update_entry(
-                        relative_path,
-                        hash=file_hash,
-                        status="new",
-                        preprocessed_path="",
-                        raw_transcript_path="",
-                        final_transcript_path="",
-                        error=""
-                    )
-                    entry = self.state_manager.get_entry(relative_path)
-
-                # Get and store audio duration
-                audio_duration = self.preprocessor.get_duration(file_path)
-                self.state_manager.update_entry(relative_path, audio_duration=audio_duration)
-
-                working_file = file_path
-
-                # 2. Preprocess (if needed)
-                if self.stage in ("all", "transcribe"):
-                    if entry.get("status") in ("new", "failed"):
-                        try:
-                            working_file = self.preprocessor.preprocess(file_path, duration=audio_duration)
-                            self.state_manager.update_entry(
-                                relative_path,
-                                status="preprocessed",
-                                preprocessed_path=working_file
-                            )
-                        except Exception as e:
-                            self.state_manager.update_entry(relative_path, status="failed", error=f"Preprocessing: {str(e)}")
-                            raise
-
-                    elif entry.get("preprocessed_path"):
-                        # Skip preprocessing, use previous result
-                        working_file = Path(entry["preprocessed_path"])
-                        is_missing = False
-                        if not working_file.exists():
-                            is_missing = True
-                        elif working_file.is_dir():
-                            # Ensure chunk directory is not empty
-                            chunks = [f for f in working_file.iterdir() if f.is_file() and f.suffix.lower() == ".wav"]
-                            if not chunks:
-                                is_missing = True
-
-                        if is_missing:
-                            logger.warning(f"Preprocessed file missing or empty chunk directory: {working_file}. Re-running.")
-                            working_file = self.preprocessor.preprocess(file_path, duration=audio_duration)
-                            self.state_manager.update_entry(relative_path, preprocessed_path=working_file)
-
-
-                # 3. Transcribe (if needed)
-                raw_transcript = ""
-                raw_transcript_path = self.raw_transcripts_dir / f"{file_path.stem}_raw.txt"
-
-                if self.stage in ("all", "transcribe"):
-                    if self.state_manager.get_entry(relative_path).get("status") == "preprocessed":
-                        try:
-                            raw_transcript = self.transcriber.transcribe(working_file)
-                            self._save_and_update_transcript_state(
-                                relative_path, raw_transcript, raw_transcript_path, promote_status=True
-                            )
-                        except Exception as e:
-                            self.state_manager.update_entry(relative_path, status="failed", error=f"Transcription: {str(e)}")
-                            raise
-                    else:
-                        # Skip transcription, read saved file
-                        existing = self._load_existing_transcript(relative_path, raw_transcript_path)
-                        if existing:
-                            raw_transcript, raw_transcript_path = existing
-                        else:
-                            logger.warning(f"Raw transcript missing: {raw_transcript_path}. Re-running transcription.")
-                            raw_transcript = self.transcriber.transcribe(working_file)
-                            self._save_and_update_transcript_state(
-                                relative_path, raw_transcript, raw_transcript_path, promote_status=False
-                            )
-                else:
-                    # self.stage == "postprocess"
-                    # Load the raw transcript. Do not run transcriber.
-                    try:
-                        existing = self._load_existing_transcript(relative_path, raw_transcript_path)
-                        if existing:
-                            raw_transcript, raw_transcript_path = existing
-                        else:
-                            raise FileNotFoundError(f"Raw transcript not found at {raw_transcript_path}. Cannot post-process without transcription.")
-                    except Exception as e:
-                        self.state_manager.update_entry(relative_path, status="failed", error=f"Post-processing setup: {str(e)}")
-                        raise
-
-                # 4. Post-process (if needed)
-                if self.stage in ("all", "postprocess"):
-                    entry_status = self.state_manager.get_entry(relative_path).get("status")
-                    if entry_status in ("transcribed", "failed"):
-                        try:
-                            context = {
-                                "filename": file_path.name,
-                                **self.config.prompt_context
-                            }
-                            final_transcript, token_usage = self.post_processor.post_process(
-                                raw_transcript, self.prompt_template, context=context
-                            )
-
-                            # Save final transcript
-                            final_transcript_path = self.output_dir / f"{file_path.stem}_final.md"
-                            with open(final_transcript_path, "w") as f:
-                                f.write(final_transcript)
-
-                            self.state_manager.update_entry(
-                                relative_path,
-                                status="completed",
-                                final_transcript_path=final_transcript_path,
-                                token_usage=token_usage.to_dict()
-                            )
-                            logger.info(f"Successfully completed pipeline for {relative_path}")
-                        except Exception as e:
-                            self.state_manager.update_entry(relative_path, status="failed", error=f"Post-processing: {str(e)}")
-                            raise
-                else:
-                    if self.state_manager.get_entry(relative_path).get("status") == "transcribed":
-                        logger.info(f"Successfully completed transcription stage for {relative_path}")
-
+                working_file = self._prepare_and_preprocess_file(file_path)
+                if working_file is not None:
+                    prepared_items.append((file_path, working_file))
             except Exception as e:
-                logger.error(f"Error processing {relative_path}: {e}")
+                logger.error(f"Error preparing {relative_path}: {e}")
                 logger.error(traceback.format_exc())
-                # Continue to the next file even if one fails
                 continue
+
+        # Phase 2 & Phase 3: Transcribe and Post-process (pipelined concurrently when stage == 'all')
+        try:
+            t_workers = int(getattr(self.config, "transcription_workers", 1))
+        except (TypeError, ValueError):
+            t_workers = 1
+
+        try:
+            p_workers = int(getattr(self.config, "postprocessing_workers", 1))
+        except (TypeError, ValueError):
+            p_workers = 1
+
+        if self.stage == "transcribe" and prepared_items:
+            if t_workers > 1 and len(prepared_items) > 1:
+                logger.info(f"Transcribing {len(prepared_items)} files concurrently with ThreadPoolExecutor (workers={t_workers})")
+                with ThreadPoolExecutor(max_workers=t_workers) as executor:
+                    list(executor.map(lambda item: self._run_transcription_for_file(item[0], item[1]), prepared_items))
+            else:
+                for file_path, working_file in prepared_items:
+                    self._run_transcription_for_file(file_path, working_file)
+
+        elif self.stage == "postprocess" and prepared_items:
+            if p_workers > 1 and len(prepared_items) > 1:
+                logger.info(f"Post-processing {len(prepared_items)} files concurrently with ThreadPoolExecutor (workers={p_workers})")
+                with ThreadPoolExecutor(max_workers=p_workers) as executor:
+                    list(executor.map(lambda item: self._run_postprocessing_for_file(item[0]), prepared_items))
+            else:
+                for file_path, _ in prepared_items:
+                    self._run_postprocessing_for_file(file_path)
+
+        elif self.stage == "all" and prepared_items:
+            if t_workers <= 1 and p_workers <= 1 and len(prepared_items) <= 1:
+                for file_path, working_file in prepared_items:
+                    self._run_transcription_for_file(file_path, working_file)
+                    self._run_postprocessing_for_file(file_path)
+            else:
+                logger.info(
+                    f"Running pipelined execution with concurrent ThreadPoolExecutors "
+                    f"(transcription_workers={t_workers}, postprocessing_workers={p_workers})"
+                )
+                with ThreadPoolExecutor(max_workers=t_workers) as t_executor, \
+                     ThreadPoolExecutor(max_workers=p_workers) as p_executor:
+
+                    postprocess_futures = []
+
+                    def transcribe_and_dispatch(fp: Path, wf: Path):
+                        self._run_transcription_for_file(fp, wf)
+                        # Immediately submit to post-processing pool as soon as transcription finishes
+                        return p_executor.submit(self._run_postprocessing_for_file, fp)
+
+                    transcribe_futures = [
+                        t_executor.submit(transcribe_and_dispatch, fp, wf)
+                        for fp, wf in prepared_items
+                    ]
+
+                    for t_future in as_completed(transcribe_futures):
+                        try:
+                            p_future = t_future.result()
+                            if p_future is not None:
+                                postprocess_futures.append(p_future)
+                        except Exception as e:
+                            logger.error(f"Error in pipelined task dispatch: {e}")
+
+                    for p_future in as_completed(postprocess_futures):
+                        try:
+                            p_future.result()
+                        except Exception as e:
+                            logger.error(f"Error in pipelined postprocessing: {e}")
 
         # 5. Print Summary Report
         if files:

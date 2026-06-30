@@ -40,6 +40,8 @@ def mock_config(tmp_path):
     config.post_processor_temperature = 0.2
     config.rss_feeds = [] # Skip RSS by default
     config.prompt_context = {}
+    config.transcription_workers = 1
+    config.postprocessing_workers = 1
     return config
 
 def test_orchestrator_find_files(mock_config):
@@ -927,4 +929,93 @@ def test_print_summary_report_logs_words_and_segments_fallback(mock_config, tmp_
         entry1 = orchestrator.state_manager.get_entry("file1.mp3")
         assert entry1["num_words"] == 3
         assert entry1["num_segments"] == 2
+
+def test_orchestrator_run_concurrent_workers(mock_config):
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    file1 = input_dir / "file1.mp3"
+    file2 = input_dir / "file2.mp3"
+    file1.write_text("audio1")
+    file2.write_text("audio2")
+
+    mock_config.transcription_workers = 2
+    mock_config.postprocessing_workers = 2
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe.return_value = "transcribed text"
+        mock_init_t.return_value = mock_transcriber
+
+        mock_post_processor = MagicMock()
+        from podscribe.post_processors import TokenUsage
+        mock_post_processor.post_process.return_value = ("final text", TokenUsage(10, 10, 20))
+        mock_init_p.return_value = mock_post_processor
+
+        mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 60.0
+        mock_preprocessor.preprocess.side_effect = lambda f, duration=None: f
+
+        orchestrator = Orchestrator(mock_config)
+        orchestrator.run()
+
+        assert mock_transcriber.transcribe.call_count == 2
+        assert mock_post_processor.post_process.call_count == 2
+
+def test_orchestrator_run_pipelined_parallel(mock_config):
+    import threading
+    import time
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    file1 = input_dir / "file1.mp3"
+    file2 = input_dir / "file2.mp3"
+    file1.write_text("audio1")
+    file2.write_text("audio2")
+
+    mock_config.transcription_workers = 2
+    mock_config.postprocessing_workers = 2
+
+    events = []
+    lock = threading.Lock()
+
+    def fake_transcribe(working_file):
+        with lock:
+            events.append(f"start_transcribe_{working_file.name}")
+        time.sleep(0.05)
+        with lock:
+            events.append(f"end_transcribe_{working_file.name}")
+        return "transcribed text"
+
+    def fake_post_process(raw_transcript, prompt_template, context=None):
+        with lock:
+            events.append(f"start_postprocess_{context['filename']}")
+        time.sleep(0.05)
+        with lock:
+            events.append(f"end_postprocess_{context['filename']}")
+        from podscribe.post_processors import TokenUsage
+        return ("final text", TokenUsage(10, 10, 20))
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe.side_effect = fake_transcribe
+        mock_init_t.return_value = mock_transcriber
+
+        mock_post_processor = MagicMock()
+        mock_post_processor.post_process.side_effect = fake_post_process
+        mock_init_p.return_value = mock_post_processor
+
+        mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 60.0
+        mock_preprocessor.preprocess.side_effect = lambda f, duration=None: f
+
+        orchestrator = Orchestrator(mock_config)
+        orchestrator.run()
+
+        # Check that postprocessing happened
+        assert len([e for e in events if e.startswith("end_postprocess_")]) == 2
 

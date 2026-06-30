@@ -25,6 +25,17 @@ assemblyai_keyterms_file = "prompts/keyterms.txt"
 
 
 # -----------------------------------------------------------------------------
+# Concurrency Configuration
+# -----------------------------------------------------------------------------
+[concurrency]
+# Number of concurrent threads to use for audio transcription tasks
+transcription_workers = 1
+
+# Number of concurrent threads to use for LLM post-processing tasks
+postprocessing_workers = 1
+
+
+# -----------------------------------------------------------------------------
 # Audio Preprocessing Configuration
 # -----------------------------------------------------------------------------
 [preprocessing]

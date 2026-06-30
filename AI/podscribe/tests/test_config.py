@@ -225,6 +225,8 @@ def test_config_dump_covers_all_properties(tmp_path):
         "post_processor_model": "Model:",
         "post_processor_endpoint": "Endpoint URL:",
         "post_processor_temperature": "Temperature:",
+        "transcription_workers": "Transcription Workers:",
+        "postprocessing_workers": "Postprocessing Workers:",
         "rss_feeds": "RSS Feeds",
         "prompt_context": "Prompt Context"
     }
@@ -360,3 +362,14 @@ def test_get_required_auth_env_vars(tmp_path):
     transcribe_reqs = [r[0] for r in config.get_required_auth_env_vars(stage="transcribe")]
     assert "ASSEMBLYAI_API_KEY" in transcribe_reqs
     assert "GEMINI_API_KEY" not in transcribe_reqs
+
+def test_concurrency_config(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("""
+    [concurrency]
+    transcription_workers = 4
+    postprocessing_workers = 2
+    """)
+    config = Config(config_file)
+    assert config.transcription_workers == 4
+    assert config.postprocessing_workers == 2

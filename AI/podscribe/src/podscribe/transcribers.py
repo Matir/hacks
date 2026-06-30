@@ -2,6 +2,7 @@ import abc
 import base64
 import inspect
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import assemblyai as aai
@@ -45,9 +46,24 @@ class BaseTranscriber(abc.ABC):
     def _transcribe_directory(
         self, file_path: Path, join_char: str = " ", pass_prompt: bool = False
     ) -> str:
-        """Transcribe all WAV chunk files in a directory sequentially and join their texts."""
-        logger.info(f"Processing chunks sequentially in directory: {file_path}")
+        """Transcribe all WAV chunk files in a directory sequentially or concurrently and join their texts."""
         chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
+        if not chunks:
+            return ""
+
+        max_workers = getattr(self, "max_workers", 1)
+        if max_workers > 1:
+            logger.info(f"Processing {len(chunks)} chunks concurrently in directory: {file_path} (workers={max_workers})")
+            def worker(chunk: Path) -> str:
+                if pass_prompt and inspect.signature(self._transcribe_single).parameters.get("prompt"):
+                    return self._transcribe_single(chunk, prompt="")
+                return self._transcribe_single(chunk)
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(worker, chunks))
+            return join_char.join(results)
+
+        logger.info(f"Processing chunks sequentially in directory: {file_path}")
         results = []
         for chunk in chunks:
             if pass_prompt and inspect.signature(self._transcribe_single).parameters.get("prompt"):
@@ -417,14 +433,21 @@ class CrispASRTranscriber(OpenAICompatibleTranscriber):
     def transcribe(self, file_path: Path) -> str:
         """Transcribe audio chunk or directory, merging consecutive chunks from the same speaker."""
         if file_path.is_dir():
-            logger.info(f"Processing CrispASR chunks sequentially in directory: {file_path}")
             chunks = sorted([f for f in file_path.iterdir() if f.is_file() and f.suffix.lower() == ".wav"])
+            max_workers = getattr(self, "max_workers", 1)
+            if max_workers > 1:
+                logger.info(f"Processing {len(chunks)} CrispASR chunks concurrently in directory: {file_path} (workers={max_workers})")
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    chunk_results = list(executor.map(self._transcribe_single_crisp, chunks))
+            else:
+                logger.info(f"Processing CrispASR chunks sequentially in directory: {file_path}")
+                chunk_results = [self._transcribe_single_crisp(chunk) for chunk in chunks]
+
             results = []
             current_speaker = None
             current_text = []
 
-            for chunk in chunks:
-                text, speaker = self._transcribe_single_crisp(chunk)
+            for text, speaker in chunk_results:
                 if not text:
                     continue
 
