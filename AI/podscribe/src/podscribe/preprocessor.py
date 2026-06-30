@@ -1,8 +1,8 @@
+import logging
+import re
 import shutil
 import subprocess
 from pathlib import Path
-import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class AudioPreprocessor:
                     first_event_is_end = False
                 else:
                     start_time = current_start if current_start is not None else end_time
-                
+
                 midpoints.append((start_time + end_time) / 2)
                 current_start = None
 
@@ -106,7 +106,7 @@ class AudioPreprocessor:
 
         while last_split + self.chunk_max_duration < total_duration:
             target_time = last_split + self.chunk_max_duration
-            
+
             # Find silence pauses between last split and target duration
             candidates = [m for m in midpoints if last_split < m < target_time]
             if not candidates:
@@ -246,5 +246,5 @@ class AudioPreprocessor:
                     return hrs * 3600 + mins * 60 + secs + fractional
         except Exception as e:
             logger.error(f"Failed to get audio duration for {file_path.name}: {e}")
-            
+
         return 0.0

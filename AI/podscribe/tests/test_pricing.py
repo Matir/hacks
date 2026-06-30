@@ -1,5 +1,7 @@
 import pytest
+
 from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
+
 
 def test_calculate_post_processing_cost_gemini_flash():
     # gemini-2.5-flash in genai-prices: input 0.30/1M, output 2.50/1M
@@ -51,7 +53,7 @@ def test_calculate_transcription_cost():
     # Free provider
     assert calculate_transcription_cost("huggingface", 600) == 0.0
     assert calculate_transcription_cost("unknown", 600) == 0.0
-    
+
     # openai_compatible with official endpoint
     cost_compat = calculate_transcription_cost("openai_compatible", 600, "https://api.openai.com/v1")
     assert pytest.approx(cost_compat) == 0.06

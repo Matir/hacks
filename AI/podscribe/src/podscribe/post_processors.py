@@ -1,8 +1,9 @@
 import abc
 import logging
-from openai import OpenAI
+
 from google import genai
 from google.genai import types
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class GeminiPostProcessor(BasePostProcessor):
         try:
             # Initialize Gemini client
             client = genai.Client(api_key=self.api_key or None)
-            
+
             # Prepare prompt by rendering template
             prompt = self._render_prompt(transcript, prompt_template, context)
 

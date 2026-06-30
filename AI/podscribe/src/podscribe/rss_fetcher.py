@@ -22,7 +22,7 @@ class RSSFetcher:
         """Scan input_dir for any leftover .download.tmp files and remove them."""
         if not self.input_dir.exists():
             return
-        
+
         logger.info(f"Checking for leftover temporary files in {self.input_dir}...")
         for temp_file in self.input_dir.glob("*.download.tmp"):
             try:
@@ -85,7 +85,7 @@ class RSSFetcher:
                 slug = self._slugify(title)
                 if slug:
                     filename = f"{slug}{ext}"
-            
+
             if not filename:
                 url_filename = self._filename_from_url(media_url)
                 if url_filename:
@@ -117,7 +117,7 @@ class RSSFetcher:
 
         return None
 
-    def download_missing(self, episodes: list[dict]) -> list[Path]:
+    def download_missing(self, episodes: list[dict], raise_on_error: bool = False) -> list[Path]:
         """Download any episodes not already present in input_dir."""
         self.input_dir.mkdir(parents=True, exist_ok=True)
         downloaded = []
@@ -137,13 +137,15 @@ class RSSFetcher:
                         with open(temp_dest, "wb") as f:
                             for chunk in response.iter_bytes(chunk_size=65536):
                                 f.write(chunk)
-                
+
                 # Rename to final destination only after successful download
                 temp_dest.rename(dest)
                 logger.info(f"Downloaded: {episode['filename']}")
                 downloaded.append(dest)
             except Exception as e:
                 logger.error(f"Failed to download {episode['filename']}: {e}")
+                if raise_on_error:
+                    raise
             finally:
                 if temp_dest.exists():
                     try:
@@ -154,19 +156,23 @@ class RSSFetcher:
 
         return downloaded
 
-    def sync_feeds(self, feeds: list[dict]) -> list[Path]:
+    def sync_feeds(self, feeds: list[dict], raise_on_error: bool = False) -> list[Path]:
         """Fetch all configured feeds and download missing episodes."""
         all_downloaded = []
         for feed in feeds:
             url = feed.get("url", "")
             if not url:
                 logger.warning("RSS feed entry missing 'url', skipping")
+                if raise_on_error:
+                    raise ValueError("RSS feed entry missing 'url'")
                 continue
             max_episodes = feed.get("max_episodes")
             try:
                 episodes = self.fetch_episodes(url, max_episodes=max_episodes)
-                downloaded = self.download_missing(episodes)
+                downloaded = self.download_missing(episodes, raise_on_error=raise_on_error)
                 all_downloaded.extend(downloaded)
             except Exception as e:
                 logger.error(f"Error processing RSS feed {url}: {e}")
+                if raise_on_error:
+                    raise
         return all_downloaded

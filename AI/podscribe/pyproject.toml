@@ -16,6 +16,7 @@ dependencies = [
     "jinja2>=3.1.6",
     "openai>=2.38.0",
     "python-dotenv>=1.2.2",
+    "tenacity>=9.0.0",
 ]
 
 [project.scripts]
@@ -32,6 +33,7 @@ default = true
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
+    "ruff>=0.9.0",
 ]
 
 [tool.coverage.report]
@@ -44,3 +46,21 @@ exclude_also = [
     "@abc.abstractmethod",
     "@abstractmethod",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+ignore = [
+    "E501", # line too long
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402", "W293"]

@@ -1,8 +1,11 @@
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from podscribe.__main__ import main
 from podscribe.config import Config
+
 
 @patch("podscribe.__main__.Orchestrator")
 @patch("podscribe.__main__.Config")
@@ -77,3 +80,64 @@ def test_main_log_level_case_insensitive(mock_load_dotenv, mock_setup_logging, m
 
     # Verify setup_logging was called with uppercase "DEBUG"
     mock_setup_logging.assert_called_once_with(Path(mock_config.output_dir), log_level_str="DEBUG")
+
+@patch("podscribe.__main__.RSSFetcher")
+@patch("podscribe.__main__.setup_logging")
+@patch("podscribe.__main__.Config")
+@patch("podscribe.__main__.load_dotenv")
+def test_main_rss_download_only_success(mock_load_dotenv, mock_config_class, mock_setup_logging, mock_fetcher_class, tmp_path):
+    mock_config = MagicMock(spec=Config)
+    mock_config.output_dir = str(tmp_path / "output")
+    mock_config.input_dir = str(tmp_path / "input")
+    mock_config.rss_feeds = [{"url": "https://example.com/feed.xml"}]
+    mock_config_class.return_value = mock_config
+
+    mock_fetcher = MagicMock()
+    mock_fetcher.sync_feeds.return_value = [tmp_path / "input/ep1.mp3"]
+    mock_fetcher_class.return_value = mock_fetcher
+
+    test_args = ["podscribe", "--rss-download-only"]
+    with patch.object(sys, "argv", test_args):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+    assert excinfo.value.code == 0
+    mock_fetcher.sync_feeds.assert_called_once_with(mock_config.rss_feeds, raise_on_error=True)
+
+@patch("podscribe.__main__.setup_logging")
+@patch("podscribe.__main__.Config")
+@patch("podscribe.__main__.load_dotenv")
+def test_main_rss_download_only_no_feeds(mock_load_dotenv, mock_config_class, mock_setup_logging, tmp_path):
+    mock_config = MagicMock(spec=Config)
+    mock_config.output_dir = str(tmp_path / "output")
+    mock_config.rss_feeds = []
+    mock_config_class.return_value = mock_config
+
+    test_args = ["podscribe", "--rss-download-only"]
+    with patch.object(sys, "argv", test_args):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+    assert excinfo.value.code == 1
+
+@patch("podscribe.__main__.RSSFetcher")
+@patch("podscribe.__main__.setup_logging")
+@patch("podscribe.__main__.Config")
+@patch("podscribe.__main__.load_dotenv")
+def test_main_rss_download_only_error(mock_load_dotenv, mock_config_class, mock_setup_logging, mock_fetcher_class, tmp_path):
+    mock_config = MagicMock(spec=Config)
+    mock_config.output_dir = str(tmp_path / "output")
+    mock_config.input_dir = str(tmp_path / "input")
+    mock_config.rss_feeds = [{"url": "https://example.com/feed.xml"}]
+    mock_config_class.return_value = mock_config
+
+    mock_fetcher = MagicMock()
+    mock_fetcher.sync_feeds.side_effect = Exception("Network Error")
+    mock_fetcher_class.return_value = mock_fetcher
+
+    test_args = ["podscribe", "--rss-download-only"]
+    with patch.object(sys, "argv", test_args):
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+    assert excinfo.value.code == 1

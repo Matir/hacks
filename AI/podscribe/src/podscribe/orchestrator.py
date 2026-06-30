@@ -1,12 +1,33 @@
 import logging
-from pathlib import Path
 import re
 import traceback
+from pathlib import Path
 from typing import List
+
+from podscribe.config import Config
+from podscribe.post_processors import BasePostProcessor, GeminiPostProcessor, OpenAICompatiblePostProcessor
+from podscribe.preprocessor import AudioPreprocessor
+from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
+from podscribe.rss_fetcher import RSSFetcher
+from podscribe.state import StateManager
+from podscribe.transcribers import (
+    AssemblyAITranscriber,
+    BaseTranscriber,
+    CrispASRCLITranscriber,
+    CrispASRTranscriber,
+    HuggingFaceTranscriber,
+    OpenAICompatibleTranscriber,
+    SpeakerAttributedHuggingFaceTranscriber,
+    SpeakerAttributedOpenAICompatibleTranscriber,
+    VibeVoiceASRTranscriber,
+)
+
+logger = logging.getLogger(__name__)
+
 
 def count_words_and_segments(transcript: str) -> tuple[int, int]:
     """Calculate the number of transcribed words and segments in a transcript.
-    
+
     Excludes speaker labels (e.g. [Speaker 1]:) from the word count.
     """
     if not transcript.strip():
@@ -22,16 +43,6 @@ def count_words_and_segments(transcript: str) -> tuple[int, int]:
     num_words = len(cleaned_transcript.split())
 
     return num_words, num_segments
-
-from podscribe.config import Config
-from podscribe.state import StateManager
-from podscribe.preprocessor import AudioPreprocessor
-from podscribe.transcribers import HuggingFaceTranscriber, SpeakerAttributedHuggingFaceTranscriber, OpenAICompatibleTranscriber, SpeakerAttributedOpenAICompatibleTranscriber, CrispASRTranscriber, CrispASRCLITranscriber, VibeVoiceASRTranscriber, AssemblyAITranscriber, BaseTranscriber
-from podscribe.post_processors import GeminiPostProcessor, OpenAICompatiblePostProcessor, BasePostProcessor, TokenUsage
-from podscribe.pricing import calculate_post_processing_cost, calculate_transcription_cost
-from podscribe.rss_fetcher import RSSFetcher
-
-logger = logging.getLogger(__name__)
 
 class Orchestrator:
     SUPPORTED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm", ".mp4"}
@@ -476,5 +487,5 @@ class Orchestrator:
         logger.info("--------------------------------------------------")
         logger.info(f"ASR Cost ({self.config.transcriber_provider}):".ljust(30) + f"${total_transcription_cost:.4f}")
         logger.info(f"LLM Cost ({self.config.post_processor_model}):".ljust(30) + f"${total_post_processing_cost:.4f}")
-        logger.info(f"Total Estimated Cost:".ljust(30) + f"${total_cost:.4f}")
+        logger.info("Total Estimated Cost:".ljust(30) + f"${total_cost:.4f}")
         logger.info("==================================================")

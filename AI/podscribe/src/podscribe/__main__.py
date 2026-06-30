@@ -1,13 +1,13 @@
 import argparse
 import logging
-import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from podscribe.config import Config
 from podscribe.orchestrator import Orchestrator
+from podscribe.rss_fetcher import RSSFetcher
 
 # Environment variables loaded via python-dotenv
 
@@ -69,6 +69,11 @@ def main():
         action="store_true",
         help="Dump the resolved configuration and exit"
     )
+    parser.add_argument(
+        "--rss-download-only",
+        action="store_true",
+        help="Only download source material from configured RSS feeds and exit"
+    )
     args = parser.parse_args()
 
     # 1. Load .env if present (contains keys like HF_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY)
@@ -95,8 +100,25 @@ def main():
     # 3. Setup Logging (requires output directory from config)
     setup_logging(Path(config.output_dir), log_level_str=args.log_level)
 
+    if args.rss_download_only:
+        if not config.rss_feeds:
+            logging.error("No RSS feeds configured in %s", args.config)
+            print("Error: No RSS feeds configured.", file=sys.stderr)
+            sys.exit(1)
+
+        logging.info("Running in RSS download-only mode.")
+        fetcher = RSSFetcher(Path(config.input_dir))
+        try:
+            downloaded = fetcher.sync_feeds(config.rss_feeds, raise_on_error=True)
+            logging.info(f"RSS download completed successfully. Downloaded {len(downloaded)} file(s).")
+            sys.exit(0)
+        except Exception as e:
+            logging.error(f"RSS download failed: {e}")
+            print(f"Error: RSS download failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
     logging.info("Starting Audio Transcription & Post-Processing Pipeline")
-    
+
     # 4. Run Orchestrator
     try:
         orchestrator = Orchestrator(config, stage=args.stage)

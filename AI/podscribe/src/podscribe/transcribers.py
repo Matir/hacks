@@ -3,11 +3,12 @@ import base64
 import inspect
 import logging
 from pathlib import Path
+
+import assemblyai as aai
 import httpx
 import openai
 from openai import OpenAI
-import re
-import assemblyai as aai
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +168,7 @@ class HuggingFaceTranscriber(BaseTranscriber):
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         logger.info(f"Sending request to Hugging Face: {self.endpoint_url}")
-        response: Optional[httpx.Response] = None
+        response: httpx.Response | None = None
         try:
             with open(file_path, "rb") as audio_file:
                 with httpx.Client(timeout=self.timeout) as client:
@@ -519,10 +520,10 @@ class CrispASRCLITranscriber(SpeakerAttributedMixin, BaseTranscriber):
         self.diarize_method = diarize_method or "pyannote"
 
     def _transcribe_single(self, file_path: Path) -> str:
-        import subprocess
-        import tempfile
         import json
         import shlex
+        import subprocess
+        import tempfile
 
         family = _detect_model_family(self.model, self.backend)
         settings = CRISPASR_MODEL_FAMILY_SETTINGS.get(family, CRISPASR_MODEL_FAMILY_SETTINGS["default"])

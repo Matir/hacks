@@ -11,7 +11,7 @@ LLM_PRICING = {
     "gemini-2.5-pro": {"input": 1.25, "output": 5.00},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
     "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    
+
     # OpenAI Models
     "gpt-4o": {"input": 2.50, "output": 10.00},
     "gpt-4o-mini": {"input": 0.150, "output": 0.600},
@@ -85,7 +85,7 @@ def calculate_transcription_cost(provider: str, duration_seconds: float, endpoin
         return 0.0
 
     provider_lower = provider.lower()
-    
+
     # If using openai_compatible but endpoint is official OpenAI, treat as openai pricing
     if provider_lower == "openai_compatible" and endpoint_url and "api.openai.com" in endpoint_url:
         provider_lower = "openai"

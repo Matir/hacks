@@ -3,6 +3,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Dict
 
+
 class Config:
     def __init__(self, config_path: str | Path = "config.toml"):
         self.config_path = Path(config_path)
@@ -12,7 +13,7 @@ class Config:
     def load(self):
         if not self.config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
-        
+
         with open(self.config_path, "rb") as f:
             self.data = tomllib.load(f)
 
@@ -154,7 +155,7 @@ class Config:
             f"API Key Present:         {'Yes' if self.get_transcriber_api_key() else 'No'}",
             f"Timeout:                 {self.transcriber_timeout}s",
         ]
-        
+
         # Add provider-specific keys if they exist
         if self.transcriber_provider == "crispasr_cli":
             lines.extend([
@@ -177,7 +178,7 @@ class Config:
             f"API Key Env Var:         {self.data.get('post_processor', {}).get('api_key_env', 'GEMINI_API_KEY')}",
             f"API Key Present:         {'Yes' if self.get_post_processor_api_key() else 'No'}",
         ])
-        
+
         if self.rss_feeds:
             lines.extend([
                 "",

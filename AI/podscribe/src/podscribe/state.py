@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
+
 class StateManager:
     def __init__(self, output_dir: Path):
         self.output_dir = Path(output_dir)

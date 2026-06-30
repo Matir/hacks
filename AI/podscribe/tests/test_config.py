@@ -1,6 +1,9 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from podscribe.config import Config
+
 
 def test_config_load_valid(tmp_path):
     # Create a dummy config file
@@ -67,17 +70,17 @@ def test_config_load_valid(tmp_path):
     assert config.enable_speaker_attribution is True
     assert config.language == "es"
     assert config.hotwords == "testing, hotwords"
-    
+
     # Test API key retrieval (requires env var setting)
     import os
     os.environ["CUSTOM_ASR_KEY"] = "secret-asr-key"
     assert config.get_transcriber_api_key() == "secret-asr-key"
-    
+
     assert config.post_processor_provider == "gemini"
     assert config.post_processor_model == "gemini-2.5-flash"
     assert config.post_processor_endpoint == "https://openrouter.ai/api/v1"
     assert config.post_processor_temperature == 0.5
-    
+
     os.environ["CUSTOM_GEMINI_KEY"] = "secret-gemini-key"
     assert config.get_post_processor_api_key() == "secret-gemini-key"
 
@@ -159,13 +162,13 @@ def test_config_dump(tmp_path):
     config_file.write_text(config_content)
 
     config = Config(config_file)
-    
+
     # Test without keys set in env
     if "CUSTOM_ASR_KEY" in os.environ:
         del os.environ["CUSTOM_ASR_KEY"]
     if "CUSTOM_GEMINI_KEY" in os.environ:
         del os.environ["CUSTOM_GEMINI_KEY"]
-        
+
     dump_str = config.dump()
     assert "custom_input" in dump_str
     assert "custom_output" in dump_str
@@ -181,24 +184,25 @@ def test_config_dump(tmp_path):
     # Test with keys set in env
     os.environ["CUSTOM_ASR_KEY"] = "some-key"
     os.environ["CUSTOM_GEMINI_KEY"] = "another-key"
-    
+
     dump_str_with_keys = config.dump()
     assert "API Key Present:         Yes" in dump_str_with_keys
-    
+
     # Clean up env
     del os.environ["CUSTOM_ASR_KEY"]
     del os.environ["CUSTOM_GEMINI_KEY"]
 
 def test_config_dump_covers_all_properties(tmp_path):
     import inspect
+
     from podscribe.config import Config
-    
+
     # 1. Get all properties defined on Config
     properties = [
         name for name, member in inspect.getmembers(Config)
         if isinstance(member, property)
     ]
-    
+
     # 2. Define mappings of properties to their expected dump substrings
     general_properties = {
         "input_dir": "Input Directory:",
@@ -223,17 +227,17 @@ def test_config_dump_covers_all_properties(tmp_path):
         "rss_feeds": "RSS Feeds",
         "prompt_context": "Prompt Context"
     }
-    
+
     crispasr_properties = {
         "transcriber_crispasr_path": "CrispASR Path:",
         "transcriber_backend": "CrispASR Backend:",
         "transcriber_diarize_method": "Diarize Method:"
     }
-    
+
     vibevoice_properties = {
         "hotwords": "Hotwords:"
     }
-    
+
     # 3. Verify that every property defined on Config is in exactly one mapping
     all_mapped = {**general_properties, **crispasr_properties, **vibevoice_properties}
     for prop in properties:
@@ -242,21 +246,21 @@ def test_config_dump_covers_all_properties(tmp_path):
             f"Please add it to the appropriate mapping (general, crispasr, or vibevoice) "
             f"and ensure it is rendered in Config.dump()."
         )
-        
+
     # 4. Helper to verify a configuration's dump
     def verify_dump(config_content: str, expected_fields: dict, unexpected_fields: dict):
         config_file = tmp_path / "config.toml"
         config_file.write_text(config_content)
         config = Config(config_file)
         dump_str = config.dump()
-        
+
         # All expected fields must be present
         for prop, substring in expected_fields.items():
             assert substring in dump_str, (
                 f"Expected substring '{substring}' (for property '{prop}') "
                 f"was not found in Config.dump() output:\n{dump_str}"
             )
-            
+
         # All unexpected fields must NOT be present
         for prop, substring in unexpected_fields.items():
             assert substring not in dump_str, (
