@@ -1,9 +1,12 @@
 import abc
 import logging
 
+import httpx
+import openai
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 from openai import OpenAI
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,32 @@ class TokenUsage:
         )
 
 
+def is_post_processing_retryable_exception(exception: Exception) -> bool:
+    """Determine whether an exception during post-processing should trigger a retry (e.g. rate limits, timeouts, 503)."""
+    cause = exception.__cause__ if isinstance(exception, RuntimeError) and exception.__cause__ else exception
+
+    # Check httpx exceptions
+    if isinstance(cause, (httpx.TimeoutException, httpx.NetworkError)):
+        return True
+
+    if isinstance(cause, httpx.HTTPStatusError):
+        return cause.response.status_code in (429, 502, 503, 504)
+
+    # Check OpenAI exceptions
+    if isinstance(cause, (openai.APITimeoutError, openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError)):
+        return True
+    if isinstance(cause, openai.APIStatusError):
+        if cause.status_code in (429, 502, 503, 504):
+            return True
+
+    # Check Google GenAI exceptions
+    if isinstance(cause, errors.APIError):
+        if cause.code in (429, 502, 503, 504):
+            return True
+
+    return False
+
+
 class BasePostProcessor(abc.ABC):
     """Abstract base class defining the interface for LLM post-processors."""
 
@@ -65,6 +94,12 @@ class GeminiPostProcessor(BasePostProcessor):
         self.api_key = api_key
         self.temperature = temperature
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_post_processing_retryable_exception)
+    )
     def post_process(self, transcript: str, prompt_template: str, context: dict = None) -> tuple[str, TokenUsage]:
         """Send the rendered transcript prompt to Gemini and return polished Markdown text."""
         if not self.model:
@@ -100,7 +135,10 @@ class GeminiPostProcessor(BasePostProcessor):
                 raise RuntimeError("Empty response from Gemini.")
 
         except Exception as e:
-            logger.error(f"Gemini post-processing failed: {e}")
+            if is_post_processing_retryable_exception(e):
+                logger.warning(f"Gemini post-processing attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"Gemini post-processing failed: {e}")
             raise RuntimeError(f"Gemini post-processing failed: {e}") from e
 
 class OpenAICompatiblePostProcessor(BasePostProcessor):
@@ -118,6 +156,12 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
         self.model = model
         self.temperature = temperature
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1.5, min=2, max=30),
+        retry=retry_if_exception(is_post_processing_retryable_exception)
+    )
     def post_process(self, transcript: str, prompt_template: str, context: dict = None) -> tuple[str, TokenUsage]:
         """Send the rendered transcript prompt to an OpenAI-compatible chat endpoint and return polished text."""
         if not self.endpoint_url:
@@ -158,5 +202,8 @@ class OpenAICompatiblePostProcessor(BasePostProcessor):
                 raise RuntimeError("No choices returned from OpenAI-compatible API.")
 
         except Exception as e:
-            logger.error(f"OpenAI-compatible post-processing failed: {e}")
+            if is_post_processing_retryable_exception(e):
+                logger.warning(f"OpenAI-compatible post-processing attempt failed: {e}. Retrying...")
+            else:
+                logger.error(f"OpenAI-compatible post-processing failed: {e}")
             raise RuntimeError(f"OpenAI-compatible post-processing failed: {e}") from e

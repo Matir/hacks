@@ -297,3 +297,72 @@ def test_openai_post_process_with_context():
             ],
             temperature=0.5
         )
+
+
+def test_gemini_post_process_retry_on_503():
+    from google.genai.errors import ServerError
+    proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="key", temperature=0.3)
+
+    err_503 = ServerError(503, {"error": {"code": 503, "status": "UNAVAILABLE", "message": "Service Unavailable"}})
+
+    mock_response = MagicMock()
+    mock_response.text = "Hello World"
+    mock_usage = MagicMock()
+    mock_usage.prompt_token_count = 10
+    mock_usage.candidates_token_count = 5
+    mock_usage.total_token_count = 15
+    mock_response.usage_metadata = mock_usage
+
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class, \
+         patch("time.sleep") as mock_sleep:
+        mock_client = mock_genai_client_class.return_value
+        mock_models = mock_client.models
+        mock_models.generate_content.side_effect = [err_503, mock_response]
+
+        text, usage = proc.post_process("raw text", "Clean this: {{TRANSCRIPT}}")
+
+        assert text == "Hello World"
+        assert usage.prompt_tokens == 10
+        assert usage.completion_tokens == 5
+        assert usage.total_tokens == 15
+        assert mock_models.generate_content.call_count == 2
+        mock_sleep.assert_called_once()
+
+
+def test_openai_post_process_retry_on_503():
+    import httpx
+    import openai
+    proc = OpenAICompatiblePostProcessor(
+        endpoint_url="https://openrouter.ai/api/v1",
+        api_key="op-key",
+        model="meta-llama/llama-3-70b-instruct",
+        temperature=0.5
+    )
+
+    response_503 = httpx.Response(503, request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"))
+    err_503 = openai.APIStatusError("Service Unavailable", response=response_503, body=None)
+
+    mock_response = MagicMock()
+    mock_usage = MagicMock()
+    mock_usage.prompt_tokens = 20
+    mock_usage.completion_tokens = 10
+    mock_usage.total_tokens = 30
+    mock_response.usage = mock_usage
+    mock_choice = MagicMock()
+    mock_choice.message.content = "formatted output"
+    mock_response.choices = [mock_choice]
+
+    with patch("podscribe.post_processors.OpenAI") as mock_openai_class, \
+         patch("time.sleep") as mock_sleep:
+        mock_client = mock_openai_class.return_value
+        mock_chat = mock_client.chat
+        mock_chat.completions.create.side_effect = [err_503, mock_response]
+
+        text, usage = proc.post_process("raw transcript data", "Format: {{TRANSCRIPT}}")
+
+        assert text == "formatted output"
+        assert usage.prompt_tokens == 20
+        assert usage.completion_tokens == 10
+        assert usage.total_tokens == 30
+        assert mock_chat.completions.create.call_count == 2
+        mock_sleep.assert_called_once()

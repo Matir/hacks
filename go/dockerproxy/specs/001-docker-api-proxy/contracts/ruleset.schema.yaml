@@ -1,0 +1,52 @@
+# Docker Proxy Policy Ruleset Schema & Reference Example
+# File format: YAML v3
+version: "1.0"
+default_action: allow # Optional: 'allow' or 'deny' (defaults to 'allow')
+
+rules:
+  # Rule 1: Deny container creation if privileged mode is requested or mounts fall outside allowlist
+  - id: deny-privileged-or-unauthorized-mounts
+    action: deny
+    methods: ["POST"]
+    command_types: ["create"]
+    path_pattern: "^/v[\\d\\.]+/containers/create.*"
+    container_create:
+      privileged: true
+      allowed_mounts:
+        - "^/var/log/myapp/.*"
+        - "^/tmp/scratch/.*"
+      allowed_ports:
+        - "80/tcp"
+        - "8080/tcp"
+    message: "Container creation denied: privileged containers or unauthorized mounts/ports prohibited."
+
+  # Rule 2: Filter container and image lists returned to client based on allowlist
+  - id: filter-multi-tenant-lists
+    action: filter
+    methods: ["GET"]
+    command_types: ["list"]
+    path_pattern: "^/v[\\d\\.]+/(containers|images)/json.*"
+    response_filter:
+      allowed_names:
+        - "^tenant-a-.*"
+      allowed_labels:
+        tenant: "tenant-a"
+
+  # Rule 3: Deny interactive exec sessions unless running allowed commands
+  - id: restrict-exec-commands
+    action: deny
+    methods: ["POST"]
+    command_types: ["exec"]
+    path_pattern: "^/v[\\d\\.]+/containers/.*/exec$"
+    exec_create:
+      allowed_commands:
+        - "^ls\\s+.*"
+        - "^cat\\s+/var/log/.*"
+    message: "Exec command denied by security policy allowlist."
+
+  # Rule 4: Block entire command types (e.g. image building)
+  - id: deny-image-builds
+    action: deny
+    command_types: ["build"]
+    path_pattern: "^/v[\\d\\.]+/build.*"
+    message: "Image build operations are prohibited on this node."

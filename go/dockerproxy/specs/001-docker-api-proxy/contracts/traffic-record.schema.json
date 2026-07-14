@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TrafficRecord",
+  "description": "Structured JSON Line record output for intercepted Docker API transactions",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Correlation UUID for the proxy session"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when transaction finished"
+    },
+    "method": {
+      "type": "string",
+      "description": "HTTP request method"
+    },
+    "uri": {
+      "type": "string",
+      "description": "Full request URI path and query string"
+    },
+    "client_headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "request_body": {
+      "type": "string",
+      "description": "Bounded snippet of raw request body (up to 64KB)"
+    },
+    "status_code": {
+      "type": "integer",
+      "description": "HTTP status code returned to client"
+    },
+    "response_headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "response_body": {
+      "type": "string",
+      "description": "Bounded snippet of raw response body (up to 64KB)"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["allowed", "denied"]
+    },
+    "matched_rule_id": {
+      "type": "string",
+      "description": "ID of the rule that determined the outcome, or 'default'"
+    }
+  },
+  "required": [
+    "session_id",
+    "timestamp",
+    "method",
+    "uri",
+    "status_code",
+    "outcome",
+    "matched_rule_id"
+  ]
+}
