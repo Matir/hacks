@@ -130,6 +130,16 @@ api_key_env = "GEMINI_API_KEY"
 # Model temperature (lower values are more deterministic and follow instructions better)
 temperature = 0.2
 
+# Safety block threshold for Gemini post-processor ("OFF", "BLOCK_NONE", "BLOCK_ONLY_HIGH", "BLOCK_MEDIUM_AND_ABOVE")
+# Audio transcripts of podcasts/interviews may trigger default safety filters; defaults to "OFF".
+# safety_settings = "OFF"
+
+# Thinking token budget for reasoning models (e.g. Gemini 2.5). Set to 0 to disable thinking for transcript editing.
+# thinking_budget = 0
+
+# Maximum output tokens for response generation (defaults to 16384)
+# max_output_tokens = 16384
+
 # --- Alternative Post-Processor: OpenAI Compatible (e.g., OpenRouter, OpenAI, local) ---
 # provider = "openai_compatible"
 # endpoint_url = "https://openrouter.ai/api/v1"

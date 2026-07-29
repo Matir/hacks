@@ -159,7 +159,14 @@ class Orchestrator:
         temp = self.config.post_processor_temperature
 
         if provider == "gemini":
-            return GeminiPostProcessor(model=model, api_key=api_key, temperature=temp)
+            return GeminiPostProcessor(
+                model=model,
+                api_key=api_key,
+                temperature=temp,
+                safety_settings=self.config.post_processor_safety_settings,
+                thinking_budget=self.config.post_processor_thinking_budget,
+                max_output_tokens=self.config.post_processor_max_output_tokens,
+            )
         elif provider == "openai_compatible":
             return OpenAICompatiblePostProcessor(endpoint_url=endpoint, api_key=api_key, model=model, temperature=temp)
         else:

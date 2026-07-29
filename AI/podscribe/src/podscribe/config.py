@@ -156,6 +156,22 @@ class Config:
     def post_processor_temperature(self) -> float:
         return float(self.data.get("post_processor", {}).get("temperature", 0.2))
 
+    @property
+    def post_processor_safety_settings(self) -> Any:
+        pp = self.data.get("post_processor", {})
+        return pp.get("safety_settings", pp.get("safety_threshold", "OFF"))
+
+    @property
+    def post_processor_thinking_budget(self) -> int | None:
+        val = self.data.get("post_processor", {}).get("thinking_budget")
+        return int(val) if val is not None else None
+
+    @property
+    def post_processor_max_output_tokens(self) -> int:
+        pp = self.data.get("post_processor", {})
+        val = pp.get("max_output_tokens", pp.get("max_tokens", 16384))
+        return int(val)
+
     def get_post_processor_api_key_env(self) -> str | None:
         if "api_key_env" in self.data.get("post_processor", {}):
             return str(self.data["post_processor"]["api_key_env"])
@@ -293,6 +309,9 @@ class Config:
             f"Temperature:             {self.post_processor_temperature}",
             f"API Key Env Var:         {self.get_post_processor_api_key_env() or 'N/A'}",
             f"API Key Present:         {'Yes' if self.get_post_processor_api_key() else 'No'}",
+            f"Safety Settings:         {self.post_processor_safety_settings or 'Default'}",
+            f"Thinking Budget:         {self.post_processor_thinking_budget if self.post_processor_thinking_budget is not None else 'Default'}",
+            f"Max Output Tokens:       {self.post_processor_max_output_tokens or 'Default'}",
         ])
 
         if self.rss_feeds:

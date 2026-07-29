@@ -168,10 +168,99 @@ def test_gemini_post_process_empty_response():
         mock_models = mock_client.models
         mock_response = MagicMock()
         mock_response.text = None # Empty response
+        mock_response.candidates = []
+        mock_response.prompt_feedback = None
         mock_models.generate_content.return_value = mock_response
 
-        with pytest.raises(RuntimeError, match="Empty response from Gemini"):
+        with pytest.raises(RuntimeError, match="Empty response from Gemini \\(no candidates returned\\)"):
             proc.post_process("raw", "temp {{TRANSCRIPT}}")
+
+def test_gemini_post_process_empty_response_safety_details():
+    proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="key", temperature=0.3)
+
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
+        mock_client = mock_genai_client_class.return_value
+        mock_models = mock_client.models
+        mock_response = MagicMock()
+        mock_response.text = None
+        mock_candidate = MagicMock()
+        mock_candidate.finish_reason = "SAFETY"
+        mock_candidate.finish_message = "Content blocked"
+        mock_rating = MagicMock()
+        mock_rating.blocked = True
+        mock_rating.category = "HARM_CATEGORY_HARASSMENT"
+        mock_rating.probability = "HIGH"
+        mock_candidate.safety_ratings = [mock_rating]
+        mock_candidate.content = None
+        mock_response.candidates = [mock_candidate]
+        mock_response.prompt_feedback = None
+        mock_models.generate_content.return_value = mock_response
+
+        with pytest.raises(RuntimeError, match="finish_reason=SAFETY"):
+            proc.post_process("raw", "temp {{TRANSCRIPT}}")
+
+def test_gemini_post_process_empty_response_thought_parts():
+    proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="key", temperature=0.3)
+
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
+        mock_client = mock_genai_client_class.return_value
+        mock_models = mock_client.models
+        mock_response = MagicMock()
+        mock_response.text = None
+        mock_candidate = MagicMock()
+        mock_candidate.finish_reason = "MAX_TOKENS"
+        mock_candidate.finish_message = None
+        mock_candidate.safety_ratings = []
+        mock_part = MagicMock()
+        mock_part.thought = True
+        mock_part.text = "Thinking process..."
+        mock_candidate.content.parts = [mock_part]
+        mock_response.candidates = [mock_candidate]
+        mock_response.prompt_feedback = None
+        mock_models.generate_content.return_value = mock_response
+
+        with pytest.raises(RuntimeError, match="candidate contains thought parts but no final text"):
+            proc.post_process("raw", "temp {{TRANSCRIPT}}")
+
+def test_gemini_post_process_config_options():
+    proc = GeminiPostProcessor(
+        model="gemini-2.5-flash",
+        api_key="key",
+        temperature=0.3,
+        safety_settings="OFF",
+        thinking_budget=0,
+        max_output_tokens=4096,
+    )
+
+    with patch("podscribe.post_processors.genai.Client") as mock_genai_client_class:
+        mock_client = mock_genai_client_class.return_value
+        mock_models = mock_client.models
+        mock_response = MagicMock(text="Polished text")
+        mock_response.usage_metadata = MagicMock(prompt_token_count=10, candidates_token_count=5, total_token_count=15)
+        mock_models.generate_content.return_value = mock_response
+
+        text, usage = proc.post_process("raw text", "template {{TRANSCRIPT}}")
+
+        assert text == "Polished text"
+        mock_models.generate_content.assert_called_once()
+        call_args = mock_models.generate_content.call_args[1]
+        config = call_args["config"]
+        assert config.max_output_tokens == 4096
+        assert config.thinking_config.thinking_budget == 0
+        assert len(config.safety_settings) == 5
+        assert config.safety_settings[0].threshold.name == "OFF"
+
+def test_gemini_post_process_invalid_safety_threshold():
+    proc = GeminiPostProcessor(
+        model="gemini-2.5-flash",
+        api_key="key",
+        temperature=0.3,
+        safety_settings="INVALID_THRESHOLD",
+    )
+
+    with patch("podscribe.post_processors.genai.Client"):
+        with pytest.raises(RuntimeError, match="Unsupported safety threshold string"):
+            proc.post_process("raw text", "template {{TRANSCRIPT}}")
 
 def test_gemini_post_process_failure():
     proc = GeminiPostProcessor(model="gemini-2.5-flash", api_key="key", temperature=0.3)

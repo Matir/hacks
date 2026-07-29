@@ -118,6 +118,8 @@ def test_config_defaults(tmp_path):
     assert config.post_processor_model == ""
     assert config.post_processor_endpoint == ""
     assert config.post_processor_temperature == 0.2
+    assert config.post_processor_safety_settings == "OFF"
+    assert config.post_processor_max_output_tokens == 16384
     assert config.rss_feeds == []
     assert config.prompt_context == {}
 
@@ -225,6 +227,9 @@ def test_config_dump_covers_all_properties(tmp_path):
         "post_processor_model": "Model:",
         "post_processor_endpoint": "Endpoint URL:",
         "post_processor_temperature": "Temperature:",
+        "post_processor_safety_settings": "Safety Settings:",
+        "post_processor_thinking_budget": "Thinking Budget:",
+        "post_processor_max_output_tokens": "Max Output Tokens:",
         "transcription_workers": "Transcription Workers:",
         "postprocessing_workers": "Postprocessing Workers:",
         "rss_feeds": "RSS Feeds",
@@ -373,3 +378,20 @@ def test_concurrency_config(tmp_path):
     config = Config(config_file)
     assert config.transcription_workers == 4
     assert config.postprocessing_workers == 2
+
+
+def test_post_processor_extra_config(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("""
+    [post_processor]
+    provider = "gemini"
+    model = "gemini-2.5-flash"
+    safety_settings = "BLOCK_NONE"
+    thinking_budget = 0
+    max_output_tokens = 8192
+    """)
+    config = Config(config_file)
+    assert config.post_processor_safety_settings == "BLOCK_NONE"
+    assert config.post_processor_thinking_budget == 0
+    assert config.post_processor_max_output_tokens == 8192
+
