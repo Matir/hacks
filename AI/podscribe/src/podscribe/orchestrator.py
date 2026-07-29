@@ -303,6 +303,10 @@ class Orchestrator:
 
         # 2. Preprocess (if needed)
         if self.stage in ("all", "transcribe"):
+            raw_transcript_path = self.raw_transcripts_dir / f"{file_path.stem}_raw.txt"
+            if entry.get("status") in ("new", "failed") and self._load_existing_transcript(relative_path, raw_transcript_path):
+                entry = self.state_manager.get_entry(relative_path)
+
             if entry.get("status") in ("new", "failed"):
                 try:
                     working_file = self.preprocessor.preprocess(file_path, duration=audio_duration)

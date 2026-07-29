@@ -256,6 +256,72 @@ def test_orchestrator_run_resumes_from_transcribed(mock_config, tmp_path):
         assert final_transcript_file.exists()
         assert final_transcript_file.read_text() == "polished markdown text"
 
+def test_orchestrator_run_resumes_from_failed_postprocessing(mock_config, tmp_path):
+    input_dir = mock_config.input_dir
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_file = input_dir / "podcast.mp3"
+    input_file.write_text("fake_audio_content")
+
+    with patch.object(Orchestrator, "_init_transcriber") as mock_init_t, \
+         patch.object(Orchestrator, "_init_post_processor") as mock_init_p, \
+         patch("podscribe.orchestrator.AudioPreprocessor") as mock_preprocessor_class:
+
+        mock_transcriber = MagicMock()
+        mock_init_t.return_value = mock_transcriber
+
+        mock_post_processor = MagicMock()
+        mock_post_processor.post_process.return_value = ("polished markdown text", TokenUsage(20, 10, 30))
+        mock_init_p.return_value = mock_post_processor
+        mock_preprocessor = mock_preprocessor_class.return_value
+        mock_preprocessor.get_duration.return_value = 120.0
+
+        import hashlib
+        file_hash = hashlib.md5(b"fake_audio_content").hexdigest()
+
+        output_dir = mock_config.output_dir
+        raw_transcripts_dir = output_dir / "raw_transcripts"
+        raw_transcripts_dir.mkdir(parents=True, exist_ok=True)
+
+        raw_transcript_file = raw_transcripts_dir / "podcast_raw.txt"
+        raw_transcript_file.write_text("saved raw transcript")
+
+        preprocessed_file = output_dir / "preprocessed" / "podcast_16k_mono.wav"
+        preprocessed_file.parent.mkdir(parents=True, exist_ok=True)
+        preprocessed_file.write_text("fake preprocessed")
+
+        state_file = output_dir / "state.json"
+        state_data = {
+            "podcast.mp3": {
+                "hash": file_hash,
+                "status": "failed",
+                "preprocessed_path": str(preprocessed_file),
+                "raw_transcript_path": str(raw_transcript_file),
+                "final_transcript_path": "",
+                "error": "Post-processing: Empty response from Gemini."
+            }
+        }
+        import json
+        with open(state_file, "w") as f:
+            json.dump(state_data, f)
+
+        orchestrator = Orchestrator(mock_config)
+        orchestrator.run()
+
+        # Preprocessor and Transcriber should be skipped because raw transcript exists
+        mock_preprocessor.preprocess.assert_not_called()
+        mock_transcriber.transcribe.assert_not_called()
+
+        # Post-processor should be called
+        mock_post_processor.post_process.assert_called_once_with(
+            "saved raw transcript",
+            "Format this: {{TRANSCRIPT}}",
+            context={"filename": "podcast.mp3"}
+        )
+
+        with open(state_file, "r") as f:
+            updated_state = json.load(f)
+            assert updated_state["podcast.mp3"]["status"] == "completed"
+
 def test_orchestrator_run_handles_error_and_continues(mock_config, tmp_path):
     input_dir = mock_config.input_dir
     input_dir.mkdir(parents=True, exist_ok=True)
