@@ -36,7 +36,7 @@ function _shelper_cmd_widget
     set -l payload (printf '{"input":%s,"variables":{"shell":"fish"}}' "$escaped_input")
 
     # Dispatch via socat
-    set -l response (echo "$payload" | socat -t 15 - "UNIX-CONNECT:$sock" 2>/dev/null)
+    set -l response (echo "$payload" | socat -t 60 - "UNIX-CONNECT:$sock" 2>/dev/null)
 
     if test -z "$response"
         return 1
