@@ -1,0 +1,18 @@
+# Go artifacts
+*.exe
+*.test
+vendor/
+*.out
+
+# Binaries
+/shelperd
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+.agents/
+/cmd/shelperd

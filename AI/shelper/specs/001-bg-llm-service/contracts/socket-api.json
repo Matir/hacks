@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SHelper Socket IPC API",
+  "description": "Newline-Delimited JSON (NDJSON) protocol over Unix Domain Socket",
+  "definitions": {
+    "Request": {
+      "type": "object",
+      "required": ["input"],
+      "properties": {
+        "id": { "type": "string", "description": "Optional request correlation ID" },
+        "provider": { "type": "string", "enum": ["google", "openai"], "default": "google" },
+        "model": { "type": "string", "description": "Optional model override" },
+        "input": { "type": "string", "minLength": 1, "description": "Input user text/prompt" },
+        "template": { "type": "string", "description": "Optional inline prompt template override" },
+        "variables": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Optional key-value template variables"
+        },
+        "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0 }
+      }
+    },
+    "Response": {
+      "type": "object",
+      "required": ["id", "status", "metadata"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "enum": ["success", "error"] },
+        "output": { "type": "string" },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": { "type": "string" },
+            "message": { "type": "string" },
+            "details": { "type": "string" }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "required": ["provider", "model", "latency_ms", "template_source"],
+          "properties": {
+            "provider": { "type": "string" },
+            "model": { "type": "string" },
+            "latency_ms": { "type": "integer" },
+            "template_source": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
