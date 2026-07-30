@@ -38,12 +38,13 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 		// Track active background workers
 		atomic.AddInt32(&d.activeWorkers, 1)
 
-		// Process normal text generation request
-		ctx, cancel := context.WithTimeout(d.ctx, 60*time.Second)
-		resp, err := d.reqHandler(ctx, &req)
-		cancel()
-
-		atomic.AddInt32(&d.activeWorkers, -1)
+		// Process normal text generation request in a closure to safely defer telemetry decrement
+		resp, err := func() (*SocketResponse, error) {
+			defer atomic.AddInt32(&d.activeWorkers, -1)
+			ctx, cancel := context.WithTimeout(d.ctx, 60*time.Second)
+			defer cancel()
+			return d.reqHandler(ctx, &req)
+		}()
 
 		if err != nil {
 			d.logger.Error("Request processing failed: %v", err)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,7 @@ const (
 )
 
 type Logger struct {
+	mu         sync.RWMutex
 	out        io.Writer
 	level      Level
 	maskedKeys []string
@@ -39,14 +41,19 @@ func NewLogger(out io.Writer, levelStr string) *Logger {
 
 // Mask registers a sensitive value to be replaced with [API_KEY_MASKED].
 func (l *Logger) Mask(key string) {
-	if key == "" {
+	// Guard against empty keys or short keys that would cause collateral masking (e.g. "key")
+	if len(key) < 6 {
 		return
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.maskedKeys = append(l.maskedKeys, key)
 }
 
 // applyMask replaces all registered sensitive values.
 func (l *Logger) applyMask(msg string) string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	for _, key := range l.maskedKeys {
 		msg = strings.ReplaceAll(msg, key, "[API_KEY_MASKED]")
 	}

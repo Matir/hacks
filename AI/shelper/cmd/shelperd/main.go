@@ -50,27 +50,21 @@ func main() {
 	var registeredCount int
 
 	// Proactively attempt initialization of Google Gen AI Provider
-	if cfg.GeminiAPIKey != "" {
-		os.Setenv("GEMINI_API_KEY", cfg.GeminiAPIKey)
-	}
-	if googleProv, err := llm.NewGoogleGenAIProvider(); err == nil {
+	if googleProv, err := llm.NewGoogleGenAIProvider(cfg.GeminiAPIKey); err == nil {
 		registry.Register(googleProv)
 		logger.Info("Google Gen AI Provider initialized successfully")
 		registeredCount++
 	} else {
-		logger.Warning("Google Gen AI Provider init deferred (not configured): %v", err)
+		logger.Warning("Google Gen AI Provider init deferred: %v", err)
 	}
 
 	// Proactively attempt initialization of OpenAI Provider
-	if cfg.OpenAIAPIKey != "" {
-		os.Setenv("OPENAI_API_KEY", cfg.OpenAIAPIKey)
-	}
-	if openaiProv, err := llm.NewOpenAIProvider(); err == nil {
+	if openaiProv, err := llm.NewOpenAIProvider(cfg.OpenAIAPIKey); err == nil {
 		registry.Register(openaiProv)
 		logger.Info("OpenAI Provider initialized successfully")
 		registeredCount++
 	} else {
-		logger.Warning("OpenAI Provider init deferred (not configured): %v", err)
+		logger.Warning("OpenAI Provider init deferred: %v", err)
 	}
 
 	// CRITICAL check: Exit immediately if no providers are registered due to missing credentials

@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"google.golang.org/genai"
 )
@@ -13,12 +12,10 @@ type GoogleGenAIProvider struct {
 	client *genai.Client
 }
 
-// NewGoogleGenAIProvider initializes the Google Gen AI SDK client.
-// It automatically resolves the API key from the GEMINI_API_KEY environment variable.
-func NewGoogleGenAIProvider() (*GoogleGenAIProvider, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+// NewGoogleGenAIProvider initializes the Google Gen AI client using the explicitly injected key.
+func NewGoogleGenAIProvider(apiKey string) (*GoogleGenAIProvider, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
+		return nil, fmt.Errorf("Gemini API key is empty")
 	}
 
 	// Initialize using default configuration

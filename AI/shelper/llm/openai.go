@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -15,12 +14,10 @@ type OpenAIProvider struct {
 	client openai.Client
 }
 
-// NewOpenAIProvider initializes the OpenAI SDK client.
-// It automatically resolves the API key from the OPENAI_API_KEY environment variable.
-func NewOpenAIProvider() (*OpenAIProvider, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
+// NewOpenAIProvider initializes the OpenAI client using the explicitly injected key.
+func NewOpenAIProvider(apiKey string) (*OpenAIProvider, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("OPENAI_API_KEY environment variable is not set")
+		return nil, fmt.Errorf("OpenAI API key is empty")
 	}
 
 	client := openai.NewClient(option.WithAPIKey(apiKey))
