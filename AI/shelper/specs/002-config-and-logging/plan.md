@@ -6,7 +6,10 @@
 
 ## Summary
 
-This feature introduces a unified configuration system (supporting CLI flags and a `shelper.toml` configuration file) and an observability logging engine. We will extend `config/config.go` to parse the TOML file and CLI flags, merging them with environment variables using strict precedence. The logging system will redirect operational metrics and API payloads to a designated log file or fallback to stdout/stderr.
+This feature introduces a unified configuration system (supporting CLI flags and a `shelper.toml` configuration file) and an observability logging engine. We will extend `config/config.go` to parse the TOML file and CLI flags, merging them with environment variables using strict precedence.
+Additionally:
+- If no logfile is specified, all log output will be disabled (no stdout/stderr logs).
+- If no LLM provider is successfully initialized due to lack of credentials (missing API keys), the daemon will exit immediately on startup.
 
 ## Technical Context
 
@@ -24,7 +27,10 @@ This feature introduces a unified configuration system (supporting CLI flags and
 
 **Performance Goals**: Configuration load overhead under 5ms, logging latency under 1ms.
 
-**Constraints**: Precedence order MUST be: CLI flags > TOML File > Environment variables > Defaults.
+**Constraints**:
+- Precedence order MUST be: CLI flags > TOML File > Environment variables > Defaults.
+- If `logfile` is empty, logging is disabled (no fallback to stdout/stderr).
+- If both Google/OpenAI providers fail to initialize because of credentials, exit immediately.
 
 **Scale/Scope**: Local developer tool.
 
@@ -54,7 +60,7 @@ specs/002-config-and-logging/
 
 ```text
 cmd/shelperd/
-└── main.go              # Entrypoint updated to load flags and initialize logger
+└── main.go              # Entrypoint updated to load flags, initialize logger, and check credentials on startup
 
 config/
 ├── config.go            # Updated to support TOML parsing, CLI flag parsing, and merging
@@ -65,7 +71,7 @@ daemon/
 ├── worker.go            # Updated to log prompt, response, and elapsed time details
 
 log/                     # New package for structured logging
-├── logger.go            # Structured logger implementation
+├── logger.go            # Structured logger implementation (supports disabling logging if writer is nil/empty)
 └── logger_test.go       # Logger unit tests
 ```
 

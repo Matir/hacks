@@ -12,7 +12,7 @@ The configuration entity represents the resolved runtime parameters.
 | `LLMModel` | Flag / TOML / Env | `llm_model` | `gemini-2.5-flash` | The specific model ID to request. |
 | `GeminiAPIKey` | Flag / TOML / Env | `gemini_api_key` | None | API credential for Google Gen AI. |
 | `OpenAIAPIKey` | Flag / TOML / Env | `openai_api_key` | None | API credential for OpenAI. |
-| `LogFile` | Flag / TOML / Env | `logfile` | None | Path to write operational logs. If empty, writes to stdout/stderr. |
+| `LogFile` | Flag / TOML / Env | `logfile` | None | Path to write operational logs. If empty, all logging is disabled (`io.Discard`). |
 | `LogLevel` | Flag / TOML / Env | `loglevel` | `info` | Filter for logged events (`info`, `warning`, `error`). |
 | `SocketPath` | Flag / Env | N/A | Resolved | Path of the Unix Domain Socket (resolved dynamically). |
 

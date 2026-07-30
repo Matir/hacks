@@ -107,8 +107,8 @@ func TestLoadConfigPrecedence(t *testing.T) {
 		if cfg.DefaultProvider != "gemini" {
 			t.Errorf("expected default provider 'gemini', got %q", cfg.DefaultProvider)
 		}
-		if cfg.DefaultModel != "gemini-2.5-flash" {
-			t.Errorf("expected default model 'gemini-2.5-flash', got %q", cfg.DefaultModel)
+		if cfg.DefaultModel != "gemini-3.5-flash" {
+			t.Errorf("expected default model 'gemini-3.5-flash', got %q", cfg.DefaultModel)
 		}
 	})
 

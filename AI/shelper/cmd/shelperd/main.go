@@ -24,7 +24,7 @@ func main() {
 	}
 
 	// 2. Initialize Logger
-	var logOut io.Writer = os.Stdout
+	var logOut io.Writer = io.Discard
 	if cfg.LogFile != "" {
 		f, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
@@ -47,6 +47,7 @@ func main() {
 
 	// 4. Initialize LLM Providers
 	registry := llm.NewRegistry()
+	var registeredCount int
 
 	// Proactively attempt initialization of Google Gen AI Provider
 	if cfg.GeminiAPIKey != "" {
@@ -55,6 +56,7 @@ func main() {
 	if googleProv, err := llm.NewGoogleGenAIProvider(); err == nil {
 		registry.Register(googleProv)
 		logger.Info("Google Gen AI Provider initialized successfully")
+		registeredCount++
 	} else {
 		logger.Warning("Google Gen AI Provider init deferred (not configured): %v", err)
 	}
@@ -66,8 +68,15 @@ func main() {
 	if openaiProv, err := llm.NewOpenAIProvider(); err == nil {
 		registry.Register(openaiProv)
 		logger.Info("OpenAI Provider initialized successfully")
+		registeredCount++
 	} else {
 		logger.Warning("OpenAI Provider init deferred (not configured): %v", err)
+	}
+
+	// CRITICAL check: Exit immediately if no providers are registered due to missing credentials
+	if registeredCount == 0 {
+		os.Stderr.Write([]byte("Error: No LLM provider credentials configured. Daemon cannot start.\n"))
+		os.Exit(1)
 	}
 
 	// 5. Define Request Handler Hook with resilient structured errors

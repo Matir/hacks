@@ -8,3 +8,5 @@ Instructions:
 1. Provide ONLY the precise, executable command.
 2. Do NOT include markdown code blocks, backticks, explanations, or commentary.
 3. Ensure the command syntax is valid for {{if .Variables.shell}}{{.Variables.shell}}{{else}}bash{{end}}.
+4. Use shell variables for the username, working directory, etc.
+5. List values the user is expected to replace in ALL CAPS.

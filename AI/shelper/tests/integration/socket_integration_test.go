@@ -2,11 +2,13 @@ package integration
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"shelper/daemon"
 	"shelper/llm"
@@ -326,3 +328,74 @@ func TestDaemonLoggingIntegration(t *testing.T) {
 		t.Errorf("expected latency delta in logs: %q", logContent)
 	}
 }
+
+// TestDaemonStartupNoCredentials verifies T015: daemon exits when no credentials are configured.
+func TestDaemonStartupNoCredentials(t *testing.T) {
+	// Build daemon binary
+	binPath := filepath.Join(t.TempDir(), "shelperd")
+	buildCmd := exec.Command("go", "build", "-o", binPath, "../../cmd/shelperd")
+	buildCmd.Dir = "."
+	if err := buildCmd.Run(); err != nil {
+		t.Fatalf("failed to build shelperd: %v", err)
+	}
+
+	// Start daemon with empty env and no flags
+	cmd := exec.Command(binPath)
+	cmd.Env = []string{
+		"GEMINI_API_KEY=",
+		"OPENAI_API_KEY=",
+		"SHELPER_DEFAULT_PROVIDER=",
+	}
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("expected daemon to fail and exit, but exited with success")
+	}
+
+	// Inspect exit code
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if code := exitErr.ExitCode(); code != 1 {
+			t.Errorf("expected exit code 1, got %d", code)
+		}
+	} else {
+		t.Fatalf("expected ExitError, got: %v", err)
+	}
+}
+
+// TestDaemonSilentLogging verifies T016: daemon prints nothing to stdout/stderr when logfile is empty.
+func TestDaemonSilentLogging(t *testing.T) {
+	binPath := filepath.Join(t.TempDir(), "shelperd")
+	buildCmd := exec.Command("go", "build", "-o", binPath, "../../cmd/shelperd")
+	if err := buildCmd.Run(); err != nil {
+		t.Fatalf("failed to build: %v", err)
+	}
+
+	// Start daemon with credentials but no logfile
+	cmd := exec.Command(binPath, "--gemini-api-key=test-key", "--logfile=")
+	cmd.Env = []string{
+		"SHELPER_SOCK=" + filepath.Join(t.TempDir(), "silent.sock"),
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start: %v", err)
+	}
+	defer cmd.Process.Kill()
+
+	// Wait a moment for daemon to start and listen
+	time.Sleep(100 * time.Millisecond)
+
+	if stdout.Len() > 0 {
+		t.Errorf("expected empty stdout, got: %q", stdout.String())
+	}
+	if stderr.Len() > 0 {
+		t.Errorf("expected empty stderr, got: %q", stderr.String())
+	}
+}
+

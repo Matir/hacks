@@ -1,6 +1,6 @@
 # Quickstart Validation Guide: Config and Logging
 
-This guide details manual validation tests to verify that configuration precedence (CLI > TOML > Env > Default) and logging level behaviors are functioning correctly.
+This guide details manual validation tests to verify configuration overrides, log silencing, and daemon exit on credential absence.
 
 ## Prerequisites
 
@@ -31,36 +31,34 @@ Launch the daemon with command-line flags overriding the provider and log level:
 ./bin/shelperd --llm-provider=gemini --loglevel=info --logfile=/tmp/cli-shelper.log
 ```
 
-### 3. Verify Active Configurations
-- Check that the daemon creates the log file at `/tmp/cli-shelper.log` (CLI override) instead of `/tmp/toml-shelper.log` (TOML value).
-- Query the daemon status endpoint:
-  ```bash
-  echo '{"type":"status"}' | socat - UNIX-CONNECT:/run/user/$(id -u)/shelper.sock
-  ```
-- Inspect the log file `/tmp/cli-shelper.log` and verify it contains logs at `info` level (e.g. startup logs, status request logs).
+---
+
+## Test Case 2: Silent Logging when LogFile is Empty
+
+Verify that if no log file is specified, no output is printed to stdout or stderr.
+
+### 1. Clear Environment Credentials & TOML Config
+Make sure no log file is specified in `shelper.toml` or CLI.
+
+### 2. Run Daemon in Foreground (without logfile)
+Start the daemon directly:
+```bash
+./bin/shelperd --llm-provider=gemini --gemini-api-key="some-key"
+```
+Verify that:
+- The terminal remains silent (no log output is written to stdout/stderr).
 
 ---
 
-## Test Case 2: Request Telemetry Logging
+## Test Case 3: Immediate Exit on Credentials Lack
 
-Verify that at `info` level, prompts, responses, and latencies are successfully logged.
+Verify that if no LLM provider has credentials, the daemon exits immediately with an error.
 
-### 1. Send processing request
-Send a processing request:
+### 1. Run Daemon with empty configuration/environment
+Unset credentials and start the daemon:
 ```bash
-echo '{"id":"req-telemetry","input":"print hello world in python"}' | socat - UNIX-CONNECT:/run/user/$(id -u)/shelper.sock
+GEMINI_API_KEY="" OPENAI_API_KEY="" ./bin/shelperd --gemini-api-key="" --openai-api-key=""
 ```
-
-### 2. Inspect Log File
-Verify that the log file contains the request telemetry, including:
-- The raw prompt string.
-- The returned LLM response.
-- The latency time delta.
-
-Example expected log:
-```text
-2026/07/30 11:15:20 INFO LLM Request ID: req-telemetry | Provider: gemini | Model: gemini-2.5-flash
-Prompt: print hello world in python
-Response: print("Hello, World!")
-Latency: 245ms
-```
+Verify that:
+- The command exits immediately with exit code 1.
+- An error message is written to standard error: `Error: No LLM provider credentials configured. Daemon cannot start.`

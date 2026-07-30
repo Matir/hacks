@@ -70,7 +70,7 @@ func LoadConfig(args []string) (*Config, error) {
 	cfg := &Config{
 		SocketPath:      ResolveSocketPath(),
 		DefaultProvider: "gemini",
-		DefaultModel:    "gemini-2.5-flash",
+		DefaultModel:    "gemini-3.5-flash",
 		LogLevel:        "info",
 		MaxWorkers:      20,
 	}

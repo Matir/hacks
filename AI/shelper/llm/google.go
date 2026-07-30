@@ -44,7 +44,7 @@ func (g *GoogleGenAIProvider) Name() string {
 func (g *GoogleGenAIProvider) Generate(ctx context.Context, req *GenerateRequest) (*GenerateResponse, error) {
 	model := req.Model
 	if model == "" {
-		model = "gemini-2.5-flash"
+		model = "gemini-3.5-flash"
 	}
 
 	// We can configure system instructions and generation parameters.

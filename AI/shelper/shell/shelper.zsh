@@ -24,7 +24,7 @@ _shelper_cmd_widget() {
 
     # Dispatch via socat
     local response
-    response=$(echo "$payload" | socat - "UNIX-CONNECT:$sock" 2>/dev/null)
+    response=$(echo "$payload" | socat -t 15 - "UNIX-CONNECT:$sock" 2>/dev/null)
 
     if [[ -z "$response" ]]; then
         return 1

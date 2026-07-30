@@ -4,43 +4,19 @@
 
 When combining multiple configuration sources (CLI flags, TOML file, Environment variables, Defaults), we must prevent flag defaults from overriding explicit TOML settings.
 
-### Alternatives Considered
+### Dynamic Flag Defaults
+- First, resolve defaults, environment variables, and TOML values into a temporary configuration struct.
+- Register CLI flags using the fields of this temporary struct as their default values.
+- Parse the CLI flags.
 
-1. **Explicit Visitation Check (`flag.Visit`)**:
-   - Parse flags with empty/zero defaults.
-   - Load TOML, then load env, then load flags.
-   - For each flag, check if it was visited. If so, override the TOML value.
-   - *Drawback*: Requires maintaining a list of visited flags and manual reassignment, which can be verbose.
+## Logging Strategy & Disabling Output
 
-2. **Dynamic Flag Defaults (Selected)**:
-   - First, resolve defaults, environment variables, and TOML values into a temporary configuration struct.
-   - Register CLI flags using the fields of this temporary struct as their default values!
-   - Parse the CLI flags.
-   - *Benefit*: Extremely clean. If the user does not pass a flag, it defaults to the value resolved from TOQL/env. If the user passes a flag, it overrides the TOML value.
+The user specified: "If no logfile is specified, do not print any log output at all."
 
-### TOML Parsing
+### Discarding Logs
+- Instead of defaulting log output to `os.Stdout`, we will default the logger output stream to `io.Discard` when `cfg.LogFile == ""`.
+- This ensures all calls to `logger.Info`/`logger.Warning`/`logger.Error` are safely ignored without modifying the log execution paths.
 
-We will use `github.com/BurntSushi/toml`.
-Example usage:
-```go
-type TomlConfig struct {
-    LLMProvider  *string `toml:"llm_provider"`
-    LLMModel     *string `toml:"llm_model"`
-    GeminiAPIKey *string `toml:"gemini_api_key"`
-    OpenAIAPIKey *string `toml:"openai_api_key"`
-    LogFile      *string `toml:"logfile"`
-    LogLevel     *string `toml:"loglevel"`
-}
-```
-Using pointer fields in TOML struct allows distinguishing between an empty value (absent) and an explicitly set empty string.
-
-## Logging Strategy
-
-The constitution requires low latency and actionable errors.
-
-### Logging System Design
-- We will implement a custom `Logger` in a new `log` package.
-- It will support levels: `info` (0), `warning` (1), `error` (2).
-- If `logfile` is specified, we will initialize an `os.OpenFile` and set the logger output to it. Otherwise, default to `os.Stdout`/`os.Stderr`.
-- To avoid blocking socket operations, log writing will be done directly to the file stream. Since local disk writes are fast, standard buffered or synchronized writers will be sufficient under 1ms.
-- To prevent API key leaks, the log engine must actively strip or mask strings that match the configured Gemini/OpenAI API keys when formatting prompt telemetry.
+### Fatal Startup Errors
+- If no credentials (keys) are present, the provider registry will contain 0 providers.
+- In this state, the daemon cannot function. We will write a clear message to `os.Stderr` (even if logs are disabled, as this is a fatal startup failure for a CLI command) and exit with code 1 immediately.
