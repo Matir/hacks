@@ -53,6 +53,7 @@ def test_log_auth_info():
     mock_config = MagicMock()
     mock_agent = MagicMock()
     mock_agent.provider = "google"
+    mock_agent.model = "test-model"
     mock_config.agents = {"agent1": mock_agent}
     mock_config.get_provider_config.return_value = None
 

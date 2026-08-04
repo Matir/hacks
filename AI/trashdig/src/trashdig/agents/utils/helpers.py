@@ -12,6 +12,7 @@ from trashdig.config import get_config
 # The following imports are for type hinting only and avoid circular dependencies.
 if TYPE_CHECKING:
     from google.adk.agents import BaseAgent
+    from google.adk.agents.run_config import RunConfig
     from google.adk.artifacts import BaseArtifactService
     from google.adk.sessions import BaseSessionService
     from google.adk.sessions.session import Session
@@ -95,7 +96,7 @@ def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig 
 def log_auth_info(config: "Config", logger: logging.Logger) -> None:
     """Log model and authentication information for every provider referenced by agents."""
     referenced: dict[str, set[str]] = {}
-    
+
     # Track which models use which provider
     for agent_cfg in config.agents.values():
         if agent_cfg.provider not in referenced:
@@ -110,14 +111,14 @@ def log_auth_info(config: "Config", logger: logging.Logger) -> None:
         prov_cfg = config.get_provider_config(prov_name)
         for line in describe_provider_auth(prov_name, prov_cfg):
             logger.info(line)
-        logger.info(f"  models: {', '.join(sorted(models))}")
+        logger.info("  models: %s", ", ".join(sorted(models)))
 
 
 def print_model_info(config: "Config") -> None:
     """Print model and authentication information to the console."""
-    from rich.console import Console
+    from rich.console import Console  # noqa: PLC0415
     console = Console()
-    
+
     referenced: dict[str, set[str]] = {}
     for agent_cfg in config.agents.values():
         if agent_cfg.provider not in referenced:
@@ -241,6 +242,7 @@ async def run_agent(  # noqa: PLR0913
     artifact_service: Optional["BaseArtifactService"] = None,
     user_id: str = "default_user",
     summarizer: Optional["SummarizerAgent"] = None,
+    run_config: Optional["RunConfig"] = None,
 ) -> str:
     """Helper to run an agent synchronously-like and return the final text response.
 
@@ -252,6 +254,7 @@ async def run_agent(  # noqa: PLR0913
         artifact_service: The ADK ArtifactService.
         user_id: The user ID.
         summarizer: Optional ADK Summarizer agent for context compaction.
+        run_config: Optional RunConfig to override default streaming modes.
 
     Returns:
         The final text response from the agent.
@@ -275,17 +278,29 @@ async def run_agent(  # noqa: PLR0913
 
     content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])
 
+    if run_config is None:
+        from google.adk.agents.run_config import RunConfig, StreamingMode  # noqa: PLC0415
+
+        from trashdig.config import get_config  # noqa: PLC0415
+        run_config = RunConfig(
+            streaming_mode=StreamingMode.SSE,
+            max_llm_calls=get_config().max_llm_calls
+        )
+
     final_text = ""
-    async for event in runner.run_async(
-        new_message=content,
-        session_id=session_id,
-        user_id=user_id,
-    ):
+    run_kwargs: dict[str, Any] = {
+        "new_message": content,
+        "session_id": session_id,
+        "user_id": user_id,
+        "run_config": run_config,
+    }
+
+    async for event in runner.run_async(**run_kwargs):
         final_text += get_response_text(event)
 
     return final_text
 
-async def maybe_summarize(
+async def maybe_summarize(  # noqa: PLR0913
     app_name: str,
     user_id: str,
     session_id: str,
@@ -304,7 +319,7 @@ async def maybe_summarize(
         threshold: The turn count threshold to trigger summarization.
     """
     try:
-        session: Optional["Session"] = await session_service.get_session(
+        session: Session | None = await session_service.get_session(
             app_name=app_name, user_id=user_id, session_id=session_id
         )
         if not session or not session.events or len(session.events) < threshold:
@@ -356,7 +371,7 @@ async def maybe_summarize(
             ))]
         )
         # Import Event here to avoid global circular issues
-        from google.adk.events.event import Event
+        from google.adk.events.event import Event  # noqa: PLC0415
         summary_event = Event(
             author="summarizer",
             content=summary_content,

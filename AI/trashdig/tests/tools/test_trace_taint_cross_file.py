@@ -70,7 +70,7 @@ def test_extract_callee_name_attribute():
 
 def test_find_calls_passing_variable_simple():
     src = b"result = fetch(user_id)\n"
-    calls = _find_calls_passing_variable("user_id", src,PYTHON_METADATA)
+    calls = _find_calls_passing_variable("user_id", src,"python")
     assert len(calls) == 1
     callee, idx, line, _node = calls[0]
 
@@ -81,13 +81,13 @@ def test_find_calls_passing_variable_simple():
 
 def test_find_calls_passing_variable_second_arg():
     src = b"run(cmd, user_id, timeout=5)\n"
-    calls = _find_calls_passing_variable("user_id", src,PYTHON_METADATA)
+    calls = _find_calls_passing_variable("user_id", src,"python")
     assert any(c[0] == "run" and c[1] == 1 for c in calls)
 
 
 def test_find_calls_passing_variable_sink():
     src = b"os.system(user_input)\n"
-    calls = _find_calls_passing_variable("user_input", src,PYTHON_METADATA)
+    calls = _find_calls_passing_variable("user_input", src,"python")
     assert len(calls) == 1
     callee, idx, line, _node = calls[0]
 
@@ -97,13 +97,13 @@ def test_find_calls_passing_variable_sink():
 
 def test_find_calls_passing_variable_no_match():
     src = b"print('hello')\n"
-    calls = _find_calls_passing_variable("user_id", src,PYTHON_METADATA)
+    calls = _find_calls_passing_variable("user_id", src,"python")
     assert calls == []
 
 
 def test_find_calls_passing_variable_multiple():
     src = b"a(x)\nb(x)\nc(y)\n"
-    calls = _find_calls_passing_variable("x", src,PYTHON_METADATA)
+    calls = _find_calls_passing_variable("x", src,"python")
     callees = [c[0] for c in calls]
     assert "a" in callees
     assert "b" in callees
@@ -116,13 +116,13 @@ def test_find_calls_passing_variable_multiple():
 
 def test_find_returns_variable_found():
     src = b"def f(x):\n    return x\n"
-    lines = _find_returns_variable("x", src,PYTHON_METADATA)
+    lines = _find_returns_variable("x", src,"python")
     assert 2 in lines
 
 
 def test_find_returns_variable_not_found():
     src = b"def f(x):\n    return 42\n"
-    lines = _find_returns_variable("x", src,PYTHON_METADATA)
+    lines = _find_returns_variable("x", src,"python")
     assert lines == []
 
 

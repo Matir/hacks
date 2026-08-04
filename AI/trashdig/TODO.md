@@ -214,3 +214,12 @@ Each item requires: (1) adding the grammar package to `pyproject.toml`, (2) addi
 - [x] **[MEDIUM]** Critic Agent: Implement an adversarial reviewer agent and wire it as a tool for Hunter and Validator agents.
 - [ ] **[MEDIUM]** Add deterministic checks for the verifier.
 - [ ] **[MEDIUM]** Use long term MemoryService for findings, conversation history, memory across sessions.
+
+## 🚀 Post-Assessment Roadmap (New Additions)
+These priorities were established following codebase analysis to improve human steerability, external integrations, memory, and testing stability:
+
+- [x] **[HIGH]** **Implement "Pause - [ ] **[HIGH]** **Implement "Pause & Steer" Steer" (Human-in-the-Loop)**: Introduce `EngineState.PAUSED` for a fully collaborative mode within the Textual UI. Permit researchers to manually pause, review pending bugs, provide contextual hints, and explicitly override hypotheses.
+- [ ] **[MEDIUM]** **Tool Ecosystem Expansion**: Automate external security API interfaces (e.g., NVD/CVE APIs, GitHub Security Advisories, or Bugcrowd/HackerOne mappings) via dynamic ADK OpenAPI integrations, phasing out explicitly hand-written wrappers.
+- [ ] **[MEDIUM]** **Cross-Session Memory Evolution**: Expand the architecture beyond edge `SqliteSessionService` by rolling out ADK's `MemoryService`. Guarantee long-term facts, findings, and code interactions persist identically across entirely distinct CLI invocation sessions against the same project.
+- [ ] **[HIGH]** **Agent Evaluation Module (`adk eval`)**: Ensure prompt/logic integrity natively via synthetic datasets of known vulnerability samples (e.g., Juliet or OWASP modules) tested automatically against the multi-agent verification workflow to catch regressions.
+- [x] **[LOW]** **RunConfig Adjustments**: Evolve from implicit invocations towards formal ADK `RunConfig` mechanisms for precisely controlling message streaming modalities, parameters, and bounded executions per payload interaction.

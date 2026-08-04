@@ -11,7 +11,7 @@ from trashdig.agents.utils.helpers import load_prompt, print_model_info, run_age
 from trashdig.config import get_config
 
 
-async def seed_vuln(
+async def seed_vuln(  # noqa: PLR0913
     agent: LlmAgent,
     cwe_id: str,
     session_service: SqliteSessionService,

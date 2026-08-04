@@ -1,7 +1,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from trashdig.config import Config
+from trashdig.config import Config  # noqa: PLC0415
 from trashdig.main import main
 
 
@@ -9,9 +9,11 @@ from trashdig.main import main
 @patch("trashdig.main.load_config", autospec=True)
 @patch("sys.stdout.isatty", autospec=True, return_value=True)
 def test_main_default_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
-    mock_config = MagicMock()
-    mock_config.workspace_root = os.path.abspath(".")
-    mock_config.data_dir = str(tmp_path / ".trashdig")
+    from trashdig.config import Config  # noqa: PLC0415
+    mock_config = Config()
+    mock_config.data["require_sandbox"] = False
+    mock_config.data["workspace_root"] = os.path.abspath(".")
+    mock_config.data["data_dir"] = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
 
@@ -30,9 +32,11 @@ def test_main_default_root(mock_isatty, mock_load_config, mock_app_class, tmp_pa
 @patch("trashdig.main.load_config", autospec=True)
 @patch("sys.stdout.isatty", autospec=True, return_value=True)
 def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
-    mock_config = MagicMock()
-    mock_config.workspace_root = str(tmp_path)
-    mock_config.data_dir = str(tmp_path / ".trashdig")
+    from trashdig.config import Config  # noqa: PLC0415
+    mock_config = Config()
+    mock_config.data["require_sandbox"] = False
+    mock_config.data["workspace_root"] = str(tmp_path)
+    mock_config.data["data_dir"] = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
 
@@ -68,10 +72,12 @@ def test_main_dump_config(mock_app_class, mock_load_config, capsys):
 @patch("trashdig.main.Coordinator", autospec=True)
 @patch("asyncio.run", autospec=True)
 def test_main_batch_mode(mock_asyncio_run, mock_coordinator_class, mock_init_art, mock_load_config, tmp_path):
-    mock_config = MagicMock()
-    mock_config.rpm_limit = 10
-    mock_config.tpm_limit = 1000
-    mock_config.data_dir = str(tmp_path / ".trashdig")
+    from trashdig.config import Config  # noqa: PLC0415
+    mock_config = Config()
+    mock_config.data["require_sandbox"] = False
+    mock_config.data["rpm_limit"] = 10
+    mock_config.data["tpm_limit"] = 1000
+    mock_config.data["data_dir"] = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_init_art.return_value = MagicMock()
 

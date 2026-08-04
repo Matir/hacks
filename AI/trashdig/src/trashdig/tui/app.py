@@ -149,6 +149,7 @@ class StatusPane(Vertical):
             "Scanning": "yellow",
             "Hunting": "cyan",
             "Verifying": "magenta",
+            "Paused": "red",
         }.get(phase, "white")
 
         root_display = os.path.basename(workspace_root) or workspace_root
@@ -325,6 +326,8 @@ class TrashDigApp(App):
         Binding("f6", "prioritize", "Prioritize"),
         Binding("v", "view_findings", "Findings"),
         Binding("ctrl+l", "clear_log", "Clear Log"),
+        Binding("space", "toggle_pause", "Pause/Resume"),
+        Binding("h", "hint", "Provide Hint"),
     ]
     DEFAULT_CSS = """
     #sidebar {
@@ -434,7 +437,7 @@ class TrashDigApp(App):
             status_pane = self.query_one(StatusPane)
             status_pane.refresh_status(
                 workspace_root=self.workspace_root,
-                phase=self._phase,
+                phase="Paused" if getattr(self.coordinator, "state", None) == self.coordinator.state.__class__.PAUSED else self._phase,
                 tech_stack=self.coordinator.tech_stack,
                 scan_results=self.coordinator.scan_results,
                 prioritized_targets=self.prioritized_targets,
@@ -586,6 +589,25 @@ class TrashDigApp(App):
     def action_clear_log(self) -> None:
         """Clears the REPL console log."""
         self.query_one("#repl_log", RichLog).clear()
+
+    def action_toggle_pause(self) -> None:
+        """Toggles the engine paused state."""
+        if self.coordinator.state == self.coordinator.state.__class__.PAUSED:
+            self.coordinator.resume()
+            self.query_one("#repl_log", RichLog).write("[bold green]System:[/bold green] Engine resumed.")
+        else:
+            self.coordinator.pause()
+            self.query_one("#repl_log", RichLog).write("[bold yellow]System:[/bold yellow] Engine pausing... will stop at next safe point.")
+        self.refresh_status()
+
+    async def action_hint(self) -> None:
+        """Provides a manual hint to the engine."""
+        def check_hint(hint: str | None) -> None:
+            if hint:
+                # Append hint to context or print
+                self.query_one("#repl_log", RichLog).write(f"[bold cyan]User Hint:[/bold cyan] {hint}")
+                self.coordinator.add_hint(hint)
+        self.push_screen(AskModal("Enter a hint/override for the current analysis:"), check_hint)
 
     def action_view_findings(self) -> None:
         """Opens the findings browser screen."""

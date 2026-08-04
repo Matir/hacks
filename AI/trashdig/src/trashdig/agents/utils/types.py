@@ -24,6 +24,7 @@ class EngineState(Enum):
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     WAITING_FOR_TOOLS = "WAITING_FOR_TOOLS"
+    PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 

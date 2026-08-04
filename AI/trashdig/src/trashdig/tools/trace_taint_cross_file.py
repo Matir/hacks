@@ -49,7 +49,7 @@ def _extract_callee_name(func_node: Any) -> str | None:
     return None
 
 
-def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:
+def _get_full_callee_path(func_node: Any, metadata: Any) -> list[str]:  # noqa: C901
     """Extract the full path of a callee (e.g. ['module', 'func'])."""
     if func_node.type in metadata.identifier_types:
         return [func_node.text.decode("utf-8")]
@@ -125,7 +125,7 @@ def _resolve_import(  # noqa: C901
             return "MATCH"
         return None
 
-    def walk(node: Any) -> str | None:  # noqa: C901
+    def walk(node: Any) -> str | None:  # noqa: C901, PLR0911, PLR0912
         if node.type == "import_from_statement":
             module_node = node.child_by_field_name("module_name")
             if module_node:
@@ -608,7 +608,7 @@ def trace_taint_cross_file(
     )
     return "\n".join(report_lines)
 
-def _find_tainted_assignments(
+def _find_tainted_assignments(  # noqa: C901
     variable_name: str,
     content: bytes,
     metadata: Any,
@@ -654,9 +654,8 @@ def _find_tainted_assignments(
                                 (name_node.text.decode("utf-8"), node.start_point[0] + 1)
                             )
 
-            elif left and right and _node_contains_identifier(right, variable_name):
-                if left.type in metadata.identifier_types:
-                    results.append((left.text.decode("utf-8"), node.start_point[0] + 1))
+            elif left and right and _node_contains_identifier(right, variable_name) and left.type in metadata.identifier_types:
+                results.append((left.text.decode("utf-8"), node.start_point[0] + 1))
         for child in node.children:
             walk(child)
 

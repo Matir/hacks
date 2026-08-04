@@ -72,8 +72,8 @@ def check_sandboxes(config: Config) -> list[DiagnosticResult]:
     # 2. Python-level Sandbox (Landlock)
     if sys.platform == "linux":
         try:
-            from landlock import Ruleset  # noqa: PLC0415
-            abi = Ruleset.get_abi()
+            import landlock  # noqa: PLC0415
+            abi = landlock.landlock_abi_version()
             if abi > 0:
                 results.append(DiagnosticResult("Landlock (Linux)", True, f"Available (ABI v{abi})"))
             else:

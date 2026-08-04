@@ -153,6 +153,29 @@ TrashDig agents have access to a suite of deterministic and research-oriented to
 3.  **Run Tests**: `mise run test`
 4.  **Full Validation** (lint + type check + tests): `mise run check`
 
+### 💡 Usage Examples
+
+TrashDig can operate in fully autonomous mode or interactive collaborative mode via the TUI. Here are a few ways to leverage its capabilities:
+
+#### Automated Recon and Hunt
+1. **Initialize a Target:** Run `uv run trashdig ./my-vulnerable-app` to launch the dashboard.
+2. **Scan Phase:** Press `F5` to trigger the `StackScout` and `WebRouteMapper` agents. TrashDig will automatically detect the language, framework, and map entry points.
+3. **Prioritize:** Press `F6` to automatically prioritize targets based on the recon metadata (e.g., controllers handling user input).
+4. **Autonomous Hunting:** The system will dispatch the `Hunter` loop on prioritized files, tracing taint across boundaries and logging vulnerabilities.
+
+#### Collaborative "Pause & Steer" Workflow
+TrashDig features a powerful Human-in-the-Loop mode designed for complex security research:
+1. **Pause the Engine:** While the engine is running long taint traces or hunting loops, press `Space` to proactively suspend execution.
+2. **Review Progress:** Review intermediate agent logs, hypotheses, and AST traces to see exactly what logic paths the agents are pursuing.
+3. **Provide Hints:** Press `h` to inject a manual hypothesis or hint (e.g., "Assume the authentication token in auth.py is malformed" or "Focus on the SQL execution sink in db.ts lines 40-50").
+4. **Resume Engine:** Press `Space` again to resume the pipeline, forcing agents to pivot based on your explicitly stated adversarial context.
+
+#### Findings Review and Validation
+Once the Hunter logs findings:
+1. **View Findings:** Press `v` to open the findings review screen.
+2. **Debunk or Prove:** TrashDig automatically escalates high-confidence findings to the `Skeptic` and `Validator` agents to construct isolated containerized PoCs.
+
+
 ### Alternate LLM Provider
 
 TrashDig also supports [OpenRouter](https://openrouter.ai/) as an LLM backend. Configure it in `trashdig.toml`:

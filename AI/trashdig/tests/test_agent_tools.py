@@ -142,7 +142,6 @@ ALL_TOOLS: frozenset[str] = frozenset({
     "ask_user",
     "bash_tool",
     "container_bash_tool",
-    "critic",
     "detect_frameworks",
     "detect_language",
     "exit_loop",
@@ -165,7 +164,6 @@ ALL_TOOLS: frozenset[str] = frozenset({
     "trace_variable_semantic",
     "update_hypothesis_status",
     "web_fetch",
-        "critic",
 })
 
 
@@ -377,7 +375,6 @@ class TestStackScoutTools(AgentToolsMixin, unittest.TestCase):
         "query_vulndb",
         "ripgrep_search",
         "web_fetch",
-        "critic",
     ]
 
 
@@ -416,7 +413,6 @@ class TestHunterTools(AgentToolsMixin, unittest.TestCase):
         "trace_taint_cross_file",
         "trace_variable_semantic",
         "web_fetch",
-        "critic",
     ]
 
     def test_no_ask_user_tool_when_none(self) -> None:
@@ -443,7 +439,7 @@ class TestSkepticTools(AgentToolsMixin, unittest.TestCase):
         "read_file",
         "ripgrep_search",
         "web_fetch",
-        
+
     ]
 
 
@@ -461,7 +457,6 @@ class TestValidatorTools(AgentToolsMixin, unittest.TestCase):
         "read_file",
         "ripgrep_search",
         "web_fetch",
-        "critic",
     ]
 
 

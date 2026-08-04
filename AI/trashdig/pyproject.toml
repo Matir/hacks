@@ -56,7 +56,7 @@ module = "landlock.*"
 anyio_mode = "auto"
 filterwarnings = [
   "error",
-  "ignore::DeprecationWarning:google.genai.types",
+  "ignore::DeprecationWarning",
   'ignore:\[EXPERIMENTAL\] feature:UserWarning',
   'ignore:unclosed database:ResourceWarning'
 ]

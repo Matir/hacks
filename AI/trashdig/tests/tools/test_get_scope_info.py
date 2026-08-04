@@ -60,6 +60,7 @@ def test_get_scope_info_complex_params(mock_parser_make, mock_metadata, mock_ts_
     meta = MagicMock()
     meta.scope_types = ["function_definition"]
     meta.parameter_types = ["typed_parameter", "parameter_declaration"]
+    meta.identifier_types = ["identifier"]
     meta.skip_symbols = []
     mock_metadata.return_value = meta
 
@@ -104,6 +105,7 @@ def test_get_scope_info_nested(mock_parser_make, mock_metadata, mock_ts_lang):
     meta.scope_types = ["function_definition"]
     meta.assignment_types = ["assignment"]
     meta.parameter_types = []
+    meta.identifier_types = ["identifier"]
     meta.skip_symbols = []
     meta.name = "python"
     mock_metadata.return_value = meta

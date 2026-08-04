@@ -103,6 +103,11 @@ class Config:
         return self.data.get("rpm_limit")
 
     @property
+    def max_llm_calls(self) -> int:
+        """Maximum number of LLM calls per agent run."""
+        return self.data.get("max_llm_calls", 300)
+
+    @property
     def tpm_limit(self) -> int | None:
         """Tokens per minute limit for LLM calls."""
         return self.data.get("tpm_limit")

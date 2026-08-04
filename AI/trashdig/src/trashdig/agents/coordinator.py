@@ -68,6 +68,7 @@ class Coordinator(LlmAgent):
     _project_path: str = PrivateAttr()
     _permission_manager: PermissionManager = PrivateAttr()
     _state: EngineState = PrivateAttr(default=EngineState.IDLE)
+    _pause_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
 
     _findings: list[Finding] = PrivateAttr()
     _scan_results: dict[str, Any] = PrivateAttr()
@@ -78,7 +79,7 @@ class Coordinator(LlmAgent):
     _summarizer: Any = PrivateAttr()
     _llm_errors: int = PrivateAttr()
 
-    def __init__(
+    def __init__(  # noqa: PLR0915
         self,
         config: Config,
         project_path: str | None = None,
@@ -189,12 +190,15 @@ class Coordinator(LlmAgent):
         scan_session_id = db.get_or_create_scan_session(project_path_str)
         session_service = get_session_service()
 
-        cost_tracker = CostTracker()
-
+        # Initialize state
+        object.__setattr__(self, "_pause_event", asyncio.Event())
+        self._pause_event.set()
         object.__setattr__(self, "_config", config)
         object.__setattr__(self, "_db", db)
         object.__setattr__(self, "_session_service", session_service)
         object.__setattr__(self, "_artifact_service", artifact_service)
+        cost_tracker = CostTracker()
+
         object.__setattr__(self, "_cost_tracker", cost_tracker)
         object.__setattr__(self, "_scan_session_id", scan_session_id)
         object.__setattr__(self, "_project_path", project_path_str)
@@ -367,6 +371,20 @@ class Coordinator(LlmAgent):
         """Returns the current engine state."""
         return self._state
 
+    def pause(self) -> None:
+        """Pauses the engine execution."""
+        self._pause_event.clear()
+        object.__setattr__(self, "_state", EngineState.PAUSED)
+
+    def resume(self) -> None:
+        """Resumes the engine execution."""
+        object.__setattr__(self, "_state", EngineState.RUNNING)
+        self._pause_event.set()
+
+    async def check_pause(self) -> None:
+        """Waits if the engine is paused."""
+        await self._pause_event.wait()
+
     @property
     def llm_errors(self) -> int:
         """Returns the number of LLM errors encountered."""
@@ -375,6 +393,11 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
     # Internal state mutation (via Callbacks)
     # ------------------------------------------------------------------
+
+    def add_hint(self, hint: str) -> None:
+        """Appends a human hint to the coordinator context."""
+        self.log(f"[bold cyan]Received Hint:[/bold cyan] {hint}")
+        # Just log it for now, can be read by agents later
 
     def _on_stats(self, in_tokens: int, out_tokens: int, new_msg: bool = False, model_name: str = "unknown") -> None:
         """Called by callbacks to update TUI stats."""
@@ -544,6 +567,7 @@ class Coordinator(LlmAgent):
 
     async def run_recon(self, path: str = ".") -> dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
+        await self.check_pause()
         TrashDigCallback.get_instance().reset_turn_counts()
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
 
