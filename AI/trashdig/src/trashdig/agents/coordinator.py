@@ -214,7 +214,7 @@ class Coordinator(LlmAgent):
 
         # Wire ADK-native callbacks using the singleton manager
         cb = TrashDigCallback.get_instance(self)
-        for _agent in (*self.sub_agents, self, hunter_orchestrator):
+        for _agent in (*self.sub_agents, self, hunter_orchestrator, hunter):
             cb.attach_to(_agent)
 
     # ------------------------------------------------------------------
@@ -648,6 +648,7 @@ class Coordinator(LlmAgent):
         TrashDigCallback.get_instance().reset_turn_counts()
         new_findings: list[Finding] = []
         for i, target in enumerate(targets, 1):
+            await self.check_pause()
             self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")
             content = read_file_content(os.path.join(path, target))
 
@@ -704,6 +705,7 @@ class Coordinator(LlmAgent):
 
     async def verify_finding(self, finding: Finding) -> dict[str, Any]:
         """Verify a finding using Skeptic and Validator agents."""
+        await self.check_pause()
         self.log(f"[bold]Coordinator:[/bold] verifying [cyan]{finding.title}[/cyan]")
 
         # Phase 3.1: Skeptic
