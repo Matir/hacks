@@ -13,7 +13,9 @@ def update_hypothesis_status(task_id: str, status: str, db_path: str | None = No
         A confirmation message.
     """
     try:
-        get_database(db_path).update_hypothesis_status(task_id, status)
+        updated = get_database(db_path).update_hypothesis_status(task_id, status)
+        if not updated:
+            return f"Error: no hypothesis found with task_id '{task_id}'; status not changed."
         return f"Hypothesis {task_id} updated to {status}."
     except Exception as e:
         return f"Error updating database: {str(e)}"

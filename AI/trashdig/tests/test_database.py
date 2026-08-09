@@ -185,11 +185,20 @@ def test_update_hypothesis_status():
         hypo = _make_hypothesis()
         db.save_hypothesis("/proj", hypo)
 
-        db.update_hypothesis_status(hypo.task_id, "completed", result={"finding_count": 2})
+        updated = db.update_hypothesis_status(
+            hypo.task_id, "completed", result={"finding_count": 2}
+        )
+        assert updated is True
 
         rows = db.get_hypotheses("/proj")
         assert rows[0]["status"] == "completed"
         assert rows[0]["result"]["finding_count"] == 2
+
+
+def test_update_hypothesis_status_returns_false_for_unknown_task_id():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = _make_db(tmp)
+        assert db.update_hypothesis_status("does-not-exist", "completed") is False
 
 
 def test_save_hypothesis_ignore_duplicate_task_id():

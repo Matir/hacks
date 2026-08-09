@@ -294,14 +294,20 @@ class ProjectDatabase:
 
     def update_hypothesis_status(
         self, task_id: str, status: str, result: dict[str, Any] | None = None
-    ) -> None:
-        """Updates the status of a hypothesis."""
+    ) -> bool:
+        """Updates the status of a hypothesis.
+
+        Returns:
+            True if a hypothesis row matched `task_id` and was updated,
+            False otherwise (e.g. a stale or mistyped `task_id`).
+        """
         result_json = json.dumps(result) if result is not None else None
         with self._connect() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 "UPDATE hypotheses SET status = ?, updated_at = ?, result_json = ? WHERE task_id = ?",
                 (status, _now(), result_json, task_id),
             )
+            return cursor.rowcount > 0
 
     def get_hypotheses(self, project_path: str) -> list[dict[str, Any]]:
         """Returns ALL hypotheses for a project, sorted by confidence."""

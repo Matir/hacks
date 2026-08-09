@@ -27,6 +27,16 @@ def test_update_hypothesis_status_delegates_to_pool(tmp_path):
     assert "updated to failed" in res
 
 
+def test_update_hypothesis_status_stale_task_id(tmp_path):
+    """Regression test: a task_id that matches no row must be reported as an
+    error, not silently accepted as a success.
+    """
+    db_path = str(tmp_path / "test.db")
+    res = update_hypothesis_status("nonexistent-task-id", "completed", db_path=db_path)
+    assert "Error" in res
+    assert "nonexistent-task-id" in res
+
+
 def test_update_hypothesis_status_error():
     # Simulate a database error by making get_database raise.  We can't rely
     # on an invalid path to trigger the error because ProjectDatabase.__init__

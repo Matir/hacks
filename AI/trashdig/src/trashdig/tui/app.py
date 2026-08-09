@@ -379,6 +379,10 @@ class TrashDigApp(App):
         self.config = config or Config()
         self.workspace_root = workspace_root or self.config.workspace_root
         self._phase = "Idle"
+        # Concurrent verification workers (e.g. "verify all findings") share
+        # this counter so the phase only drops back to "Idle" once every
+        # in-flight verification has actually finished.
+        self._active_verifications = 0
         log_path = self.config.resolve_data_path("trashdig.log")
         self._file_log = _setup_file_logger(log_path)
         self._file_log.info("Session started — workspace: %s", workspace_root)
@@ -536,9 +540,15 @@ class TrashDigApp(App):
     async def run_verification(self, finding: Finding) -> None:
         """Runs the verification pipeline for a finding asynchronously.
 
+        Safe to run concurrently (e.g. "verify all findings" spawns one
+        worker per finding): the phase only reverts to "Idle" once every
+        concurrently-running verification has finished, via
+        `_active_verifications`.
+
         Args:
             finding: The Finding to verify.
         """
+        self._active_verifications += 1
         self._phase = "Verifying"
         self._file_log.info("Verification started: %s", finding.title)
         self.refresh_status()
@@ -556,7 +566,9 @@ class TrashDigApp(App):
             self.log_message(
 "error", f"[bold red]Verification failed:[/bold red] {e}")
         finally:
-            self._phase = "Idle"
+            self._active_verifications -= 1
+            if self._active_verifications <= 0:
+                self._phase = "Idle"
             self.refresh_status()
 
     def action_scan(self) -> None:

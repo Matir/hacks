@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -66,3 +67,34 @@ async def test_app_refresh_status(mock_config, mock_coordinator):
         await pilot.pause()
         app.refresh_status()
         assert app.query_one("#status_body", Static)
+
+async def test_concurrent_verification_stays_busy_until_all_finish(mock_config, mock_coordinator):
+    """Regression test: the status phase must not snap to "Idle" just because
+    one of several concurrently-running verifications finished first.
+    """
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        release_first = asyncio.Event()
+
+        async def fake_verify_finding(finding):
+            if finding.title == "slow":
+                await release_first.wait()
+
+        mock_coordinator.verify_finding = fake_verify_finding
+
+        slow_finding = MagicMock(title="slow")
+        fast_finding = MagicMock(title="fast")
+
+        slow_task = asyncio.create_task(app.run_verification(slow_finding))
+        await asyncio.sleep(0)  # let the slow worker start and block
+        assert app._phase == "Verifying"
+
+        await app.run_verification(fast_finding)  # completes immediately
+        # The slow worker is still in flight, so phase must stay "Verifying".
+        assert app._phase == "Verifying"
+
+        release_first.set()
+        await slow_task
+        assert app._phase == "Idle"
