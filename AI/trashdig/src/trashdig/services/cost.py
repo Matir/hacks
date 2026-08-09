@@ -95,6 +95,32 @@ class CostTracker:
 
         return 0.0
 
+    @staticmethod
+    def _best_prefix_match(model_name: str, rates: dict[str, Any]) -> str | None:
+        """Finds the longest (most specific) key in `rates` that `model_name` starts with.
+
+        Also checks the "gemini/"-prefixed alias of `model_name`, since
+        LiteLLM-style rate tables key Gemini models that way. Preferring the
+        longest match avoids e.g. "gemini-2.0-flash-lite" being mispriced as
+        the distinct, shorter "gemini-2.0-flash".
+
+        Args:
+            model_name: The model name to match.
+            rates: A rate table to search for prefix matches.
+
+        Returns:
+            The longest matching key, or None if no key matches.
+        """
+        gemini_alias = f"gemini/{model_name}" if not model_name.startswith("gemini/") else None
+        best_key = None
+        for key in rates:
+            is_match = model_name.startswith(key) or (
+                gemini_alias is not None and gemini_alias.startswith(key)
+            )
+            if is_match and (best_key is None or len(key) > len(best_key)):
+                best_key = key
+        return best_key
+
     def record_usage(self, model_name: str, input_tokens: int, output_tokens: int) -> None:
         """Records usage for a specific model and updates the total cost.
 
@@ -116,21 +142,20 @@ class CostTracker:
             self.total_cost += self._get_cost_from_info(rate_info, input_tokens, output_tokens)
             return
 
-        # 2. Try prefix match in loaded rates
-        for key, val in self.rates.items():
-            if model_name.startswith(key) or (
-                not model_name.startswith("gemini/") and f"gemini/{model_name}".startswith(key)
-            ):
-                self.total_cost += self._get_cost_from_info(val, input_tokens, output_tokens)
-                return
+        # 2. Try prefix match in loaded rates (longest match wins)
+        best_key = self._best_prefix_match(model_name, self.rates)
+        if best_key is not None:
+            self.total_cost += self._get_cost_from_info(
+                self.rates[best_key], input_tokens, output_tokens
+            )
+            return
 
-        # 3. Fallback to DEFAULT_RATES
+        # 3. Fallback to DEFAULT_RATES, same longest-match preference.
         rate = self.DEFAULT_RATES.get(model_name)
         if not rate:
-            for key, val in self.DEFAULT_RATES.items():
-                if model_name.startswith(key):
-                    rate = val
-                    break
+            best_default_key = self._best_prefix_match(model_name, self.DEFAULT_RATES)
+            if best_default_key is not None:
+                rate = self.DEFAULT_RATES[best_default_key]
 
         if rate:
             self.total_cost += self._get_cost_from_info(rate, input_tokens, output_tokens)

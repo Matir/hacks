@@ -48,7 +48,10 @@ class TrashDigCallback:
         """
         self._c = coordinator
         self._last_prompt: str = ""
-        self._turn_counts: dict[str, int] = {}
+        # Keyed by (invocation_id, agent_name) rather than agent_name alone so
+        # that concurrent runner.run_async() invocations (e.g. parallel hunter
+        # segments sharing the "hunter" agent name) never share a counter.
+        self._turn_counts: dict[tuple[str, str], int] = {}
 
     @classmethod
     def get_instance(cls, coordinator: Coordinator | None = None) -> TrashDigCallback:
@@ -75,7 +78,14 @@ class TrashDigCallback:
         cls._instance = None
 
     def reset_turn_counts(self) -> None:
-        """Clear per-agent turn counters at the start of a new scan."""
+        """Clear all turn counters.
+
+        Counters are already scoped per-invocation (see `_turn_counts`), so
+        this is just housekeeping to bound memory growth across a long-lived
+        process; call it only from a single top-level, non-concurrent entry
+        point (e.g. the start of a full scan), never from code paths that may
+        run concurrently with other in-flight invocations.
+        """
         self._turn_counts.clear()
 
     def attach_to(self, agent: Any) -> None:
@@ -136,8 +146,10 @@ class TrashDigCallback:
     async def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
         """Enforce per-agent turn limits, capture prompt, and wait for rate-limit slot."""
         agent_name = getattr(ctx, "agent_name", None) or "unknown"
-        self._turn_counts[agent_name] = self._turn_counts.get(agent_name, 0) + 1
-        current = self._turn_counts[agent_name]
+        invocation_id = getattr(ctx, "invocation_id", None) or "unknown"
+        turn_key = (invocation_id, agent_name)
+        self._turn_counts[turn_key] = self._turn_counts.get(turn_key, 0) + 1
+        current = self._turn_counts[turn_key]
 
         max_turns = self._c.config.get_agent_config(agent_name).max_turns
         if max_turns is not None and current > max_turns:

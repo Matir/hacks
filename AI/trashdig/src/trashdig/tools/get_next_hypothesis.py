@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from contextlib import closing
 
 from .base import get_config
 
@@ -17,7 +18,7 @@ def get_next_hypothesis(project_path: str, db_path: str | None = None) -> str:
     if db_path is None:
         db_path = get_config().db_path
     try:
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM hypotheses WHERE project_path = ? AND status = 'pending' ORDER BY confidence DESC LIMIT 1",

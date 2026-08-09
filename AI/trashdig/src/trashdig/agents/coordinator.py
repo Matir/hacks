@@ -568,7 +568,6 @@ class Coordinator(LlmAgent):
     async def run_recon(self, path: str = ".") -> dict[str, Any]:
         """Performs initial stack discovery and project mapping."""
         await self.check_pause()
-        TrashDigCallback.get_instance().reset_turn_counts()
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
 
         abs_path = os.path.abspath(path)  # noqa: ASYNC240
@@ -645,7 +644,6 @@ class Coordinator(LlmAgent):
         Returns:
             A list of new Finding objects discovered.
         """
-        TrashDigCallback.get_instance().reset_turn_counts()
         new_findings: list[Finding] = []
         for i, target in enumerate(targets, 1):
             await self.check_pause()

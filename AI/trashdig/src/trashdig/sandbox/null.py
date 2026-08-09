@@ -1,5 +1,4 @@
 import logging
-import os
 import subprocess
 
 from .base import Sandbox
@@ -29,12 +28,16 @@ class NullSandbox(Sandbox):
             "!!! RUNNING COMMAND UNSANDBOXED !!! Command: %s",
             " ".join(command)
         )
+        # self.env is already the complete environment (merged with the parent
+        # process's and denylist-filtered by get_sandbox()) -- use it as-is
+        # rather than re-merging raw os.environ, which would let filtered-out
+        # secrets back in.
         return subprocess.run(  # noqa: S603
             command,
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd=cwd or self.workspace_dir,
-            env={**os.environ, **self.env},
+            env=dict(self.env),
             check=False
         )

@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 
-from trashdig.sandbox.base import Sandbox
+from trashdig.sandbox.base import Sandbox, filter_env
 from trashdig.sandbox.landlock_tool import (
     SandboxError,
     ToolTimeoutError,
@@ -21,6 +21,7 @@ def get_sandbox(
     network: bool = False,
     require_sandbox: bool = True,
     allowlist: list[str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> Sandbox:
     """Returns the appropriate sandbox for the current platform.
 
@@ -33,6 +34,12 @@ def get_sandbox(
         network: Whether to allow network access.
         require_sandbox: Whether to raise on sandbox unavailability.
         allowlist: Additional paths to permit inside the sandbox.
+        env: Extra/overriding environment variables for the sandboxed
+            process. Merged over a copy of the current process's
+            environment (so PATH/HOME/LANG etc. are always present), then
+            passed through ``filter_env`` to strip credential-shaped
+            variables (API keys, tokens, SSH/GPG agent sockets, etc.)
+            before the sandboxed command ever sees them.
 
     Returns:
         A Sandbox instance appropriate for the current platform.
@@ -42,16 +49,22 @@ def get_sandbox(
             implementation is available or initializable.
     """
     allowlist = allowlist or []
+    sandbox_env = filter_env({**os.environ, **(env or {})})
 
     if os.environ.get("TRASHDIG_SKIP_SANDBOX") == "1":
-        return NullSandbox(workspace_dir=workspace_dir, network=network, allowlist=allowlist)
+        return NullSandbox(
+            workspace_dir=workspace_dir, network=network, allowlist=allowlist, env=sandbox_env
+        )
 
     if sys.platform == "linux":
         from trashdig.sandbox.minijail import MinijailSandbox  # noqa: PLC0415
 
         try:
             return MinijailSandbox(
-                workspace_dir=workspace_dir, network=network, allowlist=allowlist
+                workspace_dir=workspace_dir,
+                network=network,
+                allowlist=allowlist,
+                env=sandbox_env,
             )
         except Exception as e:
             if require_sandbox:
@@ -69,7 +82,12 @@ def get_sandbox(
         try:
             from trashdig.sandbox.bx import BxSandbox  # noqa: PLC0415
 
-            return BxSandbox(workspace_dir=workspace_dir, network=network, allowlist=allowlist)
+            return BxSandbox(
+                workspace_dir=workspace_dir,
+                network=network,
+                allowlist=allowlist,
+                env=sandbox_env,
+            )
         except RuntimeError as e:
             if require_sandbox:
                 raise RuntimeError(f"Sandbox required but BxSandbox not available: {e}") from e
@@ -84,7 +102,9 @@ def get_sandbox(
             raise RuntimeError(msg)
         logger.warning(msg)
 
-    return NullSandbox(workspace_dir=workspace_dir, network=network, allowlist=allowlist)
+    return NullSandbox(
+        workspace_dir=workspace_dir, network=network, allowlist=allowlist, env=sandbox_env
+    )
 
 
 __all__ = [

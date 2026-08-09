@@ -249,6 +249,32 @@ class TestSubprocessExecution:
             with pytest.raises(ToolTimeoutError):
                 _sandboxed_sleeper()
 
+    def test_timeout_closes_parent_pipe_fd(self, no_skip_sandbox, mock_config):
+        """Regression test: a timed-out call must not leak the parent-side pipe FD."""
+        # `trashdig.sandbox` re-exports a function also named `landlock_tool`,
+        # which shadows the submodule attribute on the package object — go
+        # through sys.modules (populated by the module-level import above) to
+        # reliably get the actual submodule rather than the function.
+        landlock_mod = sys.modules["trashdig.sandbox.landlock_tool"]
+
+        captured: list = []
+        real_pipe = landlock_mod.SandboxProvider.mp_context.Pipe
+
+        def _spying_pipe(*args, **kwargs):
+            parent_conn, child_conn = real_pipe(*args, **kwargs)
+            captured.append(parent_conn)
+            return parent_conn, child_conn
+
+        with (
+            patch("trashdig.sandbox.landlock_tool.get_config", return_value=mock_config),
+            patch.object(landlock_mod.SandboxProvider.mp_context, "Pipe", side_effect=_spying_pipe),
+        ):
+            with pytest.raises(ToolTimeoutError):
+                _sandboxed_sleeper()
+
+        assert len(captured) == 1
+        assert captured[0].closed
+
     def test_positional_args_forwarded(self, no_skip_sandbox, mock_config):
         with patch("trashdig.sandbox.landlock_tool.get_config", return_value=mock_config):
             assert _sandboxed_add(10, 20) == 30

@@ -132,7 +132,7 @@ def main() -> None:  # noqa: PLR0915
         return
 
     init_rate_limiter(rpm_limit=config.rpm_limit, tpm_limit=config.tpm_limit)
-    init_session_service(db_path=config.data_dir + "/trashdig.db")
+    init_session_service(db_path=config.db_path)
     art_service = init_artifact_manager(data_dir=config.data_dir)
 
     # Automatic batch mode if not a TTY or explicitly requested

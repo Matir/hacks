@@ -406,19 +406,22 @@ def landlock_tool(
             # exits the pipe EOF is detectable via recv() raising EOFError.
             child_conn.close()
 
-            # Read BEFORE join — if the child writes more than ~64 KB and we
-            # call join() first, both sides block (pipe-buffer deadlock).
-            if not parent_conn.poll(timeout):
-                child.kill()
-                child.join()
-                raise ToolTimeoutError(func.__name__, timeout)
-
             try:
-                message = parent_conn.recv()
-            except EOFError:
-                child.join()
-                raise SandboxError(func.__name__, child.exitcode or -1) from None
+                # Read BEFORE join — if the child writes more than ~64 KB and we
+                # call join() first, both sides block (pipe-buffer deadlock).
+                if not parent_conn.poll(timeout):
+                    child.kill()
+                    child.join()
+                    raise ToolTimeoutError(func.__name__, timeout)
+
+                try:
+                    message = parent_conn.recv()
+                except EOFError:
+                    child.join()
+                    raise SandboxError(func.__name__, child.exitcode or -1) from None
             finally:
+                # Covers the timeout branch too, so a timed-out sandboxed call
+                # doesn't leak the parent-side pipe file descriptor.
                 parent_conn.close()
 
             child.join()

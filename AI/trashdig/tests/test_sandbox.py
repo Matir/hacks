@@ -3,9 +3,55 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from trashdig.sandbox import NullSandbox, get_sandbox
+from trashdig.sandbox.base import filter_env
 from trashdig.sandbox.bx import BxSandbox
 from trashdig.sandbox.minijail import MinijailSandbox
 from trashdig.utils import clear_binary_stubs, set_binary_stub
+
+
+def test_filter_env_strips_credentials_and_keeps_benign_vars():
+    env = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/user",
+        "LANG": "en_US.UTF-8",
+        "GEMINI_API_KEY": "secret-value",
+        "ANTHROPIC_API_KEY": "secret-value",
+        "GITHUB_TOKEN": "secret-value",
+        "AWS_SECRET_ACCESS_KEY": "secret-value",
+        "AWS_ACCESS_KEY_ID": "secret-value",
+        "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
+        "DB_PASSWORD": "secret-value",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/path/to/creds.json",
+        "SOME_OTHER_CREDENTIAL": "secret-value",
+    }
+
+    filtered = filter_env(env)
+
+    assert filtered == {"PATH": "/usr/bin", "HOME": "/home/user", "LANG": "en_US.UTF-8"}
+
+
+@patch("sys.platform", "linux")
+def test_get_sandbox_strips_credentials_from_process_env(monkeypatch):
+    set_binary_stub("minijail0", True)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv("GEMINI_API_KEY", "should-not-leak")
+    try:
+        sandbox = get_sandbox(workspace_dir="/tmp/test")
+        assert sandbox.env.get("PATH") == "/usr/bin"
+        assert "GEMINI_API_KEY" not in sandbox.env
+    finally:
+        clear_binary_stubs()
+
+
+@patch("sys.platform", "linux")
+def test_get_sandbox_env_override_still_filtered(monkeypatch):
+    set_binary_stub("minijail0", True)
+    monkeypatch.delenv("SOME_TOKEN", raising=False)
+    try:
+        sandbox = get_sandbox(workspace_dir="/tmp/test", env={"SOME_TOKEN": "leaked"})
+        assert "SOME_TOKEN" not in sandbox.env
+    finally:
+        clear_binary_stubs()
 
 
 def test_null_sandbox():

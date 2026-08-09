@@ -1,5 +1,4 @@
 import logging
-import os
 import subprocess
 from typing import Any
 
@@ -78,17 +77,16 @@ class BxSandbox(Sandbox):
 
         logger.debug("Running in bx sandbox: %s", " ".join(args))
 
-        # bx is a Node.js wrapper around sandbox-exec and inherits the parent
-        # environment, so merge rather than replace to preserve PATH, NODE_PATH,
-        # and other variables required by bx itself.
-        merged_env = {**os.environ, **self.env}
-
+        # self.env is already the complete environment (merged with the parent
+        # process's and denylist-filtered by get_sandbox()) -- use it as-is
+        # rather than re-merging raw os.environ, which would let filtered-out
+        # secrets back in.
         return subprocess.run(  # noqa: S603
             args,
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd=cwd or self.workspace_dir,
-            env=merged_env,
+            env=dict(self.env),
             check=False,
         )

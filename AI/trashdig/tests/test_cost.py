@@ -63,6 +63,35 @@ def test_cost_tracker_prefix_match(mock_pricing):
     tracker.record_usage("gemini-2.0-flash-001", 1_000_000, 1_000_000)
     assert tracker.get_total_cost() == pytest.approx(0.75)
 
+def test_cost_tracker_prefix_match_prefers_longest():
+    """Regression test: an unlisted variant must match the longest (most
+    specific) rate-table prefix, not whichever key the dict happens to
+    iterate to first.
+    """
+    tracker = CostTracker(rates={
+        "gemini-2.0-flash": {"input": 0.15, "output": 0.60},
+        "gemini-2.0-flash-lite": {"input": 0.01, "output": 0.02},
+    })
+    # "gemini-2.0-flash-lite-001" is a prefix match for both keys; it must be
+    # priced using the more specific "-lite" rate, not the shorter one.
+    tracker.record_usage("gemini-2.0-flash-lite-001", 1_000_000, 1_000_000)
+    assert tracker.get_total_cost() == pytest.approx(0.03)
+
+
+def test_cost_tracker_default_rates_prefix_match_prefers_longest():
+    """Same longest-prefix guarantee for the DEFAULT_RATES fallback path."""
+    # Non-empty, non-matching `rates` avoids both triggering load_rates()
+    # (which would attempt a real network fetch) and matching in steps 1/2,
+    # forcing the lookup through to the DEFAULT_RATES fallback in step 3.
+    tracker = CostTracker(rates={"unrelated-model": {"input": 0, "output": 0}})
+    tracker.DEFAULT_RATES = {
+        "gemini-2.0-flash": {"input": 0.15, "output": 0.60},
+        "gemini-2.0-flash-lite": {"input": 0.01, "output": 0.02},
+    }
+    tracker.record_usage("gemini-2.0-flash-lite-001", 1_000_000, 1_000_000)
+    assert tracker.get_total_cost() == pytest.approx(0.03)
+
+
 def test_cost_tracker_custom_rates(mock_pricing):
     custom_rates = {
         "custom-model": {"input": 1.0, "output": 2.0}

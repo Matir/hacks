@@ -217,3 +217,41 @@ async def test_reset_turn_counts_clears_state(mock_coordinator):
     cb.reset_turn_counts()
 
     assert await cb.on_before_model(ctx, req) is None   # turn 1 again — allowed
+
+
+async def test_turn_limit_independent_across_concurrent_invocations(mock_coordinator):
+    """Two concurrent runs of the same agent (same name, different invocation_id)
+    must not share a turn counter, and resetting one must not clobber the other.
+
+    Regression test for the parallel-hunter race where a shared `agent_name`-keyed
+    counter let one `run_hunter` segment's reset wipe another in-flight segment's
+    turn count.
+    """
+    mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=2)
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    req = MagicMock()
+    req.contents = []
+
+    ctx_seg1 = MagicMock(spec=CallbackContext)
+    ctx_seg1.agent_name = "hunter"
+    ctx_seg1.invocation_id = "invocation-segment-1"
+
+    ctx_seg2 = MagicMock(spec=CallbackContext)
+    ctx_seg2.agent_name = "hunter"
+    ctx_seg2.invocation_id = "invocation-segment-2"
+
+    # Segment 1 runs up to its limit.
+    assert await cb.on_before_model(ctx_seg1, req) is None
+    assert await cb.on_before_model(ctx_seg1, req) is None
+
+    # Segment 2 starts concurrently (e.g. a fresh run_hunter call for another
+    # parallel segment) and must start from turn 1, not inherit segment 1's count.
+    assert await cb.on_before_model(ctx_seg2, req) is None
+
+    # Segment 1 is now at its limit and must be blocked, unaffected by segment 2.
+    blocked = await cb.on_before_model(ctx_seg1, req)
+    assert isinstance(blocked, LlmResponse)
+
+    # Segment 2 still has one turn left.
+    assert await cb.on_before_model(ctx_seg2, req) is None
