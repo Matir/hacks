@@ -88,6 +88,7 @@ JAVASCRIPT_METADATA = LanguageMetadata(
     method_sinks={"query", "execute", "write"},
     definition_patterns=[r"\bfunction {name}\b", r"\b{name}\s*=\s*(?:async\s+)?function", r"\b{name}\s*:\s*function"],
     attr_separators={"."},
+    argument_types={"arguments"},
     call_types={"call_expression"},
     member_access_types={"member_expression"},
     await_types={"await_expression"},

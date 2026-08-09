@@ -132,12 +132,15 @@ class Config:
 
         return final_noisy
 
+    def _raw_data_dir(self) -> str:
+        """Returns the unresolved data_dir template, honoring the nested [database] key."""
+        db_cfg = self.data.get("database", {})
+        return db_cfg.get("data_dir", self.data.get("data_dir", ".trashdig"))
+
     @property
     def data_dir(self) -> str:
         """Returns the directory for TrashDig artifacts and state."""
-        db_cfg = self.data.get("database", {})
-        path = db_cfg.get("data_dir", self.data.get("data_dir", ".trashdig"))
-        return self.resolve_workspace_path(path)
+        return self.resolve_workspace_path(self._raw_data_dir())
 
     @property
     def db_path(self) -> str:
@@ -153,7 +156,14 @@ class Config:
             path_template: Path string possibly containing tokens like {workspace}.
         """
         tokens = self.resolve_workspace_tokens(self.workspace_root)
-        tokens["{datadir}"] = self.data.get("data_dir", ".trashdig")
+
+        # Resolve any tokens (e.g. {workspace}) inside the raw data_dir value
+        # itself before using it as the {datadir} substitution below, since
+        # the substitution loop only makes a single pass over path_template.
+        datadir = self._raw_data_dir()
+        for token, val in tokens.items():
+            datadir = datadir.replace(token, val)
+        tokens["{datadir}"] = datadir
 
         path = path_template
         for token, val in tokens.items():

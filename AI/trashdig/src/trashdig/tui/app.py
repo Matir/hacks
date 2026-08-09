@@ -193,11 +193,13 @@ class REPLPane(Vertical):
         """Composes the REPL pane widgets."""
         yield Label("Interactive Console")
         yield RichLog(id="repl_log", highlight=True, markup=True, wrap=True)
+        repl_input = Input(
+            placeholder="Type a command (e.g., 'scan api/', 'help')...",
+            id="repl_input",
+        )
+        yield repl_input
         yield AutoComplete(
-            Input(
-                placeholder="Type a command (e.g., 'scan api/', 'help')...",
-                id="repl_input",
-            ),
+            repl_input,
             candidates=[DropdownItem(cmd) for cmd in self.commands],
             id="repl_autocomplete",
         )
