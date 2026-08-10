@@ -37,12 +37,15 @@ def parse_json_response(text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # 3. Try to find anything between { and }
+    # 3. Try decoding the first complete JSON value starting at the first
+    # '{', ignoring any trailing garbage the LLM may have appended after it
+    # (e.g. stray closing brackets). rfind("}") is unreliable here since the
+    # *last* '}' in the text isn't necessarily the one that closes the first
+    # object.
     try:
         start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1:
-            data = json.loads(cleaned[start:end+1])
+        if start != -1:
+            data, _ = json.JSONDecoder().raw_decode(cleaned, start)
             if isinstance(data, list):
                 return {"items": data}
             return data
