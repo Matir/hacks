@@ -128,7 +128,7 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
 
     def on_before_tool(
-        self, tool: BaseTool, args: dict[str, Any], ctx: ToolContext, **kwargs: Any
+        self, tool: BaseTool, args: dict[str, Any], tool_context: ToolContext, **kwargs: Any
     ) -> dict | None:
         """Log tool invocations and update state to WAITING_FOR_TOOLS."""
         self._c._state = EngineState.WAITING_FOR_TOOLS
@@ -143,12 +143,14 @@ class TrashDigCallback:
     # Model hooks
     # ------------------------------------------------------------------
 
-    async def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
+    async def on_before_model(
+        self, callback_context: CallbackContext, llm_request: LlmRequest, **kwargs: Any
+    ) -> LlmResponse | None:
         """Block while paused, inject steering hints, enforce turn limits, capture prompt, and wait for rate-limit slot."""
         await self._c.check_pause()
 
-        agent_name = getattr(ctx, "agent_name", None) or "unknown"
-        invocation_id = getattr(ctx, "invocation_id", None) or "unknown"
+        agent_name = getattr(callback_context, "agent_name", None) or "unknown"
+        invocation_id = getattr(callback_context, "invocation_id", None) or "unknown"
         turn_key = (invocation_id, agent_name)
         self._turn_counts[turn_key] = self._turn_counts.get(turn_key, 0) + 1
         current = self._turn_counts[turn_key]
@@ -179,7 +181,7 @@ class TrashDigCallback:
             self._c._state = EngineState.STEERING
             hint_text = "\n".join(f"- {h}" for h in hints)
             self._c.log(f"[bold cyan]Steering:[/bold cyan] injecting hint into {agent_name}")
-            req.contents.append(
+            llm_request.contents.append(
                 types.Content(
                     role="user",
                     parts=[types.Part(text=(
@@ -194,17 +196,19 @@ class TrashDigCallback:
             await limiter.wait_for_request()
 
         prompt = ""
-        if req.contents:
-            for content in req.contents:
+        if llm_request.contents:
+            for content in llm_request.contents:
                 if content.parts:
                     for part in content.parts:
                         if hasattr(part, "text") and part.text:
                             prompt += part.text + "\n"
         self._last_prompt = prompt.strip()
+
+        self._c.log(f"[dim]→ LLM request ({agent_name})[/dim]")
         return None
 
     async def on_after_model(
-        self, ctx: CallbackContext | None = None, resp: LlmResponse | None = None, **kwargs: Any
+        self, callback_context: CallbackContext, llm_response: LlmResponse, **kwargs: Any
     ) -> LlmResponse | None:
         """Record usage, cost, log conversation, and update rate limiter usage."""
         # Restore RUNNING state after tool call finishes and model resumes,
@@ -212,12 +216,8 @@ class TrashDigCallback:
         if self._c._state in (EngineState.WAITING_FOR_TOOLS, EngineState.STEERING):
             self._c._state = EngineState.RUNNING
 
-        # Handle kwargs if passed by name (ADK sometimes does this)
-        if ctx is None:
-            ctx = kwargs.get("callback_context") or kwargs.get("ctx")
-        if resp is None:
-            resp = kwargs.get("response") or kwargs.get("resp")
-
+        ctx = callback_context
+        resp = llm_response
         if not ctx or not resp:
             return None
 
@@ -264,13 +264,22 @@ class TrashDigCallback:
             in_t,
             out_t,
         )
+
+        # Full turn (prompt + response) goes to the logfile only — the TUI
+        # log window only gets the compact "request" notice from on_before_model.
+        logger.info(
+            "LLM turn — agent=%s\n----- PROMPT -----\n%s\n----- RESPONSE -----\n%s",
+            agent_name,
+            self._last_prompt,
+            response_text,
+        )
         return None  # Never replace the model response
 
     async def on_model_error(
-        self, ctx: CallbackContext, req: LlmRequest, err: Exception
+        self, callback_context: CallbackContext, llm_request: LlmRequest, error: Exception, **kwargs: Any
     ) -> LlmResponse | None:
         """Increment the LLM error counter on model API failures."""
-        agent_name = getattr(ctx, "agent_name", "unknown")
-        logger.warning("Model error in agent %s: %s", agent_name, err)
+        agent_name = getattr(callback_context, "agent_name", "unknown")
+        logger.warning("Model error in agent %s: %s", agent_name, error)
         self._c._on_llm_error()
         return None  # Let the error propagate

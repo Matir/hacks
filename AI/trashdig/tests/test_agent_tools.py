@@ -373,6 +373,7 @@ class TestStackScoutTools(AgentToolsMixin, unittest.TestCase):
         "get_scope_info",
         "list_files",
         "query_vulndb",
+        "read_file",
         "ripgrep_search",
         "web_fetch",
     ]
@@ -388,6 +389,7 @@ class TestWebRouteMapperTools(AgentToolsMixin, unittest.TestCase):
         "get_ast_summary",
         "get_project_structure",
         "list_files",
+        "read_file",
         "ripgrep_search",
     ]
 

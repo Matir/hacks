@@ -21,6 +21,10 @@ def _find_project_config() -> str | None:
     return None
 
 
+class WorkspacePathError(ValueError):
+    """Raised when a tool-supplied path resolves outside the workspace root."""
+
+
 DEFAULT_NOISY_DIRS: set[str] = {
     ".git",
     "node_modules",
@@ -289,6 +293,53 @@ def get_config(config_path: str | None = None) -> Config:
             if ConfigProvider.instance is None:
                 ConfigProvider.instance = Config(config_path or "trashdig.toml")
     return ConfigProvider.instance
+
+
+def init_config(config: Config) -> None:
+    """Installs `config` as the singleton returned by `get_config()`."""
+    with ConfigProvider.lock:
+        ConfigProvider.instance = config
+
+
+def resolve_workspace_path(path: str | None, workspace_root: str | None = None) -> str:
+    """Resolves a tool-supplied path against the workspace root, enforcing containment.
+
+    Relative paths are always anchored to *workspace_root* rather than the
+    process's current working directory, which may be unrelated to the
+    workspace being scanned. Absolute paths are accepted only if they already
+    resolve inside the workspace root. Either way, the final resolved path
+    (symlinks and ``..`` segments included) must land on the workspace root or
+    one of its descendants; agent-facing tools use this to stop a caller-
+    supplied path from escaping the scanned project.
+
+    Args:
+        path: Caller-supplied path, or ``None`` to mean the workspace root itself.
+        workspace_root: Root directory to confine to. Defaults to Config workspace_root.
+
+    Returns:
+        The resolved absolute path, guaranteed to equal *workspace_root* or a
+        descendant of it.
+
+    Raises:
+        WorkspacePathError: If *path* resolves outside *workspace_root*.
+    """
+    if workspace_root is None:
+        workspace_root = get_config().workspace_root
+    workspace_root = os.path.realpath(workspace_root)
+
+    if path is None:
+        return workspace_root
+
+    if os.path.isabs(path):
+        candidate = os.path.realpath(path)
+    else:
+        candidate = os.path.realpath(os.path.join(workspace_root, path))
+
+    if candidate != workspace_root and not candidate.startswith(workspace_root + os.sep):
+        raise WorkspacePathError(
+            f"path {path!r} resolves outside the workspace root ({workspace_root})"
+        )
+    return candidate
 
 
 def load_config(

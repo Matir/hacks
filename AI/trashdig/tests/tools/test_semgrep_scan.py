@@ -1,6 +1,7 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
+from trashdig.config import resolve_workspace_path
 from trashdig.tools.semgrep_scan import semgrep_scan
 
 
@@ -13,7 +14,7 @@ def test_semgrep_scan(mock_run):
     mock_run.assert_called_once()
     args = mock_run.call_args[0][0]
     assert "semgrep" in args
-    assert "path" in args
+    assert resolve_workspace_path("path") in args
 
 
 @patch("subprocess.run")

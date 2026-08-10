@@ -295,8 +295,14 @@ async def run_agent(  # noqa: PLR0913
         "run_config": run_config,
     }
 
+    # In StreamingMode.SSE, the Runner yields incremental `partial` events as
+    # the response streams in, followed by one final non-partial event that
+    # repeats the fully-assembled text. Summing every event's text double-
+    # counts that final event; only the non-partial (or otherwise final)
+    # events should be accumulated.
     async for event in runner.run_async(**run_kwargs):
-        final_text += get_response_text(event)
+        if not event.partial:
+            final_text += get_response_text(event)
 
     return final_text
 

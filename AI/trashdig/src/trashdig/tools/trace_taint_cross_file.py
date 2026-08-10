@@ -11,7 +11,7 @@ from trashdig.metadata.languages import (
 )
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import artifact_tool, get_config
+from .base import WorkspacePathError, artifact_tool, resolve_workspace_path
 from .ripgrep_search import ripgrep_search
 
 
@@ -582,8 +582,10 @@ def trace_taint_cross_file(
     Returns:
         A human-readable trace report listing each hop.
     """
-    if project_root is None:
-        project_root = get_config().workspace_root
+    try:
+        project_root = resolve_workspace_path(project_root)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
 
     metadata = get_language_metadata(language)
     if not metadata:

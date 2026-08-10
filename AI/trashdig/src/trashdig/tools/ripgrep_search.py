@@ -2,7 +2,7 @@ from typing import Any
 
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import _run_sandboxed, artifact_tool, get_config
+from .base import WorkspacePathError, _run_sandboxed, artifact_tool, resolve_workspace_path
 
 EXIT_COMMAND_NOT_FOUND = 127
 
@@ -26,8 +26,10 @@ def ripgrep_search(
     Returns:
         The standard output of the ripgrep command.
     """
-    if path is None:
-        path = get_config().workspace_root
+    try:
+        path = resolve_workspace_path(path)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
 
     cmd = ["rg", "--column", "--line-number", "--no-heading", "--color", "never", pattern, path]
     if extra_args:

@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from trashdig.agents.coordinator import Coordinator
-from trashdig.config import load_config
+from trashdig.config import init_config, load_config
 from trashdig.diagnostics import run_all_diagnostics
 from trashdig.sandbox.landlock_tool import init_sandbox_mp_context
 from trashdig.services.rate_limiter import init_rate_limiter
@@ -49,6 +49,38 @@ def _run_diagnostics(config: Any) -> bool:
 
     console.print(table)
     return all_passed
+
+
+def _print_token_usage_summary(summary: dict[str, Any] | None) -> None:
+    """Prints a token usage report after the TUI has exited via Quit."""
+    if not summary:
+        return
+
+    console = Console()
+    console.print("\n[bold blue]Token Usage Summary[/bold blue]")
+
+    table = Table()
+    table.add_column("Model", style="cyan")
+    table.add_column("Input Tokens", justify="right")
+    table.add_column("Output Tokens", justify="right")
+    table.add_column("Total Tokens", justify="right")
+
+    for model_name, stats in sorted(summary["model_usage"].items()):
+        model_total = stats["input_tokens"] + stats["output_tokens"]
+        table.add_row(
+            model_name,
+            f"{stats['input_tokens']:,}",
+            f"{stats['output_tokens']:,}",
+            f"{model_total:,}",
+        )
+
+    console.print(table)
+    total_tokens = summary["total_input_tokens"] + summary["total_output_tokens"]
+    console.print(
+        f"[bold]Total:[/bold] {total_tokens:,} tokens "
+        f"({summary['total_input_tokens']:,} in / {summary['total_output_tokens']:,} out), "
+        f"estimated cost ${summary['total_cost']:.4f}"
+    )
 
 
 def main() -> None:  # noqa: PLR0915
@@ -96,6 +128,7 @@ def main() -> None:  # noqa: PLR0915
     config = load_config(
         config_flag=args.config, data_dir_flag=args.data_dir, workspace_root=workspace_root
     )
+    init_config(config)
 
     # Environment Diagnostics
     if args.check_env:
@@ -165,6 +198,7 @@ def main() -> None:  # noqa: PLR0915
     else:
         app = TrashDigApp(config=config, workspace_root=config.workspace_root)
         app.run()
+        _print_token_usage_summary(app.token_usage_summary)
 
 
 if __name__ == "__main__":

@@ -1,24 +1,32 @@
 import fnmatch
 import os
 
+from trashdig.config import WorkspacePathError, resolve_workspace_path
 from trashdig.sandbox.landlock_tool import landlock_tool
 
 
 @landlock_tool()
 def find_files(
-    pattern: str, directory: str = ".", recursive: bool = True, case_sensitive: bool = False
+    pattern: str,
+    directory: str | None = None,
+    recursive: bool = True,
+    case_sensitive: bool = False,
 ) -> str:
     """Finds files by name pattern in a given directory.
 
     Args:
         pattern: The file name pattern to search for (e.g., '*.py').
-        directory: The root directory to start the search.
+        directory: The root directory to start the search. Defaults to Config workspace_root.
         recursive: Whether to search subdirectories.
         case_sensitive: Whether the pattern matching should be case-sensitive.
 
     Returns:
         A newline-separated list of relative paths for matching files.
     """
+    try:
+        directory = resolve_workspace_path(directory)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
     matches = []
     if not case_sensitive:
         pattern = pattern.lower()

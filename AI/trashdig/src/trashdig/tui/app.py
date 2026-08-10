@@ -474,6 +474,7 @@ class TrashDigApp(App):
         super().__init__()
         self.config = config or Config()
         self.workspace_root = workspace_root or self.config.workspace_root
+        self.token_usage_summary: dict[str, Any] | None = None
         self._phase = "Idle"
         # Concurrent verification workers (e.g. "verify all findings") share
         # this counter so the phase only drops back to "Idle" once every
@@ -492,8 +493,12 @@ class TrashDigApp(App):
             on_ask=self._on_ask,
             artifact_service=art_service,
         )
-        self.coordinator.on_task_event = lambda msg: self.call_from_thread(self._on_coordinator_log, msg)
-        self.coordinator.on_stats_event = lambda: self.call_from_thread(self.refresh_status)
+        # Coordinator work runs via `run_worker` on the app's own asyncio
+        # event loop (not a separate OS thread), so these callbacks must
+        # call directly rather than through `call_from_thread` — Textual
+        # raises when that's invoked from the app's own thread.
+        self.coordinator.on_task_event = self._on_coordinator_log
+        self.coordinator.on_stats_event = self.refresh_status
         self.prioritized_targets: list[str] = []
 
     def log_message(self, level: str, message: str) -> None:
@@ -701,6 +706,12 @@ class TrashDigApp(App):
         """Saves session state and exits the application."""
         if hasattr(self, "coordinator") and self.coordinator is not None:
             self.coordinator.db.close_scan_session(self.coordinator.session_id)
+            self.token_usage_summary = {
+                "total_input_tokens": self.coordinator.input_tokens,
+                "total_output_tokens": self.coordinator.output_tokens,
+                "total_cost": self.coordinator.total_cost,
+                "model_usage": dict(self.coordinator.model_usage),
+            }
         self.exit()
 
     def action_clear_log(self) -> None:

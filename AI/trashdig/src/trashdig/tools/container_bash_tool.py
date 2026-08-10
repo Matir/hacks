@@ -62,7 +62,7 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
     # Use a temporary container to run the command
     # We mount the current project directory read-only for context if needed,
     # but the command runs in a scratch space.
-    project_root = os.getcwd()
+    project_root = get_config().workspace_root
     cmd = [
         "docker", "run", "--rm",
         "--network", "none", # Isolate network by default

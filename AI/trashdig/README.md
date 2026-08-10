@@ -121,7 +121,7 @@ TrashDig agents have access to a suite of deterministic and research-oriented to
 | | `get_symbol_definition` | Finds the source definition of a class or function. | H |
 | | `find_references` | Finds all usages of a specific symbol. | SS, H |
 | | `get_scope_info` | Extracts local variables and parameters for a line. | SS, H |
-| | `read_file` | Reads the full content of a file. | H, S, V |
+| | `read_file` | Reads the full content of a file. | SS, WRM, H, S, V |
 | | `semgrep_scan` | Pattern-based security scanning. | H |
 | **Data Flow** | `trace_variable_semantic`| AST-aware intra-file taint tracing. | H |
 | | `trace_taint_cross_file`| Follows untrusted data across module boundaries. | H |

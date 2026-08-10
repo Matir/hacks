@@ -301,6 +301,11 @@ class Coordinator(LlmAgent):
         return self._cost_tracker.total_messages
 
     @property
+    def model_usage(self) -> dict[str, dict[str, int]]:
+        """Returns per-model token usage breakdown."""
+        return self._cost_tracker.model_usage
+
+    @property
     def task_queue(self) -> list[Any]:
         """Returns the current task queue (stub for TUI compatibility)."""
         return []

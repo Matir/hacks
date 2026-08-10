@@ -2,7 +2,7 @@ from typing import Any
 
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import artifact_tool, get_config
+from .base import WorkspacePathError, artifact_tool, resolve_workspace_path
 from .ripgrep_search import ripgrep_search
 
 
@@ -19,8 +19,10 @@ def find_references(symbol_name: str, path: str | None = None, tool_context: Any
     Returns:
         A list of occurrences.
     """
-    if path is None:
-        path = get_config().workspace_root
+    try:
+        path = resolve_workspace_path(path)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
 
     # Use ripgrep to find all usages, but exclude definitions
     extra_args = ["--line-number", "--column", "-v", f"def {symbol_name}|class {symbol_name}"]

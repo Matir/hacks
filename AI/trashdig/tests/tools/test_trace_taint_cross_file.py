@@ -130,8 +130,9 @@ def test_find_returns_variable_not_found():
 # _find_function_files
 # ---------------------------------------------------------------------------
 
-def test_find_function_files_found():
+def test_find_function_files_found(mock_cfg):
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         target = os.path.join(tmp, "db.py")
         with open(target, "w") as f:
             f.write("def fetch_user(user_id):\n    pass\n")
@@ -194,9 +195,10 @@ def test_resolve_param_name_skips_self():
 # trace_taint_cross_file – integration scenarios
 # ---------------------------------------------------------------------------
 
-def test_taint_reaches_sink_directly():
+def test_taint_reaches_sink_directly(mock_cfg):
     """Variable passed directly to a known sink in the same file."""
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         src_file = os.path.join(tmp, "app.py")
         with open(src_file, "wb") as f:
             f.write(
@@ -216,9 +218,10 @@ def test_taint_reaches_sink_directly():
         assert "POTENTIAL VULNERABILITY FOUND" in result
 
 
-def test_taint_crosses_one_file_to_sink():
+def test_taint_crosses_one_file_to_sink(mock_cfg):
     """Variable flows from entry file into a callee that calls a sink."""
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         # Entry file: calls db_query(user_id)
         with open(os.path.join(tmp, "routes.py"), "wb") as f:
             f.write(
@@ -244,9 +247,10 @@ def test_taint_crosses_one_file_to_sink():
         assert "POTENTIAL VULNERABILITY FOUND" in result
 
 
-def test_taint_safe_path():
+def test_taint_safe_path(mock_cfg):
     """Variable that is never passed to a sink should report safe."""
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         with open(os.path.join(tmp, "app.py"), "wb") as f:
             f.write(
                 b"def handle(user_input):\n"
@@ -264,9 +268,10 @@ def test_taint_safe_path():
         assert "RESULT" in result
 
 
-def test_taint_max_depth_respected():
+def test_taint_max_depth_respected(mock_cfg):
     """Depth limit prevents infinite recursion through a chain of files."""
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         # a.py calls hop_b(x), b.py defines hop_b and calls hop_c(x), etc.
         # With max_depth=1 the tracer should stop after one hop.
         with open(os.path.join(tmp, "a.py"), "wb") as f:
@@ -286,9 +291,10 @@ def test_taint_max_depth_respected():
         assert "max depth" in result
 
 
-def test_taint_cycle_detection():
+def test_taint_cycle_detection(mock_cfg):
     """Cycle between two files does not cause infinite recursion."""
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         with open(os.path.join(tmp, "a.py"), "wb") as f:
             f.write(b"def fa(x):\n    fb(x)\n")
         with open(os.path.join(tmp, "b.py"), "wb") as f:
@@ -304,9 +310,10 @@ def test_taint_cycle_detection():
         assert "cycle detected" in result
 
 
-def test_taint_external_library_call_noted():
+def test_taint_external_library_call_noted(mock_cfg):
     """Calls to symbols not found in the project are noted but don't crash."""
     with tempfile.TemporaryDirectory() as tmp:
+        mock_cfg.return_value.data["workspace_root"] = tmp
         with open(os.path.join(tmp, "app.py"), "wb") as f:
             f.write(b"def handle(data):\n    some_external_lib_fn(data)\n")
 

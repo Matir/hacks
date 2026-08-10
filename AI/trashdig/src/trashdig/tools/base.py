@@ -11,7 +11,7 @@ from google.adk.artifacts import BaseArtifactService, FileArtifactService
 from google.adk.tools import ToolContext
 from google.genai import types as genai_types
 
-from trashdig.config import get_config
+from trashdig.config import WorkspacePathError, get_config, resolve_workspace_path
 from trashdig.sandbox import get_sandbox
 from trashdig.sandbox.base import Sandbox
 

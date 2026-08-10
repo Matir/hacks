@@ -30,7 +30,7 @@ def mock_cfg():
         yield mock
 
 @pytest.fixture
-def temp_project(tmp_path):
+def temp_project(tmp_path, mock_cfg):
     # Create a dummy project structure
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "main.py").write_text("print('hello')")
@@ -40,4 +40,7 @@ def temp_project(tmp_path):
     (tmp_path / "tests" / "test_main.py").write_text("def test(): pass")
     (tmp_path / "web").mkdir()
     (tmp_path / "web" / "app.js").write_text("console.log('web')")
+    # Anchor the mocked workspace_root here so path-validating tools accept
+    # this directory as a valid target.
+    mock_cfg.return_value.data["workspace_root"] = str(tmp_path)
     return tmp_path

@@ -2,7 +2,7 @@ from typing import Any
 
 from trashdig.utils import is_binary_available
 
-from .base import _run_sandboxed, artifact_tool, get_config
+from .base import WorkspacePathError, _run_sandboxed, artifact_tool, resolve_workspace_path
 
 EXIT_TIMEOUT = 124
 
@@ -24,8 +24,10 @@ def semgrep_scan(
     if not is_binary_available("semgrep"):
         return "Error: semgrep is not installed or not in PATH."
 
-    if path is None:
-        path = get_config().workspace_root
+    try:
+        path = resolve_workspace_path(path)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
 
     cmd = ["semgrep", "--json", "--config", config, path]
 

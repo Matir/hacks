@@ -1,20 +1,25 @@
 import os
 import time
 
+from trashdig.config import WorkspacePathError, resolve_workspace_path
 from trashdig.sandbox.landlock_tool import landlock_tool
 
 
 @landlock_tool()
-def list_files(directory: str = ".", recursive: bool = False) -> str:
+def list_files(directory: str | None = None, recursive: bool = False) -> str:
     """Lists files and directories in a given path.
 
     Args:
-        directory: The directory to list.
+        directory: The directory to list. Defaults to Config workspace_root.
         recursive: Whether to list files recursively.
 
     Returns:
         A formatted string containing file names, sizes, and modification times.
     """
+    try:
+        directory = resolve_workspace_path(directory)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
     try:
         if recursive:
             output = []

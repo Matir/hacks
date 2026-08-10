@@ -1,6 +1,6 @@
 from trashdig.sandbox.landlock_tool import landlock_tool
 
-from .base import artifact_tool, get_config
+from .base import WorkspacePathError, artifact_tool, resolve_workspace_path
 from .ripgrep_search import ripgrep_search
 
 
@@ -16,8 +16,10 @@ def get_symbol_definition(symbol_name: str, path: str | None = None) -> str:
     Returns:
         The file path and a snippet of the definition if found.
     """
-    if path is None:
-        path = get_config().workspace_root
+    try:
+        path = resolve_workspace_path(path)
+    except WorkspacePathError as e:
+        return f"Error: {e}"
 
     patterns = [f"def {symbol_name}", f"class {symbol_name}", f"async def {symbol_name}"]
     results: list[str] = []

@@ -1,6 +1,7 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
+from trashdig.config import resolve_workspace_path
 from trashdig.tools.ripgrep_search import ripgrep_search
 
 
@@ -19,7 +20,7 @@ def test_ripgrep_search(mock_run):
     args = mock_run.call_args[0][0]
     assert "rg" in args
     assert "pattern" in args
-    assert "path" in args
+    assert resolve_workspace_path("path") in args
 
 
 @patch("subprocess.run")

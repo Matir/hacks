@@ -117,6 +117,7 @@ async def test_run_agent():
     # Mock Runner.run_async to yield an event
     mock_event = MagicMock()
     mock_event.content.parts = [MagicMock(text="response")]
+    mock_event.partial = False
 
     async def mock_run_async(*args, **kwargs):
         yield mock_event

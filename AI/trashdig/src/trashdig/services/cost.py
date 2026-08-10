@@ -36,6 +36,7 @@ class CostTracker:
         self.total_output_tokens: int = 0
         self.total_messages: int = 0
         self.rates: dict[str, Any] = rates or {}
+        self.model_usage: dict[str, dict[str, int]] = {}
 
         if not self.rates:
             self.load_rates()
@@ -132,6 +133,13 @@ class CostTracker:
         self.total_input_tokens += input_tokens
         self.total_output_tokens += output_tokens
         self.total_messages += 1
+
+        model_stats = self.model_usage.setdefault(
+            model_name, {"input_tokens": 0, "output_tokens": 0, "messages": 0}
+        )
+        model_stats["input_tokens"] += input_tokens
+        model_stats["output_tokens"] += output_tokens
+        model_stats["messages"] += 1
 
         # 1. Try exact match in loaded rates
         rate_info = self.rates.get(model_name)

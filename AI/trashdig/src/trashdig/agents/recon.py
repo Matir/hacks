@@ -20,6 +20,7 @@ from trashdig.tools import (
     get_scope_info,
     list_files,
     query_vulndb,
+    read_file,
     ripgrep_search,
     web_fetch,
 )
@@ -74,6 +75,7 @@ def create_stack_scout_agent(
         FunctionTool(detect_language),
         FunctionTool(list_files),
         FunctionTool(find_files),
+        FunctionTool(read_file),
         load_artifacts_tool,
     ]
     if extras["google_search_tool"]:
@@ -121,6 +123,7 @@ def create_web_route_mapper_agent(
         FunctionTool(get_project_structure),
         FunctionTool(list_files),
         FunctionTool(find_files),
+        FunctionTool(read_file),
         load_artifacts_tool,
     ]
 

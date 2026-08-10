@@ -16,6 +16,7 @@ def test_main_default_root(mock_isatty, mock_load_config, mock_app_class, tmp_pa
     mock_config.data["data_dir"] = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
+    mock_app_class.return_value.token_usage_summary = None
 
     with patch("sys.argv", ["trashdig"]):
         main()
@@ -39,6 +40,7 @@ def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_p
     mock_config.data["data_dir"] = str(tmp_path / ".trashdig")
     mock_load_config.return_value = mock_config
     mock_app_class.return_value = MagicMock()
+    mock_app_class.return_value.token_usage_summary = None
 
     with patch("sys.argv", ["trashdig", str(tmp_path)]):
         main()

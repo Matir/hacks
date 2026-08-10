@@ -10,11 +10,15 @@ Usage::
     @landlock_tool()
     def read_file(file_path: str, tool_context: Any = None) -> str: ...
 
-On non-Linux platforms or when the ``TRASHDIG_SKIP_SANDBOX`` environment
-variable is set to ``"1"``, the function is called directly in the current
-process (no child is spawned).  Set ``require_sandbox = true`` in
-``trashdig.toml`` (the default) to make Landlock unavailability a hard failure
-on Linux rather than a silent fall-through to unsandboxed execution.
+A child process is always spawned, on every platform, so that a crashing or
+runaway tool call can't take down the main process. Only the Landlock
+filesystem ruleset itself is Linux-specific: on non-Linux platforms the child
+runs unrestricted (sandboxing is a no-op there). Set the ``TRASHDIG_SKIP_SANDBOX``
+environment variable to ``"1"`` to skip spawning a child entirely and call the
+function directly in the current process (used by the test suite). Set
+``require_sandbox = true`` in ``trashdig.toml`` (the default) to make Landlock
+unavailability a hard failure on Linux rather than a silent fall-through to
+unsandboxed execution.
 
 The decorator must sit **inside** ``@artifact_tool`` so that
 :class:`~google.adk.tools.ToolContext` is consumed by the outer decorator and
@@ -95,6 +99,10 @@ class ToolTimeoutError(SandboxError):
 # ---------------------------------------------------------------------------
 
 
+def _warmup_noop() -> None:
+    """No-op child target used only to force-start helper processes."""
+
+
 def init_sandbox_mp_context(method: str = "forkserver") -> None:
     """Initialise the multiprocessing start method used for sandboxed calls.
 
@@ -106,11 +114,26 @@ def init_sandbox_mp_context(method: str = "forkserver") -> None:
     In tests, call with ``method='spawn'`` to obtain a clean interpreter per
     call without needing a pre-started forkserver process.
 
+    For ``forkserver``, this also eagerly spawns a throwaway child so the
+    ``forkserver`` and ``resource_tracker`` helper processes start immediately
+    (they are otherwise started lazily on the first real sandboxed call).
+    Deferring that start is unsafe for TrashDig specifically: the Textual TUI
+    puts the terminal into raw mode and remaps stdio, and starting the helper
+    processes after that happens makes ``resource_tracker``'s internal
+    ``os.pipe()`` grab colliding low file descriptors, crashing with
+    ``ValueError: bad value(s) in fds_to_keep`` on the first sandboxed tool
+    call. Warming up here, while stdio is still untouched, avoids that.
+
     Args:
         method: One of ``'forkserver'``, ``'spawn'``, or ``'fork'``.
     """
     SandboxProvider.mp_context = multiprocessing.get_context(method)
     SandboxProvider.sys_path_snapshot = list(sys.path)
+
+    if method == "forkserver":
+        warmup = SandboxProvider.mp_context.Process(target=_warmup_noop)
+        warmup.start()
+        warmup.join()
 
 
 # ---------------------------------------------------------------------------
