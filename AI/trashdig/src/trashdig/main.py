@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import dataclasses
+import logging
 import os
 import sys
 import traceback
@@ -22,6 +23,8 @@ from trashdig.tui.app import TrashDigApp
 
 # Suppress experimental ADK feature warnings
 warnings.filterwarnings("ignore", message=".*FeatureName.PLUGGABLE_AUTH.*")
+
+logger = logging.getLogger(__name__)
 
 
 def _run_diagnostics(config: Any) -> bool:
@@ -129,6 +132,9 @@ def main() -> None:  # noqa: PLR0915
         config_flag=args.config, data_dir_flag=args.data_dir, workspace_root=workspace_root
     )
     init_config(config)
+
+    Console().print(f"[bold]Workspace root:[/bold] {config.workspace_root}")
+    logger.info("Workspace root: %s", config.workspace_root)
 
     # Environment Diagnostics
     if args.check_env:

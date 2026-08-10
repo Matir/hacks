@@ -54,6 +54,31 @@ async def test_callback_on_before_model(mock_coordinator):
     await cb.on_before_model(ctx, req)
     assert cb._last_prompt == "Test Prompt"
 
+
+async def test_callback_on_before_model_captures_only_latest_turn(mock_coordinator):
+    """llm_request.contents carries the full running history on every call.
+    Only the newest entry — this turn's actual new input — must be captured,
+    not the whole transcript (which would always start with turn 1's prompt).
+    """
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+
+    req = MagicMock()
+    req.contents = [genai_types.Content(parts=[genai_types.Part(text="First turn prompt")])]
+    await cb.on_before_model(ctx, req)
+    assert cb._last_prompt == "First turn prompt"
+
+    # Turn 2: history now includes turn 1's exchange plus a tool result with
+    # no text part, followed by the new user-visible text for this turn.
+    req.contents = [
+        genai_types.Content(role="user", parts=[genai_types.Part(text="First turn prompt")]),
+        genai_types.Content(role="model", parts=[genai_types.Part(text="First turn response")]),
+        genai_types.Content(role="user", parts=[genai_types.Part(text="Second turn prompt")]),
+    ]
+    await cb.on_before_model(ctx, req)
+    assert cb._last_prompt == "Second turn prompt"
+
+
 async def test_callback_on_before_model_awaits_pause(mock_coordinator):
     """Every model call must check the pause gate before proceeding, not just
     the coarse per-phase checkpoints in Coordinator — this is the fix for
@@ -155,6 +180,140 @@ async def test_callback_on_after_model_skips_partial_chunks(mock_coordinator):
     mock_coordinator.db.log_conversation.assert_not_called()
 
 
+async def test_callback_on_after_model_skips_empty_trailing_echo(mock_coordinator):
+    """ADK's Gemini streaming aggregator can yield a trailing event with
+    partial=False, finish_reason set, and empty content — its text was
+    already flushed into an earlier event. This echo must not overwrite the
+    real logged response with a blank one, nor double-count usage."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "test_agent"
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = None
+    resp.partial = False
+    usage = MagicMock()
+    usage.prompt_token_count = 10
+    usage.candidates_token_count = 5
+    resp.usage_metadata = usage
+
+    await cb.on_after_model(ctx, resp)
+
+    mock_coordinator._cost_tracker.record_usage.assert_not_called()
+    mock_coordinator._on_stats.assert_not_called()
+    mock_coordinator.db.log_conversation.assert_not_called()
+
+
+async def test_callback_on_after_model_logs_content_with_unset_partial(mock_coordinator):
+    """The real assembled-text event from the streaming aggregator leaves
+    `partial` unset (None) rather than explicitly False; it must still be
+    logged and accounted for."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "test_agent"
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = genai_types.Content(parts=[genai_types.Part(text="Full response")])
+    resp.partial = None
+    usage = MagicMock()
+    usage.prompt_token_count = 10
+    usage.candidates_token_count = 5
+    resp.usage_metadata = usage
+
+    await cb.on_after_model(ctx, resp)
+
+    mock_coordinator._cost_tracker.record_usage.assert_called_once()
+    mock_coordinator.db.log_conversation.assert_called_once()
+    call_args = mock_coordinator.db.log_conversation.call_args[0]
+    assert "Full response" in call_args
+
+
+async def test_callback_on_after_model_detects_safety_refusal(mock_coordinator):
+    """A response blocked mid-generation (finish_reason=SAFETY, no content)
+    must be logged, recorded with a [REFUSED: ...] marker, and must stop
+    the agent by setting escalate — the same signal exit_loop uses."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "hunter"
+    ctx.actions = MagicMock()
+
+    usage = MagicMock()
+    usage.prompt_token_count = 20
+    usage.candidates_token_count = 0
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = None
+    resp.partial = False
+    resp.finish_reason = genai_types.FinishReason.SAFETY
+    resp.error_code = None
+    resp.usage_metadata = usage
+
+    await cb.on_after_model(ctx, resp)
+
+    assert ctx.actions.escalate is True
+    mock_coordinator.log.assert_called_once()
+    assert "hunter" in mock_coordinator.log.call_args[0][0]
+
+    # Token accounting still happens — the refused call still cost tokens.
+    mock_coordinator._cost_tracker.record_usage.assert_called_once()
+
+    mock_coordinator.db.log_conversation.assert_called_once()
+    call_args = mock_coordinator.db.log_conversation.call_args[0]
+    assert "[REFUSED: SAFETY]" in call_args[3]
+
+
+async def test_callback_on_after_model_detects_prompt_blocked_via_error_code(mock_coordinator):
+    """A prompt blocked before generation started carries no finish_reason —
+    ADK's LlmResponse.create() reports it via error_code instead — and must
+    still be detected as a refusal."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "skeptic"
+    ctx.actions = MagicMock()
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = None
+    resp.partial = False
+    resp.finish_reason = None
+    resp.error_code = genai_types.BlockedReason.PROHIBITED_CONTENT
+    resp.usage_metadata = None
+
+    await cb.on_after_model(ctx, resp)
+
+    assert ctx.actions.escalate is True
+    mock_coordinator.db.log_conversation.assert_called_once()
+    call_args = mock_coordinator.db.log_conversation.call_args[0]
+    assert "[REFUSED: PROHIBITED_CONTENT]" in call_args[3]
+
+
+async def test_callback_on_after_model_max_tokens_is_not_a_refusal(mock_coordinator):
+    """finish_reason=MAX_TOKENS also accompanies empty content but is not a
+    refusal — it must fall through to the existing empty-echo skip, not
+    trigger refusal logging or escalate."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "hunter"
+    ctx.actions = MagicMock()
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = None
+    resp.partial = False
+    resp.finish_reason = genai_types.FinishReason.MAX_TOKENS
+    resp.error_code = genai_types.FinishReason.MAX_TOKENS
+    resp.usage_metadata = None
+
+    await cb.on_after_model(ctx, resp)
+
+    assert ctx.actions.escalate is not True
+    mock_coordinator._cost_tracker.record_usage.assert_not_called()
+    mock_coordinator.db.log_conversation.assert_not_called()
+
+
 async def test_callback_on_before_model_injects_pending_hint(mock_coordinator):
     """A queued hint must be appended to the request as a high-priority
     user message, and the state must flip to STEERING while it's injected.
@@ -232,6 +391,77 @@ def test_callback_on_before_tool(mock_coordinator):
     mock_coordinator.log.assert_called_once()
     assert "test_tool" in mock_coordinator.log.call_args[0][0]
 
+
+def test_callback_on_after_tool_logs_success(mock_coordinator):
+    """A successful tool response is logged plainly, not flagged as a failure."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    tool = MagicMock(spec=BaseTool)
+    tool.name = "read_file"
+    tool_context = MagicMock()
+    tool_context.agent_name = "hunter"
+
+    cb.on_after_tool(tool, {"file_path": "foo.py"}, tool_context, "def foo(): pass")
+
+    mock_coordinator.log.assert_called_once()
+    logged = mock_coordinator.log.call_args[0][0]
+    assert "read_file" in logged
+    assert "bold red" not in logged
+
+
+def test_callback_on_after_tool_flags_string_error_convention(mock_coordinator):
+    """Trashdig tools (read_file, bash_tool, web_fetch, ...) signal failure by
+    returning a string starting with "Error" rather than raising — this must
+    be flagged in the console, distinctly from a normal response."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    tool = MagicMock(spec=BaseTool)
+    tool.name = "read_file"
+    tool_context = MagicMock()
+    tool_context.agent_name = "hunter"
+
+    cb.on_after_tool(tool, {"file_path": "missing.py"}, tool_context, "Error reading file missing.py: not found")
+
+    mock_coordinator.log.assert_called_once()
+    logged = mock_coordinator.log.call_args[0][0]
+    assert "bold red" in logged
+    assert "read_file" in logged
+
+
+def test_callback_on_after_tool_flags_error_dict_convention(mock_coordinator):
+    """ADK's own FunctionTool reports failures like missing args as
+    {"error": ...} rather than a string — this must also be flagged."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    tool = MagicMock(spec=BaseTool)
+    tool.name = "some_tool"
+    tool_context = MagicMock()
+    tool_context.agent_name = "hunter"
+
+    cb.on_after_tool(tool, {}, tool_context, {"error": "missing mandatory parameter"})
+
+    mock_coordinator.log.assert_called_once()
+    logged = mock_coordinator.log.call_args[0][0]
+    assert "bold red" in logged
+
+
+def test_callback_on_tool_error_logs_and_does_not_swallow(mock_coordinator):
+    """A raised tool exception must be flagged in the console, and the
+    callback must return None so ADK re-raises rather than silently
+    continuing with a fabricated response."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    tool = MagicMock(spec=BaseTool)
+    tool.name = "container_bash_tool"
+    tool_context = MagicMock()
+    tool_context.agent_name = "hunter"
+
+    result = cb.on_tool_error(tool, {"command": "ls"}, tool_context, RuntimeError("docker daemon unreachable"))
+
+    assert result is None
+    mock_coordinator.log.assert_called_once()
+    logged = mock_coordinator.log.call_args[0][0]
+    assert "bold red" in logged
+    assert "container_bash_tool" in logged
+    assert "docker daemon unreachable" in logged
+
+
 def test_callback_attach_to(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
     # Use a mock that spec-es LlmAgent so isinstance works
@@ -240,6 +470,8 @@ def test_callback_attach_to(mock_coordinator):
     cb.attach_to(agent)
 
     assert agent.before_tool_callback == cb.on_before_tool
+    assert agent.after_tool_callback == cb.on_after_tool
+    assert agent.on_tool_error_callback == cb.on_tool_error
     assert agent.after_model_callback == cb.on_after_model
     assert agent.on_model_error_callback == cb.on_model_error
     assert agent.before_agent_callback == cb.on_before_agent

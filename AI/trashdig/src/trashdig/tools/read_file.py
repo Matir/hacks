@@ -1,5 +1,6 @@
 from typing import Any
 
+from trashdig.config import WorkspacePathError, resolve_workspace_path
 from trashdig.sandbox.landlock_tool import landlock_tool
 
 from .base import artifact_tool
@@ -17,6 +18,10 @@ def read_file(file_path: str, tool_context: Any = None) -> str:
     Returns:
         The file content or an error message.
     """
+    try:
+        file_path = resolve_workspace_path(file_path)
+    except WorkspacePathError as e:
+        return f"Error reading file {file_path}: {str(e)}"
     try:
         with open(file_path, encoding="utf-8") as f:
             return f.read()

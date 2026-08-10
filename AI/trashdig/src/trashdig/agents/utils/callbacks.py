@@ -28,6 +28,69 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# google.genai.types.FinishReason / BlockedReason values that indicate the
+# model refused or was blocked for safety/policy reasons, as opposed to
+# reasons like MAX_TOKENS, LANGUAGE, or MALFORMED_FUNCTION_CALL which also
+# populate LlmResponse.finish_reason / error_code but are not refusals.
+_REFUSAL_REASONS = frozenset({
+    "SAFETY",
+    "PROHIBITED_CONTENT",
+    "BLOCKLIST",
+    "SPII",
+    "RECITATION",
+    "IMAGE_SAFETY",
+    "IMAGE_PROHIBITED_CONTENT",
+    "IMAGE_RECITATION",
+    "JAILBREAK",
+    "MODEL_ARMOR",
+})
+
+
+def _extract_response(resp: LlmResponse) -> tuple[str, list[dict]]:
+    """Pull the text and tool calls out of an LlmResponse's content parts."""
+    response_text = ""
+    tool_calls: list[dict] = []
+    if resp.content and resp.content.parts:
+        for part in resp.content.parts:
+            if hasattr(part, "text") and part.text:
+                response_text = part.text
+            fc = getattr(part, "function_call", None)
+            if fc and getattr(fc, "name", None):
+                tool_calls.append({
+                    "name": fc.name,
+                    "args": dict(getattr(fc, "args", None) or {}),
+                })
+    return response_text, tool_calls
+
+
+def _is_tool_error(tool_response: Any) -> bool:
+    """Best-effort detection of a tool-reported failure.
+
+    Trashdig's own tools (bash_tool, read_file, web_fetch, semgrep_scan, ...)
+    signal failure by returning a plain string starting with "Error" rather
+    than raising; ADK's own FunctionTool falls back to {"error": ...} for
+    things like missing required arguments. Check both conventions.
+    """
+    if isinstance(tool_response, dict):
+        return "error" in tool_response
+    if isinstance(tool_response, str):
+        return tool_response.startswith("Error")
+    return False
+
+
+def _refusal_reason(resp: LlmResponse) -> str | None:
+    """Return the refusal reason if `resp` was safety/policy-blocked, else None.
+
+    ADK's LlmResponse.create() (google.adk.models.llm_response) sets
+    `finish_reason` when the model started generating and was cut off (e.g.
+    mid-stream), and sets `error_code` instead when Gemini blocked the prompt
+    before generating any candidate at all — so both must be checked.
+    """
+    for reason in (getattr(resp, "finish_reason", None), getattr(resp, "error_code", None)):
+        if reason is not None and reason in _REFUSAL_REASONS:
+            return getattr(reason, "value", reason)
+    return None
+
 
 class TrashDigCallback:
     """Single callback object wired to every agent in a scan session.
@@ -103,9 +166,32 @@ class TrashDigCallback:
         # Only LlmAgent supports these specific model/tool callbacks in its schema
         if isinstance(agent, LlmAgent):
             agent.before_tool_callback = self.on_before_tool
+            agent.after_tool_callback = self.on_after_tool
+            agent.on_tool_error_callback = self.on_tool_error
             agent.before_model_callback = self.on_before_model
             agent.after_model_callback = self.on_after_model
             agent.on_model_error_callback = self.on_model_error
+
+    def _handle_refusal(
+        self, ctx: CallbackContext, agent_name: str, refusal_reason: str, response_text: str
+    ) -> None:
+        """Log a detected model refusal/safety-block and stop the agent."""
+        self._c.log(
+            f"[bold red]Refused:[/bold red] {agent_name} — model blocked "
+            f"the response ({refusal_reason}). Stopping this agent."
+        )
+        logger.warning(
+            "Model refusal in agent %s: reason=%s response=%r",
+            agent_name, refusal_reason, response_text,
+        )
+        # Stop the agent that received the refusal. `escalate` is the same
+        # ADK signal the exit_loop tool uses (tool_context.actions.escalate)
+        # — it immediately breaks any enclosing LoopAgent (e.g. hunter_loop)
+        # instead of retrying against the next target. For a single-shot
+        # agent there's nothing further to break: a refusal event carries no
+        # function_calls, so the agent's own model-call loop already ends
+        # after this turn.
+        ctx.actions.escalate = True
 
     # ------------------------------------------------------------------
     # Agent lifecycle hooks
@@ -135,9 +221,52 @@ class TrashDigCallback:
         if self._c.on_stats_event:
             self._c.on_stats_event()
 
+        agent_name = getattr(tool_context, "agent_name", "unknown")
         args_str = ", ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
         self._c.log(f"  [dim]→ {tool.name}({args_str})[/dim]")
+        logger.info("Tool call — agent=%s tool=%s args=%r", agent_name, tool.name, args)
         return None  # Never skip the actual tool call
+
+    def on_after_tool(
+        self,
+        tool: BaseTool,
+        args: dict[str, Any],
+        tool_context: ToolContext,
+        tool_response: Any,
+        **kwargs: Any,
+    ) -> dict | None:
+        """Log a tool's response, flagging a tool-reported failure in the console."""
+        agent_name = getattr(tool_context, "agent_name", "unknown")
+        preview = repr(tool_response)[:200]
+
+        if _is_tool_error(tool_response):
+            self._c.log(f"  [bold red]✗ {tool.name} failed:[/bold red] {preview}")
+            logger.warning(
+                "Tool failed — agent=%s tool=%s response=%r", agent_name, tool.name, tool_response
+            )
+        else:
+            self._c.log(f"  [dim]← {tool.name} → {preview}[/dim]")
+            logger.info(
+                "Tool response — agent=%s tool=%s response=%r", agent_name, tool.name, tool_response
+            )
+        return None  # Never override the actual tool response
+
+    def on_tool_error(
+        self,
+        tool: BaseTool,
+        args: dict[str, Any],
+        tool_context: ToolContext,
+        error: Exception,
+        **kwargs: Any,
+    ) -> dict | None:
+        """Indicate a raised (not just tool-reported) tool failure in the console."""
+        agent_name = getattr(tool_context, "agent_name", "unknown")
+        self._c.log(f"  [bold red]✗ {tool.name} raised:[/bold red] {error}")
+        logger.warning(
+            "Tool raised — agent=%s tool=%s args=%r error=%s",
+            agent_name, tool.name, args, error, exc_info=error,
+        )
+        return None  # Don't swallow the error — let it propagate as before.
 
     # ------------------------------------------------------------------
     # Model hooks
@@ -195,13 +324,20 @@ class TrashDigCallback:
         if limiter:
             await limiter.wait_for_request()
 
+        # llm_request.contents holds the *entire* running conversation ADK
+        # resends on every call, not just this turn's input — concatenating
+        # all of it here would make every logged "prompt" start with (and be
+        # dominated by) the very first turn's message, especially once later
+        # turns add only a function_response (tool result), which has no
+        # `.text` part. Only the newest entry — the actual new input for
+        # this turn — belongs in the per-turn log.
         prompt = ""
         if llm_request.contents:
-            for content in llm_request.contents:
-                if content.parts:
-                    for part in content.parts:
-                        if hasattr(part, "text") and part.text:
-                            prompt += part.text + "\n"
+            last_content = llm_request.contents[-1]
+            if last_content.parts:
+                for part in last_content.parts:
+                    if hasattr(part, "text") and part.text:
+                        prompt += part.text + "\n"
         self._last_prompt = prompt.strip()
 
         self._c.log(f"[dim]→ LLM request ({agent_name})[/dim]")
@@ -221,11 +357,27 @@ class TrashDigCallback:
         if not ctx or not resp:
             return None
 
-        # In streaming mode, this callback fires once per partial chunk plus
-        # a final non-partial chunk with the fully-assembled response and
-        # usage metadata. Skip partials so accounting and logging happen
-        # exactly once, on the complete response.
+        # In streaming mode, this callback fires once per partial chunk. Skip
+        # those so accounting and logging happen only on complete responses.
         if resp.partial:
+            return None
+
+        agent_name = getattr(ctx, "agent_name", "unknown")
+
+        # Extract response text and tool calls for the DB log
+        response_text, tool_calls = _extract_response(resp)
+
+        refusal_reason = _refusal_reason(resp)
+        if refusal_reason:
+            self._handle_refusal(ctx, agent_name, refusal_reason, response_text)
+        elif not response_text and not tool_calls:
+            # Gemini's streaming aggregator can yield a trailing "echo" event
+            # after the real content (partial=False, finish_reason set) that
+            # carries only usage/finish metadata with empty content — its text
+            # was already flushed into an earlier event whose `partial` is left
+            # unset rather than explicitly False. Skip these empty echoes so we
+            # don't overwrite the real logged response with a blank one, and
+            # don't double-count usage between the two events.
             return None
 
         usage = resp.usage_metadata
@@ -238,7 +390,6 @@ class TrashDigCallback:
             total_t = (getattr(usage, "total_token_count", None) or (in_t + out_t))
             await limiter.update_usage(total_t)
 
-        agent_name = getattr(ctx, "agent_name", "unknown")
         agent = self._c._agent_by_name(agent_name)
         model_name = getattr(agent, "model", None) or "unknown"
 
@@ -248,25 +399,14 @@ class TrashDigCallback:
         # Signaling hook for the TUI
         self._c._on_stats(in_t, out_t, new_msg=True, model_name=model_name)
 
-        # Extract response text and tool calls for the DB log
-        response_text = ""
-        tool_calls: list[dict] = []
-        if resp.content and resp.content.parts:
-            for part in resp.content.parts:
-                if hasattr(part, "text") and part.text:
-                    response_text = part.text
-                fc = getattr(part, "function_call", None)
-                if fc and getattr(fc, "name", None):
-                    tool_calls.append({
-                        "name": fc.name,
-                        "args": dict(getattr(fc, "args", None) or {}),
-                    })
-
+        logged_response = (
+            f"[REFUSED: {refusal_reason}] {response_text}" if refusal_reason else response_text
+        )
         self._c.db.log_conversation(
             self._c.project_path,
             agent_name,
             self._last_prompt,
-            response_text,
+            logged_response,
             tool_calls,
             in_t,
             out_t,

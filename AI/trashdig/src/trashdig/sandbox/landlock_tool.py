@@ -37,7 +37,7 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from trashdig.config import get_config
+from trashdig.config import Config, get_config, init_config
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +248,8 @@ def _child_main(  # noqa: PLR0913
     write: bool,
     sys_path_snap: list[str],
     require_sandbox: bool,
+    config_path: str,
+    config_data: dict[str, Any],
 ) -> None:
     """Entry point executed inside the sandboxed child process.
 
@@ -264,7 +266,22 @@ def _child_main(  # noqa: PLR0913
         write: Whether *workspace_dir* needs read+write access.
         sys_path_snap: ``sys.path`` snapshot for in-child import access.
         require_sandbox: Whether to hard-fail if Landlock cannot be applied.
+        config_path: The parent's ``Config.config_path``, carried over so
+            ``get_config()`` reports the same source path in the child.
+        config_data: The parent's ``Config.data`` (with ``workspace_root``
+            pinned to *workspace_dir*), reinstalled as the child's config
+            singleton. forkserver/spawn children start a fresh interpreter
+            that never ran ``init_config()``; without this, ``get_config()``
+            would lazily build a brand new ``Config()`` here — reloaded from
+            disk relative to the child's CWD — and anything that depends on
+            it (e.g. ``resolve_workspace_path``) would silently fall back to
+            the child's CWD instead of the real workspace root.
     """
+    child_config = Config.__new__(Config)
+    child_config.config_path = config_path
+    child_config.data = config_data
+    init_config(child_config)
+
     # Must be set before Landlock is applied (env mutation is not a FS op).
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 
@@ -395,6 +412,11 @@ def landlock_tool(
             config = get_config()
             workspace_dir: str = config.workspace_root
             require_sandbox: bool = bool(config.data.get("require_sandbox", True))
+            config_path: str = config.config_path
+            # Pin workspace_root explicitly: config.workspace_root may come
+            # from an overridden property (e.g. mocked in tests) rather than
+            # config.data, so the plain dict alone wouldn't carry it.
+            config_data: dict[str, Any] = {**config.data, "workspace_root": workspace_dir}
 
             # Strip ToolContext: not picklable and not used in tool function bodies.
             clean_kwargs: dict[str, Any] = {
@@ -414,6 +436,8 @@ def landlock_tool(
                     write,
                     SandboxProvider.sys_path_snapshot,
                     require_sandbox,
+                    config_path,
+                    config_data,
                 ),
                 daemon=True,
             )

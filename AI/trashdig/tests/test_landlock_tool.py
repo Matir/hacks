@@ -215,6 +215,7 @@ def mock_config(tmp_path):
     cfg = MagicMock()
     cfg.workspace_root = str(tmp_path)
     cfg.data = {"require_sandbox": False}
+    cfg.config_path = str(tmp_path / "trashdig.toml")
     return cfg
 
 
@@ -315,7 +316,9 @@ class TestChildEnvironment:
             [],
             False,
             [],
-            True
+            True,
+            "trashdig.toml",
+            {},
         )
         mock_apply.assert_called_once_with("/tmp", [], False, [])
         mock_conn.send.assert_called_with(("ok", "ok"))
@@ -352,7 +355,7 @@ class TestChildEnvironment:
             func.return_value = "ok"
 
             # Case 1: require_sandbox = True (should send error)
-            _child_main(mock_conn, func, (), {}, "/tmp", [], False, [], True)
+            _child_main(mock_conn, func, (), {}, "/tmp", [], False, [], True, "trashdig.toml", {})
 
             # Find the error call. _send_error calls conn.send(('err', exc, tb))
             mock_conn.send.assert_called()
@@ -363,5 +366,5 @@ class TestChildEnvironment:
 
             # Case 2: require_sandbox = False (should warning and continue)
             mock_conn.send.reset_mock()
-            _child_main(mock_conn, func, (), {}, "/tmp", [], False, [], False)
+            _child_main(mock_conn, func, (), {}, "/tmp", [], False, [], False, "trashdig.toml", {})
             mock_conn.send.assert_called_with(("ok", "ok"))
