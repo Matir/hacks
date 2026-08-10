@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import MagicMock
 
 import google.genai.types as genai_types
@@ -35,6 +36,7 @@ def mock_coordinator():
     coord._db = MagicMock()
     coord._cost_tracker = MagicMock()
     coord._state = EngineState.IDLE
+    coord.pop_pending_hints.return_value = []
     # Default: no turn limit for any agent
     coord.config.get_agent_config.return_value = _make_agent_config(max_turns=None)
     # Mock _agent_by_name to return a mock agent with a model
@@ -51,6 +53,55 @@ async def test_callback_on_before_model(mock_coordinator):
 
     await cb.on_before_model(ctx, req)
     assert cb._last_prompt == "Test Prompt"
+
+async def test_callback_on_before_model_awaits_pause(mock_coordinator):
+    """Every model call must check the pause gate before proceeding, not just
+    the coarse per-phase checkpoints in Coordinator — this is the fix for
+    "Pause & Steer" taking effect mid-turn instead of only between phases.
+    """
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+    req = MagicMock()
+    req.contents = []
+
+    await cb.on_before_model(ctx, req)
+
+    mock_coordinator.check_pause.assert_awaited_once()
+
+
+async def test_callback_on_before_model_blocks_while_paused():
+    """A real asyncio.Event-backed check_pause() must actually block the
+    callback until resumed, proving the gate is load-bearing and not just
+    called-and-ignored.
+    """
+    coord = MagicMock(spec=Coordinator)
+    coord.project_path = "test_project"
+    coord._state = EngineState.IDLE
+    coord.pop_pending_hints.return_value = []
+    coord.config.get_agent_config.return_value = _make_agent_config(max_turns=None)
+
+    # Use a real asyncio.Event so we can assert blocking behaviour precisely,
+    # mirroring Coordinator.check_pause(): await self._pause_event.wait().
+    real_event = asyncio.Event()
+
+    async def check_pause():
+        await real_event.wait()
+
+    coord.check_pause = check_pause
+
+    cb = TrashDigCallback.get_instance(coord)
+    ctx = MagicMock(spec=CallbackContext)
+    req = MagicMock()
+    req.contents = []
+
+    task = asyncio.ensure_future(cb.on_before_model(ctx, req))
+    await asyncio.sleep(0)
+    assert not task.done(), "on_before_model must block while paused"
+
+    real_event.set()
+    await task
+    assert task.done()
+
 
 async def test_callback_on_after_model(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)
@@ -82,6 +133,58 @@ async def test_callback_on_after_model(mock_coordinator):
 
     # Check DB logging
     mock_coordinator.db.log_conversation.assert_called_once()
+
+async def test_callback_on_before_model_injects_pending_hint(mock_coordinator):
+    """A queued hint must be appended to the request as a high-priority
+    user message, and the state must flip to STEERING while it's injected.
+    """
+    mock_coordinator.pop_pending_hints.return_value = ["Focus on the SQL sink in db.py"]
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+    req = MagicMock()
+    req.contents = []
+
+    await cb.on_before_model(ctx, req)
+
+    assert len(req.contents) == 1
+    injected_text = req.contents[0].parts[0].text
+    assert "Focus on the SQL sink in db.py" in injected_text
+    assert mock_coordinator._state == EngineState.STEERING
+
+
+async def test_callback_on_before_model_no_hint_no_injection(mock_coordinator):
+    """No pending hints → request contents must be left untouched."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+    ctx = MagicMock(spec=CallbackContext)
+    req = MagicMock()
+    req.contents = []
+
+    await cb.on_before_model(ctx, req)
+
+    assert req.contents == []
+
+
+async def test_callback_on_after_model_reverts_steering_to_running(mock_coordinator):
+    """After a steering hint injection, the next on_after_model call must
+    restore RUNNING, mirroring the WAITING_FOR_TOOLS revert."""
+    mock_coordinator._state = EngineState.STEERING
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "test_agent"
+
+    usage = MagicMock()
+    usage.prompt_token_count = 10
+    usage.candidates_token_count = 5
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = genai_types.Content(parts=[genai_types.Part(text="Response")])
+    resp.usage_metadata = usage
+
+    await cb.on_after_model(ctx, resp)
+
+    assert mock_coordinator._state == EngineState.RUNNING
+
 
 async def test_callback_on_model_error(mock_coordinator):
     cb = TrashDigCallback.get_instance(mock_coordinator)

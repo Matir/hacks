@@ -68,6 +68,113 @@ async def test_app_refresh_status(mock_config, mock_coordinator):
         app.refresh_status()
         assert app.query_one("#status_body", Static)
 
+async def test_app_pause_command(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("pause", log)
+        mock_coordinator.pause.assert_called_once()
+
+
+async def test_app_resume_command(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("resume", log)
+        mock_coordinator.resume.assert_called_once()
+
+
+async def test_app_hint_command(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("hint focus on auth.py", log)
+        mock_coordinator.add_hint.assert_called_once_with("focus on auth.py")
+
+
+async def test_app_hint_command_requires_text(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("hint", log)
+        mock_coordinator.add_hint.assert_not_called()
+
+
+async def test_app_hypotheses_list_command(mock_config, mock_coordinator):
+    mock_coordinator.project_path = "/proj"
+    mock_coordinator.db = MagicMock()
+    mock_coordinator.db.get_hypotheses.return_value = [
+        {
+            "task_id": "abcdef12-3456-0000-0000-000000000000",
+            "confidence": 0.8,
+            "status": "pending",
+            "target": "a.py",
+            "description": "test hypothesis",
+        }
+    ]
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("hypotheses", log)
+        mock_coordinator.db.get_hypotheses.assert_called_once_with("/proj")
+
+
+async def test_app_hypotheses_delete_command(mock_config, mock_coordinator):
+    mock_coordinator.project_path = "/proj"
+    mock_coordinator.db = MagicMock()
+    mock_coordinator.db.get_hypotheses.return_value = [
+        {
+            "task_id": "abcdef12-3456-0000-0000-000000000000",
+            "confidence": 0.8,
+            "status": "pending",
+            "target": "a.py",
+            "description": "test hypothesis",
+        }
+    ]
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("hypotheses del abcdef", log)
+        mock_coordinator.db.delete_hypothesis.assert_called_once_with(
+            "abcdef12-3456-0000-0000-000000000000"
+        )
+
+
+async def test_app_hypotheses_prio_command(mock_config, mock_coordinator):
+    mock_coordinator.project_path = "/proj"
+    mock_coordinator.db = MagicMock()
+    mock_coordinator.db.get_hypotheses.return_value = [
+        {
+            "task_id": "abcdef12-3456-0000-0000-000000000000",
+            "confidence": 0.8,
+            "status": "pending",
+            "target": "a.py",
+            "description": "test hypothesis",
+        }
+    ]
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = app.query_one(RichLog)
+        await repl.process_command("hypotheses prio abcdef 0.9", log)
+        mock_coordinator.db.update_hypothesis_confidence.assert_called_once_with(
+            "abcdef12-3456-0000-0000-000000000000", 0.9
+        )
+
+
 async def test_concurrent_verification_stays_busy_until_all_finish(mock_config, mock_coordinator):
     """Regression test: the status phase must not snap to "Idle" just because
     one of several concurrently-running verifications finished first.

@@ -144,7 +144,9 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
 
     async def on_before_model(self, ctx: CallbackContext, req: LlmRequest, **kwargs: Any) -> LlmResponse | None:
-        """Enforce per-agent turn limits, capture prompt, and wait for rate-limit slot."""
+        """Block while paused, inject steering hints, enforce turn limits, capture prompt, and wait for rate-limit slot."""
+        await self._c.check_pause()
+
         agent_name = getattr(ctx, "agent_name", None) or "unknown"
         invocation_id = getattr(ctx, "invocation_id", None) or "unknown"
         turn_key = (invocation_id, agent_name)
@@ -172,6 +174,21 @@ class TrashDigCallback:
                 finish_reason=types.FinishReason.STOP,
             )
 
+        hints = self._c.pop_pending_hints()
+        if hints:
+            self._c._state = EngineState.STEERING
+            hint_text = "\n".join(f"- {h}" for h in hints)
+            self._c.log(f"[bold cyan]Steering:[/bold cyan] injecting hint into {agent_name}")
+            req.contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part(text=(
+                        "[HUMAN STEERING HINT — high priority, adjust course now]\n"
+                        f"{hint_text}"
+                    ))],
+                )
+            )
+
         limiter = get_rate_limiter()
         if limiter:
             await limiter.wait_for_request()
@@ -190,8 +207,9 @@ class TrashDigCallback:
         self, ctx: CallbackContext | None = None, resp: LlmResponse | None = None, **kwargs: Any
     ) -> LlmResponse | None:
         """Record usage, cost, log conversation, and update rate limiter usage."""
-        # Restore RUNNING state after tool call finishes and model resumes
-        if self._c._state == EngineState.WAITING_FOR_TOOLS:
+        # Restore RUNNING state after tool call finishes and model resumes,
+        # or after a steering hint has been injected into the request.
+        if self._c._state in (EngineState.WAITING_FOR_TOOLS, EngineState.STEERING):
             self._c._state = EngineState.RUNNING
 
         # Handle kwargs if passed by name (ADK sometimes does this)

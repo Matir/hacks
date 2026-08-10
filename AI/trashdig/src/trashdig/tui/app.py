@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import traceback
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 from textual.app import App, ComposeResult
@@ -14,6 +15,7 @@ from textual_autocomplete import AutoComplete, DropdownItem
 
 from trashdig.agents.coordinator import Coordinator
 from trashdig.agents.utils.helpers import get_project_structure, log_auth_info
+from trashdig.agents.utils.types import EngineState
 from trashdig.config import Config
 from trashdig.findings import Finding
 from trashdig.tools import get_artifact_service
@@ -150,6 +152,7 @@ class StatusPane(Vertical):
             "Hunting": "cyan",
             "Verifying": "magenta",
             "Paused": "red",
+            "Steering": "cyan",
         }.get(phase, "white")
 
         root_display = os.path.basename(workspace_root) or workspace_root
@@ -187,7 +190,10 @@ class REPLPane(Vertical):
         super().__init__(**kwargs)
         self.history: list[str] = []
         self.history_index: int = -1
-        self.commands = ["help", "scan", "hunt", "star", "verify", "status", "exit"]
+        self.commands = [
+            "help", "scan", "hunt", "star", "verify", "status", "exit",
+            "pause", "resume", "hint", "hypotheses",
+        ]
 
     def compose(self) -> ComposeResult:
         """Composes the REPL pane widgets."""
@@ -287,6 +293,91 @@ class REPLPane(Vertical):
         )
         app.refresh_status()
 
+    def _handle_pause_command(self, log: RichLog, app: TrashDigApp) -> None:
+        app.coordinator.pause()
+        log.write("[bold yellow]System:[/bold yellow] Engine pausing... will stop at next safe point.")
+        app.refresh_status()
+
+    def _handle_resume_command(self, log: RichLog, app: TrashDigApp) -> None:
+        app.coordinator.resume()
+        log.write("[bold green]System:[/bold green] Engine resumed.")
+        app.refresh_status()
+
+    def _handle_hint_command(self, cmd_parts: list[str], log: RichLog, app: TrashDigApp) -> None:
+        if len(cmd_parts) < 2:  # noqa: PLR2004
+            log.write("[red]Usage: hint <text>[/red]")
+        else:
+            text = " ".join(cmd_parts[1:])
+            app.coordinator.add_hint(text)
+            log.write(f"[bold cyan]User Hint:[/bold cyan] {text}")
+
+    def _resolve_hypothesis_match(
+        self, hypotheses: list[dict[str, Any]], prefix: str, log: RichLog
+    ) -> dict[str, Any] | None:
+        matches = [h for h in hypotheses if str(h["task_id"]).startswith(prefix)]
+        if len(matches) != 1:
+            log.write(f"[red]{'No' if not matches else 'Ambiguous'} match for id prefix '{prefix}'.[/red]")
+            return None
+        return matches[0]
+
+    def _handle_hypotheses_list(self, hypotheses: list[dict[str, Any]], log: RichLog) -> None:
+        if not hypotheses:
+            log.write("[yellow]No hypotheses recorded yet.[/yellow]")
+            return
+        for h in hypotheses:
+            short_id = str(h["task_id"])[:8]
+            log.write(
+                f"[cyan]{short_id}[/cyan] "
+                f"conf=[bold]{h['confidence']:.2f}[/bold] "
+                f"status={h['status']} "
+                f"target={h['target']} — {h['description']}"
+            )
+
+    def _handle_hypotheses_delete(
+        self, cmd_parts: list[str], hypotheses: list[dict[str, Any]], log: RichLog, app: TrashDigApp
+    ) -> None:
+        if len(cmd_parts) < 3:  # noqa: PLR2004
+            log.write("[red]Usage: hypotheses del <id-prefix>[/red]")
+            return
+        match = self._resolve_hypothesis_match(hypotheses, cmd_parts[2], log)
+        if match is None:
+            return
+        app.coordinator.db.delete_hypothesis(match["task_id"])
+        log.write(f"[green]Deleted hypothesis {match['task_id'][:8]}.[/green]")
+
+    def _handle_hypotheses_prio(
+        self, cmd_parts: list[str], hypotheses: list[dict[str, Any]], log: RichLog, app: TrashDigApp
+    ) -> None:
+        if len(cmd_parts) < 4:  # noqa: PLR2004
+            log.write("[red]Usage: hypotheses prio <id-prefix> <confidence>[/red]")
+            return
+        match = self._resolve_hypothesis_match(hypotheses, cmd_parts[2], log)
+        if match is None:
+            return
+        try:
+            confidence = float(cmd_parts[3])
+        except ValueError:
+            log.write(f"[red]Invalid confidence: {cmd_parts[3]}[/red]")
+            return
+        if not 0.0 <= confidence <= 1.0:
+            log.write("[red]Confidence must be between 0.0 and 1.0.[/red]")
+            return
+        app.coordinator.db.update_hypothesis_confidence(match["task_id"], confidence)
+        log.write(f"[green]Updated {match['task_id'][:8]} confidence to {confidence:.2f}.[/green]")
+
+    def _handle_hypotheses_command(self, cmd_parts: list[str], log: RichLog, app: TrashDigApp) -> None:
+        sub = cmd_parts[1].lower() if len(cmd_parts) > 1 else "list"
+        hypotheses = app.coordinator.db.get_hypotheses(app.coordinator.project_path)
+
+        if sub == "list":
+            self._handle_hypotheses_list(hypotheses, log)
+        elif sub in ("del", "delete"):
+            self._handle_hypotheses_delete(cmd_parts, hypotheses, log, app)
+        elif sub in ("prio", "prioritize"):
+            self._handle_hypotheses_prio(cmd_parts, hypotheses, log, app)
+        else:
+            log.write(f"[red]Unknown hypotheses subcommand: {sub}[/red]")
+
     async def process_command(self, command: str, log: RichLog) -> None:
         """Parses and executes a command from the REPL.
 
@@ -300,22 +391,27 @@ class REPLPane(Vertical):
         base_cmd = cmd_parts[0].lower()
         app = cast("TrashDigApp", self.app)
 
-        if base_cmd == "help":
-            self._handle_help_command(log)
-        elif base_cmd == "scan":
-            self._handle_scan_command(cmd_parts, app)
-        elif base_cmd == "hunt":
-            self._handle_hunt_command(log, app)
-        elif base_cmd == "verify":
-            self._handle_verify_command(cmd_parts, log, app)
-        elif base_cmd == "star":
-            self._handle_star_command(cmd_parts, log, app)
-        elif base_cmd == "status":
-            self._handle_status_command(log, app)
-        elif base_cmd == "exit":
+        if base_cmd == "exit":
             await app.action_quit()
-        else:
+            return
+
+        handlers: dict[str, Callable[[], None]] = {
+            "help": lambda: self._handle_help_command(log),
+            "scan": lambda: self._handle_scan_command(cmd_parts, app),
+            "hunt": lambda: self._handle_hunt_command(log, app),
+            "verify": lambda: self._handle_verify_command(cmd_parts, log, app),
+            "star": lambda: self._handle_star_command(cmd_parts, log, app),
+            "status": lambda: self._handle_status_command(log, app),
+            "pause": lambda: self._handle_pause_command(log, app),
+            "resume": lambda: self._handle_resume_command(log, app),
+            "hint": lambda: self._handle_hint_command(cmd_parts, log, app),
+            "hypotheses": lambda: self._handle_hypotheses_command(cmd_parts, log, app),
+        }
+        handler = handlers.get(base_cmd)
+        if handler is None:
             log.write(f"[red]Unknown command: {base_cmd}[/red]")
+        else:
+            handler()
 
 
 class TrashDigApp(App):
@@ -441,9 +537,16 @@ class TrashDigApp(App):
         """Triggers a UI refresh of the status pane."""
         try:
             status_pane = self.query_one(StatusPane)
+            engine_state = getattr(self.coordinator, "state", None)
+            if engine_state == EngineState.PAUSED:
+                phase = "Paused"
+            elif engine_state == EngineState.STEERING:
+                phase = "Steering"
+            else:
+                phase = self._phase
             status_pane.refresh_status(
                 workspace_root=self.workspace_root,
-                phase="Paused" if getattr(self.coordinator, "state", None) == self.coordinator.state.__class__.PAUSED else self._phase,
+                phase=phase,
                 tech_stack=self.coordinator.tech_stack,
                 scan_results=self.coordinator.scan_results,
                 prioritized_targets=self.prioritized_targets,
@@ -606,7 +709,7 @@ class TrashDigApp(App):
 
     def action_toggle_pause(self) -> None:
         """Toggles the engine paused state."""
-        if self.coordinator.state == self.coordinator.state.__class__.PAUSED:
+        if self.coordinator.state == EngineState.PAUSED:
             self.coordinator.resume()
             self.query_one("#repl_log", RichLog).write("[bold green]System:[/bold green] Engine resumed.")
         else:

@@ -309,6 +309,34 @@ class ProjectDatabase:
             )
             return cursor.rowcount > 0
 
+    def delete_hypothesis(self, task_id: str) -> bool:
+        """Deletes a hypothesis.
+
+        Returns:
+            True if a hypothesis row matched `task_id` and was deleted,
+            False otherwise (e.g. a stale or mistyped `task_id`).
+        """
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM hypotheses WHERE task_id = ?",
+                (task_id,),
+            )
+            return cursor.rowcount > 0
+
+    def update_hypothesis_confidence(self, task_id: str, confidence: float) -> bool:
+        """Updates the confidence (priority) of a hypothesis.
+
+        Returns:
+            True if a hypothesis row matched `task_id` and was updated,
+            False otherwise (e.g. a stale or mistyped `task_id`).
+        """
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE hypotheses SET confidence = ?, updated_at = ? WHERE task_id = ?",
+                (confidence, _now(), task_id),
+            )
+            return cursor.rowcount > 0
+
     def get_hypotheses(self, project_path: str) -> list[dict[str, Any]]:
         """Returns ALL hypotheses for a project, sorted by confidence."""
         with self._connect() as conn:

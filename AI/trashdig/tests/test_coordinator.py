@@ -178,3 +178,15 @@ def test_coordinator_state_tools(mock_config, tmp_path):
         assert "saved" in msg
         assert len(coord.findings) == 1
         assert coord.findings[0].title == "XSS"
+
+        # Test add_hint / pop_pending_hints round-trip
+        assert coord.pop_pending_hints() == []
+        coord.add_hint("Assume auth.py's token is malformed")
+        coord.add_hint("Check db.ts lines 40-50")
+        hints = coord.pop_pending_hints()
+        assert hints == [
+            "Assume auth.py's token is malformed",
+            "Check db.ts lines 40-50",
+        ]
+        # Queue is drained after popping
+        assert coord.pop_pending_hints() == []

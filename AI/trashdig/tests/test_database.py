@@ -222,6 +222,42 @@ def test_failed_hypothesis_persisted():
         assert rows[0]["status"] == "failed"
 
 
+def test_delete_hypothesis():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = _make_db(tmp)
+        hypo = _make_hypothesis()
+        db.save_hypothesis("/proj", hypo)
+
+        deleted = db.delete_hypothesis(hypo.task_id)
+        assert deleted is True
+        assert db.get_hypotheses("/proj") == []
+
+
+def test_delete_hypothesis_returns_false_for_unknown_task_id():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = _make_db(tmp)
+        assert db.delete_hypothesis("does-not-exist") is False
+
+
+def test_update_hypothesis_confidence():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = _make_db(tmp)
+        hypo = _make_hypothesis()
+        db.save_hypothesis("/proj", hypo)
+
+        updated = db.update_hypothesis_confidence(hypo.task_id, 0.95)
+        assert updated is True
+
+        rows = db.get_hypotheses("/proj")
+        assert rows[0]["confidence"] == pytest.approx(0.95)
+
+
+def test_update_hypothesis_confidence_returns_false_for_unknown_task_id():
+    with tempfile.TemporaryDirectory() as tmp:
+        db = _make_db(tmp)
+        assert db.update_hypothesis_confidence("does-not-exist", 0.5) is False
+
+
 # ---------------------------------------------------------------------------
 # Symbol map
 # ---------------------------------------------------------------------------

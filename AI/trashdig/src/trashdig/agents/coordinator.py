@@ -69,6 +69,7 @@ class Coordinator(LlmAgent):
     _permission_manager: PermissionManager = PrivateAttr()
     _state: EngineState = PrivateAttr(default=EngineState.IDLE)
     _pause_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+    _pending_hints: list[str] = PrivateAttr(default_factory=list)
 
     _findings: list[Finding] = PrivateAttr()
     _scan_results: dict[str, Any] = PrivateAttr()
@@ -395,9 +396,15 @@ class Coordinator(LlmAgent):
     # ------------------------------------------------------------------
 
     def add_hint(self, hint: str) -> None:
-        """Appends a human hint to the coordinator context."""
+        """Queues a human hint to be injected into the next model call."""
         self.log(f"[bold cyan]Received Hint:[/bold cyan] {hint}")
-        # Just log it for now, can be read by agents later
+        self._pending_hints.append(hint)
+
+    def pop_pending_hints(self) -> list[str]:
+        """Drains and returns all queued hints, clearing the queue."""
+        hints = list(self._pending_hints)
+        self._pending_hints.clear()
+        return hints
 
     def _on_stats(self, in_tokens: int, out_tokens: int, new_msg: bool = False, model_name: str = "unknown") -> None:
         """Called by callbacks to update TUI stats."""

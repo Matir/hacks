@@ -107,14 +107,14 @@
 - [x] **[MEDIUM]** Use `LoopAgent` for the hypothesis-driven hunting cycle.
     - [x] Replace the manual `asyncio` retry/loop in `Coordinator.run_loop()` with ADK's `LoopAgent` + escalation condition.
 - [x] **[HIGH]** Parallel Hunting: Split codebase into logical segments during Recon and review them with parallel Hunter sessions.
-- [ ] **[HIGH]** "Pause & Steer" Collaborative Steering:
-    - [ ] Define `EngineState.PAUSED` and `EngineState.STEERING` in `types.py`.
-    - [ ] Implement a global `asyncio.Event` or interrupt flag in `Coordinator` to signal pause.
-    - [ ] Update `TrashDigCallback.on_before_model` to check for pause state and await a resume event.
-    - [ ] Add `pause` and `resume` commands to the TUI/REPL.
-    - [ ] Add a `hint <text>` command to inject user context into the current agent session as a high-priority message.
-    - [ ] Add a `hypotheses` command to the REPL to list and manually reprioritize/delete hypotheses.
-    - [ ] Implement structured "Agent Ask" UI to allow agents to proactively request steering.
+- [x] **[HIGH]** "Pause & Steer" Collaborative Steering:
+    - [x] Define `EngineState.PAUSED` and `EngineState.STEERING` in `types.py`.
+    - [x] Implement a global `asyncio.Event` or interrupt flag in `Coordinator` to signal pause.
+    - [x] Update `TrashDigCallback.on_before_model` to check for pause state and await a resume event.
+    - [x] Add `pause` and `resume` commands to the TUI/REPL.
+    - [x] Add a `hint <text>` command to inject user context into the current agent session as a high-priority message.
+    - [x] Add a `hypotheses` command to the REPL to list and manually reprioritize/delete hypotheses.
+    - [x] Implement structured "Agent Ask" UI to allow agents to proactively request steering.
 
 ### Session & Memory
 - [x] **[MEDIUM]** Adopt a persistent `SessionService` (e.g., database-backed) to allow scan resumption across CLI invocations.
@@ -219,7 +219,7 @@ Each item requires: (1) adding the grammar package to `pyproject.toml`, (2) addi
 ## 🚀 Post-Assessment Roadmap (New Additions)
 These priorities were established following codebase analysis to improve human steerability, external integrations, memory, and testing stability:
 
-- [x] **[HIGH]** **Implement "Pause - [ ] **[HIGH]** **Implement "Pause & Steer" Steer" (Human-in-the-Loop)**: Introduce `EngineState.PAUSED` for a fully collaborative mode within the Textual UI. Permit researchers to manually pause, review pending bugs, provide contextual hints, and explicitly override hypotheses.
+- [x] **[HIGH]** **Implement "Pause & Steer" (Human-in-the-Loop)**: Introduce `EngineState.PAUSED` for a fully collaborative mode within the Textual UI. Permit researchers to manually pause, review pending bugs, provide contextual hints, and explicitly override hypotheses.
 - [ ] **[MEDIUM]** **Tool Ecosystem Expansion**: Automate external security API interfaces (e.g., NVD/CVE APIs, GitHub Security Advisories, or Bugcrowd/HackerOne mappings) via dynamic ADK OpenAPI integrations, phasing out explicitly hand-written wrappers.
 - [ ] **[MEDIUM]** **Cross-Session Memory Evolution**: Expand the architecture beyond edge `SqliteSessionService` by rolling out ADK's `MemoryService`. Guarantee long-term facts, findings, and code interactions persist identically across entirely distinct CLI invocation sessions against the same project.
 - [ ] **[HIGH]** **Agent Evaluation Module (`adk eval`)**: Ensure prompt/logic integrity natively via synthetic datasets of known vulnerability samples (e.g., Juliet or OWASP modules) tested automatically against the multi-agent verification workflow to catch regressions.
