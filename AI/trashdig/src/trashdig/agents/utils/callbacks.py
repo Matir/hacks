@@ -221,6 +221,13 @@ class TrashDigCallback:
         if not ctx or not resp:
             return None
 
+        # In streaming mode, this callback fires once per partial chunk plus
+        # a final non-partial chunk with the fully-assembled response and
+        # usage metadata. Skip partials so accounting and logging happen
+        # exactly once, on the complete response.
+        if resp.partial:
+            return None
+
         usage = resp.usage_metadata
         in_t = (getattr(usage, "prompt_token_count", None) or 0) if usage else 0
         out_t = (getattr(usage, "candidates_token_count", None) or 0) if usage else 0

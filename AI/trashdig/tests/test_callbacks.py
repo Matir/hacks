@@ -118,6 +118,7 @@ async def test_callback_on_after_model(mock_coordinator):
     resp = MagicMock(spec=LlmResponse)
     resp.content = genai_types.Content(parts=[genai_types.Part(text="Response")])
     resp.usage_metadata = usage
+    resp.partial = False
 
     await cb.on_after_model(ctx, resp)
 
@@ -133,6 +134,26 @@ async def test_callback_on_after_model(mock_coordinator):
 
     # Check DB logging
     mock_coordinator.db.log_conversation.assert_called_once()
+
+
+async def test_callback_on_after_model_skips_partial_chunks(mock_coordinator):
+    """Streaming chunks (partial=True) must not be logged or accounted for;
+    only the final, fully-assembled response should be recorded."""
+    cb = TrashDigCallback.get_instance(mock_coordinator)
+
+    ctx = MagicMock(spec=CallbackContext)
+    ctx.agent_name = "test_agent"
+
+    resp = MagicMock(spec=LlmResponse)
+    resp.content = genai_types.Content(parts=[genai_types.Part(text="Resp")])
+    resp.partial = True
+
+    await cb.on_after_model(ctx, resp)
+
+    mock_coordinator._cost_tracker.record_usage.assert_not_called()
+    mock_coordinator._on_stats.assert_not_called()
+    mock_coordinator.db.log_conversation.assert_not_called()
+
 
 async def test_callback_on_before_model_injects_pending_hint(mock_coordinator):
     """A queued hint must be appended to the request as a high-priority
@@ -180,6 +201,7 @@ async def test_callback_on_after_model_reverts_steering_to_running(mock_coordina
     resp = MagicMock(spec=LlmResponse)
     resp.content = genai_types.Content(parts=[genai_types.Part(text="Response")])
     resp.usage_metadata = usage
+    resp.partial = False
 
     await cb.on_after_model(ctx, resp)
 
