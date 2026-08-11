@@ -133,9 +133,12 @@ class ProjectDatabase:
         """Provides a database connection with automatic commit/rollback."""
         if self.db_path == ":memory:":
             if self._memory_conn is None:
-                self._memory_conn = sqlite3.connect(":memory:")
+                self._memory_conn = sqlite3.connect(":memory:", timeout=30.0)
                 self._memory_conn.row_factory = sqlite3.Row
+                self._memory_conn.isolation_level = "IMMEDIATE"
                 self._memory_conn.execute("PRAGMA journal_mode=WAL")
+                self._memory_conn.execute("PRAGMA synchronous=NORMAL")
+                self._memory_conn.execute("PRAGMA mmap_size=268435456")
                 self._memory_conn.execute("PRAGMA foreign_keys=ON")
             conn = self._memory_conn
             try:
@@ -147,9 +150,12 @@ class ProjectDatabase:
             # Do NOT close for :memory: until object destruction
             return
 
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
+        conn.isolation_level = "IMMEDIATE"
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA mmap_size=268435456")
         conn.execute("PRAGMA foreign_keys=ON")
         try:
             yield conn

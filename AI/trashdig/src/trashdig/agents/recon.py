@@ -142,3 +142,53 @@ def create_web_route_mapper_agent(
         tools=tools,
         **kwargs,
     )
+
+
+class CodebaseMapperAgent(LlmAgent):
+    """CodebaseMapper Agent for TrashDig.
+
+    Analyzes individual files to identify purpose, security impact, and critical components.
+    """
+    pass
+
+
+def create_codebase_mapper_agent(
+    config: AgentConfig | None = None,
+    permission_manager: PermissionManager | None = None,
+    extra_tools: list[Any] | None = None,
+) -> LlmAgent:
+    """Creates a CodebaseMapper agent for individual file analysis.
+
+    Args:
+        config: Agent configuration.
+        permission_manager: Permission manager for tools.
+        extra_tools: Additional toolsets (e.g. McpToolset instances) to append.
+
+    Returns:
+        A configured LlmAgent instance.
+    """
+    if config is None:
+        config = AgentConfig()
+
+    instruction = load_prompt("codebase_mapper.md")
+    extras = google_provider_extras(config.provider)
+    tools: list[Any] = [
+        FunctionTool(read_file),
+        load_artifacts_tool,
+    ]
+
+    if permission_manager:
+        tools = permission_manager.wrap_tools(tools)
+    if extra_tools:
+        tools.extend(extra_tools)
+
+    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+
+    return CodebaseMapperAgent(
+        name="codebase_mapper",
+        model=config.model,
+        instruction=instruction,
+        description="Analyzes individual source files to extract purpose and security impact.",
+        tools=tools,
+        **kwargs,
+    )

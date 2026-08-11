@@ -61,6 +61,12 @@ def _run_sandboxed(
             network=network,
             require_sandbox=require_sandbox,
         )
+        logger.info(
+            "Launching subprocess: command=%s, cwd=%s, env=%s",
+            command,
+            workspace_dir,
+            sandbox.env if hasattr(sandbox, "env") else {},
+        )
     except RuntimeError as e:
         return subprocess.CompletedProcess(
             args=command, returncode=1, stdout="", stderr=str(e)

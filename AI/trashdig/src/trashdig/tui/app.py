@@ -115,6 +115,7 @@ class StatusPane(Vertical):
         input_tokens: int = 0,
         output_tokens: int = 0,
         llm_errors: int = 0,
+        active_agents: int = 0,
     ) -> None:
         """Refreshes the status display with current engine stats.
 
@@ -131,6 +132,7 @@ class StatusPane(Vertical):
             input_tokens: Cumulative input tokens.
             output_tokens: Cumulative output tokens.
             llm_errors: Count of LLM-related errors.
+            active_agents: Number of running agents.
         """
         high_value = sum(
             1
@@ -168,6 +170,7 @@ class StatusPane(Vertical):
             f"[bold]Targets:[/bold]  {len(prioritized_targets)} prioritized",
             f"[bold]Findings:[/bold] {len(findings)} ({sev_str})",
             f"[bold]Queue:[/bold]    {task_queue_len} pending / {completed_len} done",
+            f"[bold]Agents:[/bold]   {active_agents} running",
             f"[bold]LLM Msgs:[/bold] {total_messages}",
             f"[bold]Tokens↑:[/bold]  {_fmt_tokens(input_tokens)}",
             f"[bold]Tokens↓:[/bold]  {_fmt_tokens(output_tokens)}",
@@ -562,6 +565,7 @@ class TrashDigApp(App):
                 input_tokens=self.coordinator.input_tokens,
                 output_tokens=self.coordinator.output_tokens,
                 llm_errors=self.coordinator.llm_errors,
+                active_agents=self.coordinator.active_agents,
             )
         except Exception as e:
             if hasattr(self, "_file_log"):

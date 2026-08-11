@@ -4,8 +4,11 @@ from trashdig.tools.read_file import read_file
 def test_read_file(tmp_path, mock_cfg):
     mock_cfg.return_value.data["workspace_root"] = str(tmp_path)
     f = tmp_path / "test.txt"
-    f.write_text("hello world")
-    assert read_file(str(f)) == "hello world"
+    f.write_text("hello world\nline2\nline3")
+    assert read_file(str(f)) == "hello world\nline2\nline3"
+    assert read_file(str(f), first_line=2) == "line2\nline3"
+    assert read_file(str(f), last_line=2) == "hello world\nline2\n"
+    assert read_file(str(f), first_line=2, last_line=2) == "line2\n"
 
 def test_read_file_error(mock_cfg):
     res = read_file("/nonexistent/file")

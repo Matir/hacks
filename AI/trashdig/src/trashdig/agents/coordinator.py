@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from google.adk.agents import BaseAgent, LlmAgent, LoopAgent
+from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps import App
 from google.adk.artifacts import BaseArtifactService
 from google.adk.runners import Runner
 from google.adk.sessions import BaseSessionService
@@ -16,6 +18,7 @@ from trashdig.agents.code_investigator import create_code_investigator_agent
 from trashdig.agents.critic import create_critic_agent
 from trashdig.agents.hunter import create_hunter_agent
 from trashdig.agents.recon import (
+    create_codebase_mapper_agent,
     create_stack_scout_agent,
     create_web_route_mapper_agent,
 )
@@ -73,6 +76,7 @@ class Coordinator(LlmAgent):
     _project_path: str = PrivateAttr()
     _permission_manager: PermissionManager = PrivateAttr()
     _state: EngineState = PrivateAttr(default=EngineState.IDLE)
+    _active_agents: int = PrivateAttr(default=0)
     _pause_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _pending_hints: list[str] = PrivateAttr(default_factory=list)
 
@@ -136,6 +140,11 @@ class Coordinator(LlmAgent):
             permission_manager=perm,
             extra_tools=build_mcp_toolsets(config, "web_route_mapper"),
         )
+        codebase_mapper = create_codebase_mapper_agent(
+            config.get_agent_config("codebase_mapper"),
+            permission_manager=perm,
+            extra_tools=build_mcp_toolsets(config, "codebase_mapper"),
+        )
         hunter = create_hunter_agent(
             config.get_agent_config("hunter"),
             permission_manager=perm,
@@ -188,11 +197,12 @@ class Coordinator(LlmAgent):
             model=coordinator_cfg.model,
             instruction=load_prompt("coordinator.md"),
             description="Orchestrates the multi-phase vulnerability scanning pipeline.",
-            sub_agents=[stack_scout, web_route_mapper, hunter_loop, skeptic, validator, critic],
+            sub_agents=[stack_scout, web_route_mapper, codebase_mapper, hunter_loop, skeptic, validator, critic],
         )
 
         # --- PrivateAttr initialisation ---
         db = get_database(db_path)
+
         scan_session_id = db.get_or_create_scan_session(project_path_str)
         session_service = get_session_service()
 
@@ -346,6 +356,14 @@ class Coordinator(LlmAgent):
         raise RuntimeError("WebRouteMapper agent not found in Coordinator sub-agents.")
 
     @property
+    def codebase_mapper(self) -> BaseAgent:
+        """Returns the CodebaseMapper agent instance."""
+        for sa in self.sub_agents:
+            if sa.name == "codebase_mapper":
+                return sa
+        raise RuntimeError("CodebaseMapper agent not found in Coordinator sub-agents.")
+
+    @property
     def hunter_loop(self) -> BaseAgent:
         """Returns the Hunter LoopAgent instance."""
         for sa in self.sub_agents:
@@ -395,6 +413,12 @@ class Coordinator(LlmAgent):
     async def check_pause(self) -> None:
         """Waits if the engine is paused."""
         await self._pause_event.wait()
+
+    @property
+    @property
+    def active_agents(self) -> int:
+        """Returns the number of active agents."""
+        return self._active_agents
 
     @property
     def llm_errors(self) -> int:
@@ -505,9 +529,14 @@ class Coordinator(LlmAgent):
         # Phase 3: Hypothesis-driven hunting loop using ADK LoopAgent (Deep Dive)
         self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop for deep-dive hypotheses...")
 
+        app = App(
+            name="hunter_loop",
+            root_agent=self.hunter_loop,
+            context_cache_config=ContextCacheConfig(),
+        )
+
         runner = Runner(
-            agent=self.hunter_loop,
-            app_name="hunter_loop",
+            app=app,
             session_service=self._session_service,
             artifact_service=self._artifact_service,
             auto_create_session=True,
@@ -582,7 +611,7 @@ class Coordinator(LlmAgent):
     # TUI-facing methods
     # ------------------------------------------------------------------
 
-    async def run_recon(self, path: str = ".") -> dict[str, Any]:
+    async def run_recon(self, path: str = ".") -> dict[str, Any]:  # noqa: PLR0915
         """Performs initial stack discovery and project mapping."""
         await self.check_pause()
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
@@ -611,10 +640,45 @@ class Coordinator(LlmAgent):
                 "Inserting fallback segment covering the entire workspace."
             )
 
-        mapping: dict[str, Any] = data.get("mapping", {})
         hypotheses: list[dict[str, Any]] = data.get("hypotheses", [])
         object.__setattr__(self, "_tech_stack", data.get("tech_stack", ""))
         object.__setattr__(self, "_logical_segments", data.get("logical_segments", []))
+
+        # New Codebase Mapper logic
+        workspace_files = get_project_structure(abs_path)
+        source_exts = {
+            ".c", ".cpp", ".cc", ".h", ".hpp", ".cs", ".go", ".java", ".js", ".jsx", ".ts",
+            ".tsx", ".py", ".rb", ".php", ".rs", ".swift", ".kt", ".kts", ".sh", ".bash",
+            ".pl", ".html", ".sql"
+        }
+        source_files = [f for f in workspace_files if os.path.splitext(f)[1].lower() in source_exts]
+        self.log(f"[bold]Coordinator:[/bold] running CodebaseMapper on {len(source_files)} source files...")
+
+        new_mapping = {}
+        sem = asyncio.Semaphore(10)
+
+        async def _map_file(file_path: str) -> None:
+            async with sem:
+                self.log(f"[bold]CodebaseMapper:[/bold] analyzing [cyan]{file_path}[/cyan]")
+                content = read_file_content(os.path.join(abs_path, file_path))
+                file_prompt = f"Analyze this file:\nPath: {file_path}\n\nContent:\n{content}"
+
+                try:
+                    m_text = await run_agent(
+                        self.codebase_mapper,
+                        file_prompt,
+                        session_id=f"{self._scan_session_id}:recon:codebase_mapper_{hash(file_path)}",
+                        session_service=self._session_service,
+                        artifact_service=self._artifact_service,
+                        summarizer=self._summarizer
+                    )
+                    parsed = parse_json_response(m_text)
+                    new_mapping[file_path] = parsed
+                except Exception as e:
+                    self.log(f"[bold red]Error:[/bold red] CodebaseMapper failed on {file_path}: {e}")
+
+        await asyncio.gather(*[_map_file(f) for f in source_files])
+        mapping = new_mapping
         object.__setattr__(self, "_scan_results", mapping)
 
         if not self._logical_segments:
@@ -637,19 +701,19 @@ class Coordinator(LlmAgent):
         if is_web_app:
             self.log("[bold]Coordinator:[/bold] web application detected, mapping attack surface…")
             route_prompt = load_prompt("web_route_mapper_route.md")
-            r_text = await run_agent(
-                self.web_route_mapper,
-                route_prompt,
-                session_id=f"{self._scan_session_id}:recon:routes",
-                session_service=self._session_service,
-                artifact_service=self._artifact_service,
-                summarizer=self._summarizer
-            )
             try:
+                r_text = await run_agent(
+                    self.web_route_mapper,
+                    route_prompt,
+                    session_id=f"{self._scan_session_id}:recon:routes",
+                    session_service=self._session_service,
+                    artifact_service=self._artifact_service,
+                    summarizer=self._summarizer
+                )
                 route_data = parse_json_response(r_text)
                 self._attack_surface = route_data.get("attack_surface", [])
             except Exception as e:
-                self.log(f"[bold red]Error:[/bold red] Failed to parse WebRouteMapper output: {e}")
+                self.log(f"[bold red]Error:[/bold red] WebRouteMapper failed: {e}")
 
         full_profile = {"mapping": self._scan_results, "attack_surface": self._attack_surface}
         self._db.save_project_profile(self._project_path, self._tech_stack, full_profile)

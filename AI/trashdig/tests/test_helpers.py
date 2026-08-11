@@ -122,7 +122,8 @@ async def test_run_agent():
     async def mock_run_async(*args, **kwargs):
         yield mock_event
 
-    with patch("trashdig.agents.utils.helpers.Runner") as mock_runner_cls:
+    with patch("trashdig.agents.utils.helpers.Runner") as mock_runner_cls, \
+         patch("trashdig.agents.utils.helpers.App"):
         mock_runner = mock_runner_cls.return_value
         mock_runner.run_async.side_effect = mock_run_async
 

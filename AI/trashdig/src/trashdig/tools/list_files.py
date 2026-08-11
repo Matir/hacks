@@ -7,7 +7,6 @@ from trashdig.sandbox.landlock_tool import landlock_tool
 from .gitignore import HierarchicalGitIgnore
 
 
-@landlock_tool()
 def _format_entry(full_path: str, rel_display: str, is_dir: bool) -> str:
     stat = os.stat(full_path)
     mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))

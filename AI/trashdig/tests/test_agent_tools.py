@@ -100,7 +100,11 @@ import trashdig.tools
 from trashdig.agents.code_investigator import create_code_investigator_agent
 from trashdig.agents.critic import create_critic_agent
 from trashdig.agents.hunter import create_hunter_agent
-from trashdig.agents.recon import create_stack_scout_agent, create_web_route_mapper_agent
+from trashdig.agents.recon import (
+    create_codebase_mapper_agent,
+    create_stack_scout_agent,
+    create_web_route_mapper_agent,
+)
 from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.summarizer import create_summarizer_agent
 from trashdig.agents.validator import create_validator_agent
@@ -392,6 +396,17 @@ class TestWebRouteMapperTools(AgentToolsMixin, unittest.TestCase):
         "read_file",
         "ripgrep_search",
     ]
+
+
+class TestCodebaseMapperTools(AgentToolsMixin, unittest.TestCase):
+    """CodebaseMapper should have basic reading tools."""
+
+    MODULE = "trashdig.agents.recon"
+    FACTORY = create_codebase_mapper_agent
+    EXPECTED_TOOLS = [
+        "read_file",
+    ]
+
 
 
 class TestHunterTools(AgentToolsMixin, unittest.TestCase):

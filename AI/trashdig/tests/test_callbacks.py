@@ -46,6 +46,7 @@ def mock_coordinator():
     return coord
 
 async def test_callback_on_before_model(mock_coordinator):
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
     req = MagicMock()
@@ -60,6 +61,7 @@ async def test_callback_on_before_model_captures_only_latest_turn(mock_coordinat
     Only the newest entry — this turn's actual new input — must be captured,
     not the whole transcript (which would always start with turn 1's prompt).
     """
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
 
@@ -84,6 +86,7 @@ async def test_callback_on_before_model_awaits_pause(mock_coordinator):
     the coarse per-phase checkpoints in Coordinator — this is the fix for
     "Pause & Steer" taking effect mid-turn instead of only between phases.
     """
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
     req = MagicMock()
@@ -129,6 +132,7 @@ async def test_callback_on_before_model_blocks_while_paused():
 
 
 async def test_callback_on_after_model(mock_coordinator):
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -164,6 +168,7 @@ async def test_callback_on_after_model(mock_coordinator):
 async def test_callback_on_after_model_skips_partial_chunks(mock_coordinator):
     """Streaming chunks (partial=True) must not be logged or accounted for;
     only the final, fully-assembled response should be recorded."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -185,6 +190,7 @@ async def test_callback_on_after_model_skips_empty_trailing_echo(mock_coordinato
     partial=False, finish_reason set, and empty content — its text was
     already flushed into an earlier event. This echo must not overwrite the
     real logged response with a blank one, nor double-count usage."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -209,6 +215,7 @@ async def test_callback_on_after_model_logs_content_with_unset_partial(mock_coor
     """The real assembled-text event from the streaming aggregator leaves
     `partial` unset (None) rather than explicitly False; it must still be
     logged and accounted for."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -234,6 +241,7 @@ async def test_callback_on_after_model_detects_safety_refusal(mock_coordinator):
     """A response blocked mid-generation (finish_reason=SAFETY, no content)
     must be logged, recorded with a [REFUSED: ...] marker, and must stop
     the agent by setting escalate — the same signal exit_loop uses."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -269,6 +277,7 @@ async def test_callback_on_after_model_detects_prompt_blocked_via_error_code(moc
     """A prompt blocked before generation started carries no finish_reason —
     ADK's LlmResponse.create() reports it via error_code instead — and must
     still be detected as a refusal."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -294,6 +303,7 @@ async def test_callback_on_after_model_max_tokens_is_not_a_refusal(mock_coordina
     """finish_reason=MAX_TOKENS also accompanies empty content but is not a
     refusal — it must fall through to the existing empty-echo skip, not
     trigger refusal logging or escalate."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -319,6 +329,7 @@ async def test_callback_on_before_model_injects_pending_hint(mock_coordinator):
     user message, and the state must flip to STEERING while it's injected.
     """
     mock_coordinator.pop_pending_hints.return_value = ["Focus on the SQL sink in db.py"]
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
     req = MagicMock()
@@ -334,6 +345,7 @@ async def test_callback_on_before_model_injects_pending_hint(mock_coordinator):
 
 async def test_callback_on_before_model_no_hint_no_injection(mock_coordinator):
     """No pending hints → request contents must be left untouched."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
     req = MagicMock()
@@ -348,6 +360,7 @@ async def test_callback_on_after_model_reverts_steering_to_running(mock_coordina
     """After a steering hint injection, the next on_after_model call must
     restore RUNNING, mirroring the WAITING_FOR_TOOLS revert."""
     mock_coordinator._state = EngineState.STEERING
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -368,6 +381,7 @@ async def test_callback_on_after_model_reverts_steering_to_running(mock_coordina
 
 
 async def test_callback_on_model_error(mock_coordinator):
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
     ctx.agent_name = "test_agent"
@@ -378,6 +392,7 @@ async def test_callback_on_model_error(mock_coordinator):
     mock_coordinator._on_llm_error.assert_called_once()
 
 def test_callback_on_before_tool(mock_coordinator):
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     tool = MagicMock(spec=BaseTool)
     tool.name = "test_tool"
@@ -394,6 +409,7 @@ def test_callback_on_before_tool(mock_coordinator):
 
 def test_callback_on_after_tool_logs_success(mock_coordinator):
     """A successful tool response is logged plainly, not flagged as a failure."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     tool = MagicMock(spec=BaseTool)
     tool.name = "read_file"
@@ -412,6 +428,7 @@ def test_callback_on_after_tool_flags_string_error_convention(mock_coordinator):
     """Trashdig tools (read_file, bash_tool, web_fetch, ...) signal failure by
     returning a string starting with "Error" rather than raising — this must
     be flagged in the console, distinctly from a normal response."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     tool = MagicMock(spec=BaseTool)
     tool.name = "read_file"
@@ -429,6 +446,7 @@ def test_callback_on_after_tool_flags_string_error_convention(mock_coordinator):
 def test_callback_on_after_tool_flags_error_dict_convention(mock_coordinator):
     """ADK's own FunctionTool reports failures like missing args as
     {"error": ...} rather than a string — this must also be flagged."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     tool = MagicMock(spec=BaseTool)
     tool.name = "some_tool"
@@ -446,6 +464,7 @@ def test_callback_on_tool_error_logs_and_does_not_swallow(mock_coordinator):
     """A raised tool exception must be flagged in the console, and the
     callback must return None so ADK re-raises rather than silently
     continuing with a fabricated response."""
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     tool = MagicMock(spec=BaseTool)
     tool.name = "container_bash_tool"
@@ -463,6 +482,7 @@ def test_callback_on_tool_error_logs_and_does_not_swallow(mock_coordinator):
 
 
 def test_callback_attach_to(mock_coordinator):
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     # Use a mock that spec-es LlmAgent so isinstance works
     agent = MagicMock(spec=LlmAgent)
@@ -478,6 +498,7 @@ def test_callback_attach_to(mock_coordinator):
     assert agent.after_agent_callback == cb.on_after_agent
 
 def test_callback_agent_lifecycle(mock_coordinator):
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
     ctx = MagicMock(spec=CallbackContext)
 
@@ -495,6 +516,7 @@ def test_callback_agent_lifecycle(mock_coordinator):
 async def test_turn_limit_not_enforced_when_unset(mock_coordinator):
     """No turn limit configured → every call proceeds normally."""
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=None)
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -510,6 +532,7 @@ async def test_turn_limit_not_enforced_when_unset(mock_coordinator):
 async def test_turn_limit_allows_up_to_limit(mock_coordinator):
     """Calls up to max_turns are allowed; the (max_turns+1)-th is blocked."""
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=3)
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -534,6 +557,7 @@ async def test_turn_limit_per_agent_independent(mock_coordinator):
         return _make_agent_config(max_turns=2)
 
     mock_coordinator.config.get_agent_config.side_effect = _cfg_for
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     req = MagicMock()
@@ -560,6 +584,7 @@ async def test_turn_limit_per_agent_independent(mock_coordinator):
 async def test_reset_turn_counts_clears_state(mock_coordinator):
     """reset_turn_counts() lets agents run again after being blocked."""
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=1)
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     ctx = MagicMock(spec=CallbackContext)
@@ -585,6 +610,7 @@ async def test_turn_limit_independent_across_concurrent_invocations(mock_coordin
     turn count.
     """
     mock_coordinator.config.get_agent_config.return_value = _make_agent_config(max_turns=2)
+    mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
 
     req = MagicMock()

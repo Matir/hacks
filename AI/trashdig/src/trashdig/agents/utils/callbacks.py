@@ -198,16 +198,26 @@ class TrashDigCallback:
     # ------------------------------------------------------------------
 
     def on_before_agent(self, **kwargs: Any) -> None:
-        """Update state to RUNNING when an agent starts."""
+        """Update state to RUNNING when an agent starts and log it."""
         self._c._state = EngineState.RUNNING
+        self._c._active_agents += 1
         if self._c.on_stats_event:
             self._c.on_stats_event()
 
+        ctx = kwargs.get("callback_context") or kwargs.get("context")
+        agent_name = getattr(ctx, "agent_name", "unknown") if ctx else "unknown"
+        self._c.log(f"[bold]System:[/bold] Agent [cyan]{agent_name}[/cyan] is starting...")
+
     def on_after_agent(self, **kwargs: Any) -> None:
-        """Update state to IDLE when an agent finishes."""
+        """Update state to IDLE when an agent finishes and log it."""
         self._c._state = EngineState.IDLE
+        self._c._active_agents = max(0, self._c._active_agents - 1)
         if self._c.on_stats_event:
             self._c.on_stats_event()
+
+        ctx = kwargs.get("callback_context") or kwargs.get("context")
+        agent_name = getattr(ctx, "agent_name", "unknown") if ctx else "unknown"
+        self._c.log(f"[bold]System:[/bold] Agent [cyan]{agent_name}[/cyan] finished.")
 
     # ------------------------------------------------------------------
     # Tool hook
@@ -222,7 +232,16 @@ class TrashDigCallback:
             self._c.on_stats_event()
 
         agent_name = getattr(tool_context, "agent_name", "unknown")
-        args_str = ", ".join(f"{k}={repr(v)[:60]}" for k, v in args.items())
+
+        def _format_arg(k: str, v: Any) -> str:
+            if k in ("file_path", "path", "directory", "target", "filename", "project_path", "db_path") and isinstance(v, str):
+                return repr(v)
+            r = repr(v)
+            max_len = 60
+            return r if len(r) <= max_len else r[:max_len - 3] + "..."
+
+        args_str = ", ".join(f"{k}={_format_arg(k, v)}" for k, v in args.items())
+
         self._c.log(f"  [dim]→ {tool.name}({args_str})[/dim]")
         logger.info("Tool call — agent=%s tool=%s args=%r", agent_name, tool.name, args)
         return None  # Never skip the actual tool call
@@ -415,10 +434,16 @@ class TrashDigCallback:
         # Full turn (prompt + response) goes to the logfile only — the TUI
         # log window only gets the compact "request" notice from on_before_model.
         logger.info(
-            "LLM turn — agent=%s\n----- PROMPT -----\n%s\n----- RESPONSE -----\n%s",
+            "LLM turn — agent=%s\n"
+            "--- BEGIN PROMPT (%s) ---\n%s\n--- END PROMPT (%s) ---\n"
+            "--- BEGIN RESPONSE (%s) ---\n%s\n--- END RESPONSE (%s) ---",
+            agent_name,
             agent_name,
             self._last_prompt,
+            agent_name,
+            agent_name,
             response_text,
+            agent_name,
         )
         return None  # Never replace the model response
 

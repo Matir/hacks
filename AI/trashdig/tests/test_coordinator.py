@@ -79,8 +79,11 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
     # Simulate an agent tool call saving results
     coord.scan_results = {"file.py": {"summary": "test"}}
 
-    res = await coord.run_recon(".")
-    assert res == {"file.py": {"summary": "test"}}
+    with patch("trashdig.agents.coordinator.get_project_structure", return_value=["file.py"]):
+        res = await coord.run_recon(".")
+
+    assert "file.py" in res
+    assert "mapping" in res["file.py"]
     assert mock_run_agent.called
 
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)

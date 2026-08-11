@@ -9,10 +9,13 @@ EXIT_COMMAND_NOT_FOUND = 127
 
 @artifact_tool(max_chars=4000)
 @landlock_tool()
-def ripgrep_search(
+def ripgrep_search(  # noqa: PLR0913
     pattern: str,
     path: str | None = None,
     extra_args: list[str] | None = None,
+    lines_before: int | None = None,
+    lines_after: int | None = None,
+    number_lines: bool = False,
     tool_context: Any = None,
 ) -> str:
     """Performs a fast textual search across the codebase using ripgrep.
@@ -20,7 +23,10 @@ def ripgrep_search(
     Args:
         pattern: The regex pattern to search for.
         path: The directory or file to search in. Defaults to Config workspace_root.
-        extra_args: Additional arguments to pass to rg (e.g., ["-i", "-A", "2"]).
+        extra_args: Additional arguments to pass to rg (e.g., ["-i"]).
+        lines_before: Print num lines of leading context before matching lines (-B).
+        lines_after: Print num lines of trailing context after matching lines (-A).
+        number_lines: Show line numbers with each match (-n).
         tool_context: ADK context (injected).
 
     Returns:
@@ -31,7 +37,13 @@ def ripgrep_search(
     except WorkspacePathError as e:
         return f"Error: {e}"
 
-    cmd = ["rg", "--column", "--line-number", "--no-heading", "--color", "never", pattern, path]
+    cmd = ["rg", "--column", "--no-heading", "--color", "never", pattern, path]
+    if number_lines:
+        cmd.append("-n")
+    if lines_before is not None:
+        cmd.extend(["-B", str(lines_before)])
+    if lines_after is not None:
+        cmd.extend(["-A", str(lines_after)])
     if extra_args:
         cmd.extend(extra_args)
 

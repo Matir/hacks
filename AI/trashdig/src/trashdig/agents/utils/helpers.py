@@ -3,11 +3,12 @@ import os
 from typing import TYPE_CHECKING, Any, Optional
 
 import google.genai.types as genai_types
+from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps import App
 from google.adk.runners import Runner
 from google.adk.tools import google_search
 
 from trashdig.config import get_config
-from trashdig.tools.gitignore import walk_workspace
 
 # The following imports are for type hinting only and avoid circular dependencies.
 if TYPE_CHECKING:
@@ -167,6 +168,8 @@ def get_project_structure(root_path: str | None = None) -> list[str]:
     Args:
         root_path: The directory to walk. Defaults to Config workspace_root.
     """
+    # Imported locally to avoid circular dependencies with trashdig.tools
+    from trashdig.tools.gitignore import walk_workspace  # noqa: PLC0415
     return sorted(
         walk_workspace(workspace_root=root_path, include_dirs=False, ignore_noisy=True)
     )
@@ -182,6 +185,7 @@ def read_file_content(file_path: str, max_chars: int = 2000) -> str:
 
 def detect_frameworks(file_list: list[str], project_root: str | None = None) -> dict[str, list[str]]:
     """Analyzes dependency files to identify known frameworks and libraries."""
+    # TODO: much better heuristics!
     if project_root is None:
         project_root = get_config().workspace_root
 
@@ -193,7 +197,9 @@ def detect_frameworks(file_list: list[str], project_root: str | None = None) -> 
     }
     dep_files = ["package.json", "requirements.txt", "pyproject.toml", "go.mod", "pom.xml", "Gemfile"]
     signatures = {
-        "web_frameworks": ["fastapi", "flask", "django", "express", "spring-boot", "rails", "gin", "echo", "nextjs", "react"],
+        "web_frameworks":
+            ["fastapi", "flask", "django", "express", "spring-boot", "rails",
+             "gin", "echo", "nextjs", "react", "lua"],
         "databases": ["sqlalchemy", "prisma", "mongoose", "typeorm", "gorm", "postgresql", "mysql", "mongodb", "redis", "sqlite"],
         "auth_libraries": ["passport", "auth0", "next-auth", "firebase-auth", "clerk", "jwt", "oauthlib"]
     }
@@ -250,9 +256,14 @@ async def run_agent(  # noqa: PLR0913
             summarizer=summarizer,
         )
 
+    app = App(
+        name=agent.name,
+        root_agent=agent,
+        context_cache_config=ContextCacheConfig(),
+    )
+
     runner = Runner(
-        agent=agent,
-        app_name=agent.name,
+        app=app,
         session_service=session_service,
         artifact_service=artifact_service,
         auto_create_session=True,
