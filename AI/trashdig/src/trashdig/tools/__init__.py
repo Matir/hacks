@@ -1,7 +1,7 @@
 """TrashDig tools package."""
 
 from .ask_user import create_ask_user_tool
-from .base import artifact_tool, get_artifact_service, init_artifact_manager
+from .base import artifact_tool, filter_by_gitignore, get_artifact_service, init_artifact_manager
 from .bash_tool import bash_tool
 from .container_bash_tool import container_bash_tool
 from .detect_frameworks import detect_frameworks
@@ -14,6 +14,7 @@ from .get_next_hypothesis import get_next_hypothesis
 from .get_project_structure import get_project_structure
 from .get_scope_info import get_scope_info
 from .get_symbol_definition import get_symbol_definition
+from .gitignore import HierarchicalGitIgnore, sanitize_gitignore_lines, walk_workspace
 from .list_files import list_files
 from .query_cwe_database import query_cwe_database
 from .query_vulndb import query_vulndb
@@ -28,6 +29,7 @@ from .update_hypothesis_status import update_hypothesis_status
 from .web_fetch import web_fetch
 
 __all__ = [
+    "HierarchicalGitIgnore",
     "artifact_tool",
     "ask_user",
     "bash_tool",
@@ -36,6 +38,7 @@ __all__ = [
     "detect_frameworks",
     "detect_language",
     "exit_loop",
+    "filter_by_gitignore",
     "find_files",
     "find_references",
     "get_artifact_service",
@@ -50,11 +53,13 @@ __all__ = [
     "query_vulndb",
     "read_file",
     "ripgrep_search",
+    "sanitize_gitignore_lines",
     "save_findings",
     "save_hypotheses",
     "semgrep_scan",
     "trace_taint_cross_file",
     "trace_variable_semantic",
     "update_hypothesis_status",
+    "walk_workspace",
     "web_fetch",
 ]

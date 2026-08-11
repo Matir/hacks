@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Any, Optional
 import google.genai.types as genai_types
 from google.adk.runners import Runner
 from google.adk.tools import google_search
-from pathspec import PathSpec
 
 from trashdig.config import get_config
+from trashdig.tools.gitignore import walk_workspace
 
 # The following imports are for type hinting only and avoid circular dependencies.
 if TYPE_CHECKING:
@@ -167,27 +167,9 @@ def get_project_structure(root_path: str | None = None) -> list[str]:
     Args:
         root_path: The directory to walk. Defaults to Config workspace_root.
     """
-    cfg = get_config()
-    if root_path is None:
-        root_path = cfg.workspace_root
-
-    files: list[str] = []
-    gitignore_path = os.path.join(root_path, ".gitignore")
-    spec: PathSpec | None = None
-    if os.path.exists(gitignore_path):
-        with open(gitignore_path, encoding="utf-8") as f:
-            spec = PathSpec.from_lines("gitignore", f.readlines())
-
-    noisy_dirs = cfg.noisy_dirs
-
-    for root, dirs, filenames in os.walk(root_path):
-        dirs[:] = [d for d in dirs if d not in noisy_dirs]
-        for filename in filenames:
-            rel_path = os.path.relpath(os.path.join(root, filename), root_path)
-            if spec and spec.match_file(rel_path):
-                continue
-            files.append(rel_path)
-    return sorted(files)
+    return sorted(
+        walk_workspace(workspace_root=root_path, include_dirs=False, ignore_noisy=True)
+    )
 
 def read_file_content(file_path: str, max_chars: int = 2000) -> str:
     """Reads a portion of a file's content for analysis."""

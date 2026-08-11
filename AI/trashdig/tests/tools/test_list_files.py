@@ -12,3 +12,11 @@ def test_list_files_recursive(temp_project):
     res = list_files(str(temp_project), recursive=True)
     assert "src/main.py" in res
     assert "web/app.js" in res
+
+
+def test_list_files_with_gitignore(temp_project):
+    (temp_project / ".gitignore").write_text("web/\n")
+    res = list_files(str(temp_project), recursive=True)
+    assert "src/main.py" in res
+    assert "web/app.js" not in res
+

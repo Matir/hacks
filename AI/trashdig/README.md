@@ -7,45 +7,58 @@ TrashDig is a multi-agent, language-agnostic vulnerability scanner and security 
 ## 🚀 Key Features
 
 *   **Multi-Agent Intelligence**: Built on the Google Agent Development Kit (ADK), featuring specialized agents:
-    *   **StackScout**: Hybrid environment detection (deterministic + LLM inference).
-    *   **WebRouteMapper**: Deep attack surface mapping for web applications.
-    *   **Hunter**: Autonomous, hypothesis-driven depth-first analysis with cross-file taint tracing.
-    *   **Skeptic**: Adversarial reviewer that critiques findings to reduce false positives.
-    *   **Validator**: Containerized Proof-of-Concept (PoC) generation and verification.
-*   **Context Compaction**: Automated history pruning and summarization using a specialized **Summarizer** agent to handle long-running research sessions without exceeding model token limits.
-*   **Parallel Execution**: Asynchronous task processing with a worker-pool pattern to scan projects faster.
-*   **Safety Middleware**: Logic-level permission management and tool sandboxing (Docker/Minijail).
-*   **Persistent Intelligence**: SQLite-backed **ProjectDatabase** for findings, symbols, and session persistence.
+    *   **StackScout**: Hybrid environment detection (deterministic signatures + LLM inference) for framework and stack discovery.
+    *   **WebRouteMapper**: Deep attack surface mapping for web applications and route handlers.
+    *   **CodeInvestigator**: Context-optimized research analyst that handles deep symbol resolution, scope lookups, and intra-/cross-file taint traces.
+    *   **Hunter**: Autonomous, hypothesis-driven depth-first vulnerability analysis with cross-file taint tracing and semgrep pattern matching.
+    *   **Critic**: Adversarial reviewer embedded across hunting and verification phases to challenge hypotheses, flag assumptions, and review PoCs.
+    *   **Skeptic**: Socratic debunker acting as a pre-validation gate to critique findings and filter false positives before exploitation tests.
+    *   **Validator**: Containerized Proof-of-Concept (PoC) generation and verification engine proving physical exploitability in Docker.
+*   **Context Compaction**: Automated history pruning and summarization using a specialized **Summarizer** agent to sustain long-running security research without exceeding model token limits.
+*   **Parallel Execution**: Asynchronous task processing with a worker-pool pattern to scan project segments concurrently.
+*   **Safety Middleware**: Logic-level permission management and multi-tier tool sandboxing (Docker/Minijail).
+*   **Persistent Intelligence**: SQLite-backed **ProjectDatabase** for findings, symbols, hypotheses, and session persistence.
 
 ---
 
 ## 🤖 Agent Architecture
 
-TrashDig uses a pipeline of specialized agents coordinated by a central **Coordinator**.
+TrashDig operates as a team of specialized agents coordinated by a central **Coordinator** in a multi-stage workflow (`RECON → PARALLEL HUNT → AUTONOMOUS DEEP-DIVE LOOP → VERIFY`).
+
+### Coordinator Agent (Strategic Lead)
+*   **Coordinator**: The master orchestration lead. Initializes sub-agents, manages session state, persists findings/hypotheses to SQLite, tracks total cost/token usage, and coordinates multi-phase scan pipelines.
 
 ### Recon Suite
-*   **StackScout**: Builds a project profile by combining file-signature detection with LLM analysis.
-*   **WebRouteMapper**: (Conditional) Deep-dives into entry points if a web stack is detected.
+*   **StackScout**: Builds a project profile by combining file-signature detection with LLM analysis to identify programming languages, frameworks, and libraries.
+*   **WebRouteMapper**: (Conditional) Deep-dives into API endpoints, HTTP routes, and controller entry points if a web framework is detected by StackScout.
 
-### Hunter
-Performs deep-dive analysis on prioritized targets. It uses **semgrep** for patterns and **tree-sitter** for semantic taint analysis, following data flows across module boundaries until it identifies a vulnerable sink.
+### Investigative & Review Support Agents (Invoked via `AgentTool`)
+*   **CodeInvestigator**: High-efficiency technical analyst invoked as a tool by **Hunter** and **Skeptic**. Answers specific code questions (e.g. symbol definitions, scope lookups, variable semantics, and cross-file taint flows) to preserve context for the calling agent.
+*   **Critic**: Adversarial feedback specialist invoked as a tool by **Hunter** and **Validator** (and directly by **Coordinator**) to challenge vulnerability hypotheses, expose logic gaps, and review proposed exploit scripts.
+
+### Autonomous Hunting Loop
+*   **HunterOrchestrator & Hunter LoopAgent**: An ADK `LoopAgent` surrounding `HunterOrchestrator` that manages database-backed hypothesis queues (`get_next_hypothesis`, `update_hypothesis_status`, `save_findings`, `save_hypotheses`), recursively driving deep-dive research until all prioritized paths are explored.
+*   **Hunter**: Autonomous researcher running hypothesis-driven vulnerability analysis with pattern matching (`semgrep`) and semantic AST taint tracing (`tree-sitter`), delegating focused lookups to `CodeInvestigator` and `Critic`.
 
 ### Verification Pipeline
-*   **Skeptic**: Acts as a "Socratic Debunker," attempting to find logic flaws or mitigations in the Hunter's findings.
-*   **Validator**: For findings that survive the Skeptic, it generates a Python/Bash PoC and executes it in an isolated **Docker** container to prove exploitability.
+*   **Skeptic**: Pre-validation gate acting as a "Socratic Debunker." Reviews **Hunter**'s findings alongside `CodeInvestigator` to uncover missed sanitizers or framework-level defenses before escalation.
+*   **Validator**: For findings that survive **Skeptic**, constructs PoC scripts and executes them inside isolated **Docker** containers (consulting **Critic** for review) to verify empirical exploitability.
 
 ### Context Management
-*   **Summarizer**: A specialized utility agent that condenses conversation history when the context window reaches a threshold, ensuring continuity in long deep-dives.
+*   **Summarizer**: Specialized history-compaction agent invoked by the session runner when conversation history reaches context window limits.
 
 ### Agent Relationship Diagram
 
 ```mermaid
 flowchart TD
-    User([User / TUI]) -->|scan path| C
-    
-    subgraph Core [LLM-Driven Orchestration]
-        C[Coordinator Agent]
+    User([User / TUI]) -->|scan / commands| C[Coordinator Agent]
+
+    subgraph Core [Orchestration & State]
+        C
         SM[Summarizer Agent]
+        DB[(SQLite DB)]
+        CT[Cost Tracker]
+        PM[Permission Manager]
     end
 
     subgraph Recon [Recon Suite]
@@ -53,13 +66,18 @@ flowchart TD
         WRM[WebRouteMapper Agent]
     end
 
+    subgraph Investigate [Support & Review Agents]
+        CI[CodeInvestigator Agent]
+        CR[Critic Agent]
+    end
+
     subgraph Hunt [Autonomous Hunting Loop]
         HL{{Hunter LoopAgent}}
         HO[Hunter Orchestrator Agent]
         H[Hunter Agent]
-        
-        HL -.->|deterministic loop| HO
-        HO -->|delegates| H
+
+        HL -->|iterates loop| HO
+        HO -->|delegates task| H
     end
 
     subgraph Verify [Verification Pipeline]
@@ -67,38 +85,50 @@ flowchart TD
         V[Validator Agent]
     end
 
-    %% Relationships
-    C -->|SCAN| SS
-    C -.->|If WebApp| WRM
-    C -->|HUNT| HL
-    C -->|VERIFY| S
-    S -.->|If Validated| V
+    subgraph Sandbox [Execution Sandbox]
+        DOCKER[[Docker Container]]
+    end
 
-    %% Context Compaction
-    C -.->|compresses history| SM
-    HL -.->|compresses history| SM
+    %% Pipeline Delegations from Coordinator
+    C -->|1. Recon| SS
+    SS -.->|if web app| WRM
+    C -->|2. Parallel & Loop Hunt| HL
+    C -->|3. Debunk Verification| S
+    S -.->|if validated| V
+    C -.->|direct review| CR
 
-    %% Infrastructure & Persistence
-    C -->|Persist| DB[(SQLite DB)]
-    C -->|Stats/Cost| CT[Cost Tracker]
-    cb[Callbacks] -->|intercept| RL[Rate Limiter]
-    RL -.->|throttles| C
-    
-    %% Legend/Formatting
-    style HL fill:#f9f,stroke:#333,stroke-width:2px
-    style C fill:#bbf,stroke:#333,stroke-width:2px
-    style SS fill:#bbf,stroke:#333,stroke-width:2px
-    style WRM fill:#bbf,stroke:#333,stroke-width:2px
-    style HO fill:#bbf,stroke:#333,stroke-width:2px
-    style H fill:#bbf,stroke:#333,stroke-width:2px
-    style S fill:#bbf,stroke:#333,stroke-width:2px
-    style V fill:#bbf,stroke:#333,stroke-width:2px
-    style SM fill:#eee,stroke:#333,stroke-dasharray: 5 5
+    %% Tool-Level Agent Invocations (AgentTool)
+    H ==>|AgentTool: query code| CI
+    H ==>|AgentTool: review hypothesis| CR
+    S ==>|AgentTool: investigate code| CI
+    V ==>|AgentTool: review PoC script| CR
+
+    %% Sandbox Execution
+    V -->|container_bash_tool| DOCKER
+
+    %% History & Context Compression
+    C -.->|condenses history| SM
+    H -.->|condenses history| SM
+    S -.->|condenses history| SM
+    V -.->|condenses history| SM
+
+    %% Persistence & Controls
+    C -->|persists findings/hypotheses| DB
+    HO -->|queue operations| DB
+    C -->|tracks LLM usage| CT
+    SS & WRM & CI & H & CR & S & V -->|enforces policy| PM
 
     classDef llm fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef loop fill:#f9f,stroke:#333,stroke-dasharray: 5 5;
-    class HL loop;
+    classDef loop fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef support fill:#ffd,stroke:#333,stroke-width:2px;
+    classDef infra fill:#eee,stroke:#333,stroke-dasharray: 5 5;
+    classDef container fill:#dff,stroke:#333,stroke-width:2px;
+
     class C,SS,WRM,HO,H,S,V llm;
+    class HL loop;
+    class CI,CR support;
+    class SM,DB,CT,PM infra;
+    class DOCKER container;
 ```
 
 ---
@@ -109,30 +139,35 @@ TrashDig agents have access to a suite of deterministic and research-oriented to
 
 | Category | Tool Name | Description | Used By |
 | :--- | :--- | :--- | :--- |
-| **Recon & Search** | `get_project_structure` | Lists all relevant files in the workspace. | SS, WRM |
+| **Recon & Search** | `get_project_structure` | Lists all relevant files in the workspace. | SS, WRM, CI |
 | | `detect_frameworks` | Identifies web frameworks, databases, and libraries. | SS |
-| | `list_files` | Lists directory contents with sizes and dates. | All Agents |
-| | `find_files` | Finds files by name pattern. | All Agents |
+| | `list_files` | Lists directory contents with sizes and dates. | SS, WRM, CI, H, CR, S, V |
+| | `find_files` | Finds files by name pattern. | SS, WRM, CI, H, CR, S, V |
 | | `detect_language` | Detects programming language for files/projects. | SS, H |
-| | `ripgrep_search` | High-speed textual search across the codebase. | All Agents |
-| | `google_search` | Searches the web for security advisories or tech info. | SS, H, S, V |
-| | `web_fetch` | Downloads and parses web pages for research. | All Agents |
-| **Code Analysis** | `get_ast_summary` | Generates a simplified AST of a file (tree-sitter). | SS, WRM, H |
-| | `get_symbol_definition` | Finds the source definition of a class or function. | H |
-| | `find_references` | Finds all usages of a specific symbol. | SS, H |
-| | `get_scope_info` | Extracts local variables and parameters for a line. | SS, H |
-| | `read_file` | Reads the full content of a file. | SS, WRM, H, S, V |
+| | `ripgrep_search` | High-speed textual search across the codebase. | SS, WRM, CI, H, CR, S, V |
+| | `google_search` | Searches the web for security advisories or tech info. | SS, H, CR, S, V |
+| | `web_fetch` | Downloads and parses web pages for research. | SS, H, CR, S, V |
+| **Code Analysis** | `get_ast_summary` | Generates a simplified AST of a file (tree-sitter). | SS, WRM, CI, H |
+| | `get_symbol_definition` | Finds the source definition of a class or function. | CI, H |
+| | `find_references` | Finds all usages of a specific symbol. | SS, CI, H |
+| | `get_scope_info` | Extracts local variables and parameters for a line. | SS, CI, H |
+| | `read_file` | Reads the full content of a file. | SS, WRM, CI, H, CR, S, V |
 | | `semgrep_scan` | Pattern-based security scanning. | H |
-| **Data Flow** | `trace_variable_semantic`| AST-aware intra-file taint tracing. | H |
-| | `trace_taint_cross_file`| Follows untrusted data across module boundaries. | H |
+| **Data Flow** | `trace_variable_semantic`| AST-aware intra-file taint tracing. | CI, H |
+| | `trace_taint_cross_file`| Follows untrusted data across module boundaries. | CI, H |
 | **Execution** | `bash_tool` | Executes shell commands in a local sandbox. | V |
 | | `container_bash_tool` | Executes commands in an isolated Docker container. | V |
 | **Orchestration** | `get_next_hypothesis` | Retrieves the next prioritized hunting target. | HO |
 | | `save_findings` | Persists discovered vulnerabilities to the database. | HO |
+| | `save_hypotheses` | Persists new attack hypotheses to the database. | HO |
+| | `update_hypothesis_status` | Updates the status of evaluated hypotheses. | HO |
 | | `exit_loop` | Deterministically ends the autonomous hunting loop. | HO |
-| **Knowledge** | `query_cwe_database` | Queries CWE definitions and vulnerability examples. | SS, H |
+| **Knowledge & User** | `query_vulndb` | Queries local/remote vulnerability database examples. | SS, CI, H, CR, S |
+| | `ask_user` | Prompts the user for clarification during analysis. | H, S, V |
+| **Delegated Agents** | `code_investigator` (tool) | Invokes CodeInvestigator for focused code research. | H, S |
+| | `critic` (tool) | Invokes Critic to challenge hypotheses or PoC designs. | H, V |
 
-> **Key**: **SS**: StackScout, **WRM**: WebRouteMapper, **H**: Hunter, **HO**: HunterOrchestrator, **S**: Skeptic, **V**: Validator, **SM**: Summarizer
+> **Key**: **SS**: StackScout, **WRM**: WebRouteMapper, **CI**: CodeInvestigator, **H**: Hunter, **HO**: HunterOrchestrator, **CR**: Critic, **S**: Skeptic, **V**: Validator, **SM**: Summarizer
 
 ---
 

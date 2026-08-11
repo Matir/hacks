@@ -90,6 +90,45 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
+@patch("trashdig.agents.coordinator.get_project_structure", autospec=True, return_value=["a.py", "b.py"])
+async def test_coordinator_run_recon_parse_failure_fallback(
+    mock_get_proj, mock_run_agent, mock_load, mock_create_val, mock_create_skep,
+    mock_create_hunt, mock_create_web, mock_create_stack, mock_config
+):
+    mock_create_stack.return_value = create_mock_agent("stack_scout")
+    mock_create_web.return_value = create_mock_agent("web_route_mapper")
+    mock_create_hunt.return_value = create_mock_agent("hunter")
+    mock_create_skep.return_value = create_mock_agent("skeptic")
+    mock_create_val.return_value = create_mock_agent("validator")
+
+    # Simulate invalid JSON output from StackScout
+    mock_run_agent.return_value = "NOT VALID JSON response"
+
+    coord = Coordinator(mock_config)
+    logged_events: list[str] = []
+    coord.on_task_event = logged_events.append
+
+    initial_errors = coord.llm_errors
+    await coord.run_recon(".")
+
+    # Ensure an error message was logged to the TUI and llm_errors incremented
+    assert coord.llm_errors == initial_errors + 1
+    assert any("Failed to parse StackScout response into valid JSON" in msg for msg in logged_events)
+
+    # Ensure fallback full-workspace logical segment was inserted
+    assert mock_get_proj.called
+    assert len(coord.logical_segments) == 1
+    assert coord.logical_segments[0]["name"] == "Full Workspace Segment"
+    assert coord.logical_segments[0]["files"] == ["a.py", "b.py"]
+
+
+@patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
+@patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
+@patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
+@patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")

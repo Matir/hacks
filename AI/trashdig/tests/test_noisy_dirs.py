@@ -33,7 +33,7 @@ def test_get_project_structure_respects_config(tmp_path):
     (tmp_path / "custom_ignored" / "ignore.me").write_text("ignore")
 
     # Mock config to remove 'tests' from noisy_dirs and add 'custom_ignored'
-    with patch("trashdig.agents.utils.helpers.get_config") as mock_get_config:
+    with patch("trashdig.config.get_config") as mock_get_config:
         mock_cfg = patch("trashdig.config.Config").start()
         mock_cfg.workspace_root = str(tmp_path)
         mock_cfg.noisy_dirs = {

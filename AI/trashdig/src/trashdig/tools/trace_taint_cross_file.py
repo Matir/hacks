@@ -279,7 +279,9 @@ def _find_function_files(
                 if path:
                     if os.path.isabs(path):
                         with suppress(ValueError):
-                            path = os.path.relpath(path, abs_project_root)
+                            path = os.path.relpath(
+                                os.path.realpath(path), os.path.realpath(abs_project_root)
+                            )
                     all_files.add(path)
     return sorted(all_files)
 

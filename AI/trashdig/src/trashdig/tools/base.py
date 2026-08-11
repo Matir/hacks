@@ -15,7 +15,21 @@ from trashdig.config import WorkspacePathError, get_config, resolve_workspace_pa
 from trashdig.sandbox import get_sandbox
 from trashdig.sandbox.base import Sandbox
 
+from .gitignore import HierarchicalGitIgnore, filter_by_gitignore, walk_workspace
+
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "HierarchicalGitIgnore",
+    "WorkspacePathError",
+    "_run_sandboxed",
+    "artifact_tool",
+    "filter_by_gitignore",
+    "get_artifact_service",
+    "init_artifact_manager",
+    "resolve_workspace_path",
+    "walk_workspace",
+]
 
 
 def _run_sandboxed(
@@ -192,3 +206,6 @@ def artifact_tool(max_chars: int = 5000) -> Callable:
             return sync_wrapper
 
     return decorator
+
+
+

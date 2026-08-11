@@ -2,6 +2,7 @@ from trashdig.config import WorkspacePathError, resolve_workspace_path
 from trashdig.sandbox.landlock_tool import landlock_tool
 
 from ..agents.utils.helpers import get_project_structure as _get_struct
+from .base import filter_by_gitignore
 
 
 @landlock_tool()
@@ -19,4 +20,6 @@ def get_project_structure(path: str | None = None) -> str:
     except WorkspacePathError as e:
         return f"Error: {e}"
     files = _get_struct(path)
+    files = filter_by_gitignore(files, workspace_root=path)
     return "\n".join(files)
+

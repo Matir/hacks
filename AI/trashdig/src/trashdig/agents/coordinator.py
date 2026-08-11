@@ -22,7 +22,12 @@ from trashdig.agents.recon import (
 from trashdig.agents.skeptic import create_skeptic_agent
 from trashdig.agents.summarizer import create_summarizer_agent
 from trashdig.agents.utils.callbacks import TrashDigCallback
-from trashdig.agents.utils.helpers import load_prompt, read_file_content, run_agent
+from trashdig.agents.utils.helpers import (
+    get_project_structure,
+    load_prompt,
+    read_file_content,
+    run_agent,
+)
 from trashdig.agents.utils.json_utils import parse_json_response
 from trashdig.agents.utils.types import EngineState, Hypothesis, TaskType
 from trashdig.agents.validator import create_validator_agent
@@ -596,15 +601,36 @@ class Coordinator(LlmAgent):
 
         try:
             data = parse_json_response(text)
-        except Exception as e:
-            self.log(f"[bold red]Error:[/bold red] Failed to parse StackScout output: {e}")
+        except Exception:
             data = {}
+
+        if not data and text.strip():
+            self._on_llm_error()
+            self.log(
+                "[bold red]Error:[/bold red] Failed to parse StackScout response into valid JSON. "
+                "Inserting fallback segment covering the entire workspace."
+            )
 
         mapping: dict[str, Any] = data.get("mapping", {})
         hypotheses: list[dict[str, Any]] = data.get("hypotheses", [])
-        self._tech_stack = data.get("tech_stack", "")
-        self._logical_segments = data.get("logical_segments", [])
-        self._scan_results = mapping
+        object.__setattr__(self, "_tech_stack", data.get("tech_stack", ""))
+        object.__setattr__(self, "_logical_segments", data.get("logical_segments", []))
+        object.__setattr__(self, "_scan_results", mapping)
+
+        if not self._logical_segments:
+            workspace_files = get_project_structure(abs_path)
+            fallback_segments = [
+                {
+                    "name": "Full Workspace Segment",
+                    "description": "Entire workspace fallback segment covering all project files.",
+                    "files": workspace_files,
+                }
+            ]
+            object.__setattr__(self, "_logical_segments", fallback_segments)
+            self.log(
+                f"[yellow]Notice:[/yellow] No logical segments identified by StackScout. "
+                f"Inserted single fallback segment covering all {len(workspace_files)} files."
+            )
 
         is_web_app = data.get("is_web_app", False)
 
