@@ -5,6 +5,70 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Phrases models commonly use when declining a request in-character rather
+# than via a hard API-level block (finish_reason=SAFETY/PROHIBITED_CONTENT).
+_REFUSAL_PATTERN = re.compile(
+    r"^\s*(i'?m sorry|sorry,?|i cannot|i can'?t|i'?m unable to|i am unable to|"
+    r"i'?m not able to|i won'?t|i will not)\b",
+    re.IGNORECASE,
+)
+
+# google.genai.types.FinishReason / BlockedReason values that indicate the
+# model or API refused/blocked the request for safety/policy reasons, as
+# opposed to reasons like MAX_TOKENS, LANGUAGE, or MALFORMED_FUNCTION_CALL
+# which also populate these fields but aren't refusals. Shared with
+# `trashdig.agents.utils.callbacks._refusal_reason`, which checks the same
+# values on the live LlmResponse as each model call completes — this is the
+# single source of truth for both.
+BLOCKED_REASONS = frozenset({
+    "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION",
+    "IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION",
+    "JAILBREAK", "MODEL_ARMOR",
+})
+
+
+def classify_llm_failure(text: str, diagnostics: dict[str, Any] | None = None) -> str:
+    """Classifies why an LLM response could not be parsed as JSON.
+
+    Args:
+        text: The raw LLM response text.
+        diagnostics: Optional dict populated by `run_agent` with keys
+            `finish_reason`, `error_code`, `error_message` from the final
+            response event.
+
+    Returns:
+        A short machine-readable label describing the failure, for logging.
+    """
+    diagnostics = diagnostics or {}
+
+    # ADK's LlmResponse.create() only ever populates `error_code` in one
+    # situation: the API returned zero candidates at all, in which case it
+    # sets `error_code = generate_content_response.prompt_feedback.block_reason`
+    # — i.e. the *prompt itself* (not a generated candidate) was blocked
+    # before generation started. Any other error_code is a genuine API/
+    # transport error (auth, quota, etc.), not a content block.
+    error_code = diagnostics.get("error_code")
+    error_code_name = getattr(error_code, "name", error_code)
+    if error_code_name and str(error_code_name) in BLOCKED_REASONS:
+        return f"prompt_blocked:{error_code_name}"
+    if error_code:
+        return f"api_error:{error_code}"
+
+    # A candidate was generated but got cut short for a safety/policy reason
+    # (finish_reason set on the candidate itself, mid- or post-generation).
+    finish_reason = diagnostics.get("finish_reason")
+    finish_reason_name = getattr(finish_reason, "name", finish_reason)
+    if finish_reason_name and str(finish_reason_name) in BLOCKED_REASONS:
+        return f"safety_block:{finish_reason_name}"
+
+    if not text.strip():
+        return "empty_response"
+
+    if _REFUSAL_PATTERN.match(text.strip()):
+        return "model_refusal"
+
+    return "malformed_json"
+
 
 def parse_json_response(text: str) -> dict[str, Any]:
     """Cleans and parses a JSON response from an LLM.

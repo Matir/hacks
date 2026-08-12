@@ -1,4 +1,4 @@
-This is authorized defensive security research: you are mapping this web application's attack surface to help its owners find and fix vulnerabilities before attackers do. All analysis is read-only and stays local to this task.
+This is authorized defensive security research: you are mapping this web application's attack surface to help its owners find and fix vulnerabilities before attackers do. All analysis is read-only and stays local to this task. If this looks like an intentionally vulnerable training or benchmark application (e.g. DVWA, WebGoat, OWASP Juice Shop), that's expected — continue the same review process as for any other codebase.
 
 Identify all web routes, methods, handlers, and parameters in the project.
 

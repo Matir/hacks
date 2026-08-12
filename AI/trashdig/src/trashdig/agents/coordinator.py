@@ -31,7 +31,7 @@ from trashdig.agents.utils.helpers import (
     read_file_content,
     run_agent,
 )
-from trashdig.agents.utils.json_utils import parse_json_response
+from trashdig.agents.utils.json_utils import classify_llm_failure, parse_json_response
 from trashdig.agents.utils.types import EngineState, Hypothesis, TaskType
 from trashdig.agents.validator import create_validator_agent
 from trashdig.config import Config
@@ -51,6 +51,16 @@ from trashdig.tools.ask_user import create_ask_user_tool
 from trashdig.tools.mcp_toolsets import build_mcp_toolsets
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_session_id(value: str) -> str:
+    """Strips path separators so a value is safe to embed in a session_id.
+
+    ADK's FileArtifactService rejects any session_id containing "/" or "\\",
+    but callers build session ids from file paths and finding titles that
+    may legitimately contain either.
+    """
+    return value.replace("/", "_").replace("\\", "_")
 
 
 class Coordinator(LlmAgent):
@@ -415,7 +425,6 @@ class Coordinator(LlmAgent):
         await self._pause_event.wait()
 
     @property
-    @property
     def active_agents(self) -> int:
         """Returns the number of active agents."""
         return self._active_agents
@@ -510,9 +519,23 @@ class Coordinator(LlmAgent):
         # Phase 1: Recon
         await self.run_recon(path)
 
-        # Phase 2: Initial Parallel Hunt (Wide Breath)
-        if self._logical_segments:
-            self.log(f"[bold]Coordinator:[/bold] spawning {len(self._logical_segments)} parallel hunters...")
+        # Phase 2: Initial Parallel Hunt (Wide Breath) — restricted to files
+        # CodebaseMapper flagged as high-value, to keep the automated
+        # pipeline focused and reduce cost.
+        high_value_segments = []
+        for segment in self._logical_segments:
+            files = [
+                f for f in segment.get("files", [])
+                if self._scan_results.get(f, {}).get("is_high_value")
+            ]
+            if files:
+                high_value_segments.append({**segment, "files": files})
+
+        if high_value_segments:
+            self.log(
+                f"[bold]Coordinator:[/bold] spawning {len(high_value_segments)} parallel "
+                "hunters on high-value files..."
+            )
 
             # Use a semaphore to respect concurrency limits
             sem = asyncio.Semaphore(self._config.data.get("max_parallel_agents", 3))
@@ -524,7 +547,12 @@ class Coordinator(LlmAgent):
                     self.log(f"[bold]Coordinator:[/bold] parallel hunt starting on [cyan]{name}[/cyan] ({len(files)} files)")
                     return await self.run_hunter(files, path)
 
-            await asyncio.gather(*[_limited_hunt(seg) for seg in self._logical_segments])
+            await asyncio.gather(*[_limited_hunt(seg) for seg in high_value_segments])
+        else:
+            self.log(
+                "[yellow]Notice:[/yellow] no high-value files identified by CodebaseMapper — "
+                "skipping parallel hunt phase."
+            )
 
         # Phase 3: Hypothesis-driven hunting loop using ADK LoopAgent (Deep Dive)
         self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop for deep-dive hypotheses...")
@@ -574,7 +602,7 @@ class Coordinator(LlmAgent):
             text = await run_agent(
                 self.hunter,
                 prompt,
-                session_id=f"{self._scan_session_id}:hunt:{target}",
+                session_id=f"{self._scan_session_id}:hunt:{_sanitize_session_id(target)}",
                 session_service=self._session_service,
                 artifact_service=self._artifact_service,
                 summarizer=self._summarizer
@@ -611,7 +639,36 @@ class Coordinator(LlmAgent):
     # TUI-facing methods
     # ------------------------------------------------------------------
 
-    async def run_recon(self, path: str = ".") -> dict[str, Any]:  # noqa: PLR0915
+    def _log_json_parse_failure(
+        self, source: str, text: str, diagnostics: dict[str, Any], suffix: str = ""
+    ) -> str:
+        """Logs a classified LLM JSON-parse failure (refusal, safety block, etc.).
+
+        Args:
+            source: Name of the agent/step whose response failed to parse.
+            text: The raw response text.
+            diagnostics: The `run_agent` diagnostics dict for that call.
+            suffix: Optional extra text appended to the TUI-facing message.
+
+        Returns:
+            The classified failure type (see `classify_llm_failure`).
+        """
+        failure_type = classify_llm_failure(text, diagnostics)
+        self.log(
+            f"[bold red]Error:[/bold red] {source} response could not be parsed as JSON "
+            f"([yellow]{failure_type}[/yellow]).{suffix}"
+        )
+        logger.warning(
+            "%s failure — type=%s finish_reason=%s error=%s response=%r",
+            source,
+            failure_type,
+            diagnostics.get("finish_reason"),
+            diagnostics.get("error_message"),
+            text[:2000],
+        )
+        return failure_type
+
+    async def run_recon(self, path: str = ".") -> dict[str, Any]:  # noqa: C901, PLR0915
         """Performs initial stack discovery and project mapping."""
         await self.check_pause()
         self.log(f"[bold]Coordinator:[/bold] starting reconnaissance on [cyan]{path}[/cyan]")
@@ -619,13 +676,15 @@ class Coordinator(LlmAgent):
         abs_path = os.path.abspath(path)  # noqa: ASYNC240
         prompt = load_prompt("recon.md").format(abs_path=abs_path)
 
+        stack_scout_diagnostics: dict[str, Any] = {}
         text = await run_agent(
             self.stack_scout,
             prompt,
             session_id=f"{self._scan_session_id}:recon:stack_scout",
             session_service=self._session_service,
             artifact_service=self._artifact_service,
-            summarizer=self._summarizer
+            summarizer=self._summarizer,
+            diagnostics=stack_scout_diagnostics,
         )
 
         try:
@@ -633,11 +692,11 @@ class Coordinator(LlmAgent):
         except Exception:
             data = {}
 
-        if not data and text.strip():
+        if not data:
             self._on_llm_error()
-            self.log(
-                "[bold red]Error:[/bold red] Failed to parse StackScout response into valid JSON. "
-                "Inserting fallback segment covering the entire workspace."
+            self._log_json_parse_failure(
+                "StackScout", text, stack_scout_diagnostics,
+                suffix=" Inserting fallback segment covering the entire workspace.",
             )
 
         hypotheses: list[dict[str, Any]] = data.get("hypotheses", [])
@@ -663,6 +722,7 @@ class Coordinator(LlmAgent):
                 content = read_file_content(os.path.join(abs_path, file_path))
                 file_prompt = f"Analyze this file:\nPath: {file_path}\n\nContent:\n{content}"
 
+                mapper_diagnostics: dict[str, Any] = {}
                 try:
                     m_text = await run_agent(
                         self.codebase_mapper,
@@ -670,9 +730,17 @@ class Coordinator(LlmAgent):
                         session_id=f"{self._scan_session_id}:recon:codebase_mapper_{hash(file_path)}",
                         session_service=self._session_service,
                         artifact_service=self._artifact_service,
-                        summarizer=self._summarizer
+                        summarizer=self._summarizer,
+                        diagnostics=mapper_diagnostics,
                     )
                     parsed = parse_json_response(m_text)
+                    if not parsed:
+                        self._log_json_parse_failure(
+                            f"CodebaseMapper[{file_path}]", m_text, mapper_diagnostics,
+                        )
+                        return
+                    parsed.setdefault("is_high_value", False)
+                    parsed.setdefault("summary", parsed.get("purpose", ""))
                     new_mapping[file_path] = parsed
                 except Exception as e:
                     self.log(f"[bold red]Error:[/bold red] CodebaseMapper failed on {file_path}: {e}")
@@ -701,6 +769,7 @@ class Coordinator(LlmAgent):
         if is_web_app:
             self.log("[bold]Coordinator:[/bold] web application detected, mapping attack surface…")
             route_prompt = load_prompt("web_route_mapper_route.md")
+            route_diagnostics: dict[str, Any] = {}
             try:
                 r_text = await run_agent(
                     self.web_route_mapper,
@@ -708,9 +777,12 @@ class Coordinator(LlmAgent):
                     session_id=f"{self._scan_session_id}:recon:routes",
                     session_service=self._session_service,
                     artifact_service=self._artifact_service,
-                    summarizer=self._summarizer
+                    summarizer=self._summarizer,
+                    diagnostics=route_diagnostics,
                 )
                 route_data = parse_json_response(r_text)
+                if not route_data:
+                    self._log_json_parse_failure("WebRouteMapper", r_text, route_diagnostics)
                 self._attack_surface = route_data.get("attack_surface", [])
             except Exception as e:
                 self.log(f"[bold red]Error:[/bold red] WebRouteMapper failed: {e}")
@@ -757,7 +829,7 @@ class Coordinator(LlmAgent):
             text = await run_agent(
                 self.hunter,
                 prompt,
-                session_id=f"{self._scan_session_id}:hunt:{target}",
+                session_id=f"{self._scan_session_id}:hunt:{_sanitize_session_id(target)}",
                 session_service=self._session_service,
                 artifact_service=self._artifact_service,
                 summarizer=self._summarizer
@@ -820,7 +892,7 @@ class Coordinator(LlmAgent):
         s_text = await run_agent(
             self.skeptic,
             skeptic_prompt,
-            session_id=f"{self._scan_session_id}:verify:skeptic:{finding.title}",
+            session_id=f"{self._scan_session_id}:verify:skeptic:{_sanitize_session_id(finding.title)}",
             session_service=self._session_service,
             artifact_service=self._artifact_service,
             summarizer=self._summarizer
@@ -848,7 +920,7 @@ class Coordinator(LlmAgent):
             v_text = await run_agent(
                 self.validator,
                 validator_prompt,
-                session_id=f"{self._scan_session_id}:verify:validator:{finding.title}",
+                session_id=f"{self._scan_session_id}:verify:validator:{_sanitize_session_id(finding.title)}",
                 session_service=self._session_service,
                 artifact_service=self._artifact_service,
                 summarizer=self._summarizer

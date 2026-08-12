@@ -153,6 +153,7 @@ class StatusPane(Vertical):
             "Scanning": "yellow",
             "Hunting": "cyan",
             "Verifying": "magenta",
+            "Full Scan": "green",
             "Paused": "red",
             "Steering": "cyan",
         }.get(phase, "white")
@@ -254,7 +255,7 @@ class REPLPane(Vertical):
 
     def _handle_scan_command(self, cmd_parts: list[str], app: TrashDigApp) -> None:
         path = cmd_parts[1] if len(cmd_parts) > 1 else app.workspace_root
-        app.run_worker(app.run_recon_scan(path))
+        app.run_worker(app.run_full_scan_pipeline(path))
 
     def _handle_hunt_command(self, log: RichLog, app: TrashDigApp) -> None:
         if not app.prioritized_targets:
@@ -602,27 +603,27 @@ class TrashDigApp(App):
             summary_text += f"**High Value:** {'Yes' if summary_data.get('is_high_value') else 'No'}"
             self.query_one("#summary", Static).update(summary_text)
 
-    async def run_recon_scan(self, path: str = ".") -> None:
-        """Runs the reconnaissance phase asynchronously.
+    async def run_full_scan_pipeline(self, path: str = ".") -> None:
+        """Runs the full recon -> hunt -> verify pipeline asynchronously.
 
         Args:
             path: Project path to scan.
         """
-        self._phase = "Scanning"
-        self._file_log.info("Scan started: %s", path)
+        self._phase = "Full Scan"
+        self._file_log.info("Full scan started: %s", path)
         self.refresh_status()
         try:
-            results = await self.coordinator.run_recon(path)
-            if "error" in results:
-                self.log_message(
-"error", f"[red]Scan error:[/red] {results['error']}")
-            else:
-                self._file_log.info("Scan complete: %d files mapped", len(results))
-                self.query_one(FileTree).update_tree(path, results)
+            await self.coordinator.run_full_scan(path)
+            self._file_log.info(
+                "Full scan complete: %d files mapped, %d findings",
+                len(self.coordinator.scan_results),
+                len(self.coordinator.findings),
+            )
+            self.query_one(FileTree).update_tree(path, self.coordinator.scan_results)
         except Exception as e:
-            self._file_log.error("Scan exception: %s\n%s", e, traceback.format_exc())
+            self._file_log.error("Full scan exception: %s\n%s", e, traceback.format_exc())
             self.log_message(
-"error", f"[bold red]Scan failed:[/bold red] {e}")
+"error", f"[bold red]Full scan failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
             self.refresh_status()
@@ -685,7 +686,7 @@ class TrashDigApp(App):
 
     def action_scan(self) -> None:
         """Starts a full scan via a keybinding."""
-        self.run_worker(self.run_recon_scan(self.workspace_root))
+        self.run_worker(self.run_full_scan_pipeline(self.workspace_root))
 
     def action_prioritize(self) -> None:
         """Automatically stars all high-value files."""

@@ -116,7 +116,10 @@ async def test_coordinator_run_recon_parse_failure_fallback(
 
     # Ensure an error message was logged to the TUI and llm_errors incremented
     assert coord.llm_errors == initial_errors + 1
-    assert any("Failed to parse StackScout response into valid JSON" in msg for msg in logged_events)
+    assert any(
+        "StackScout response could not be parsed as JSON" in msg and "malformed_json" in msg
+        for msg in logged_events
+    )
 
     # Ensure fallback full-workspace logical segment was inserted
     assert mock_get_proj.called

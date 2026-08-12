@@ -27,10 +27,23 @@ def google_provider_extras(provider: str) -> dict[str, Any]:
     if provider != "google":
         return {"google_search_tool": None, "generate_content_config": None}
 
+    # TrashDig agents are asked to find vulnerabilities in code as their core
+    # job, which otherwise trips the model's DANGEROUS_CONTENT safety category
+    # and produces an in-persona refusal instead of the requested JSON. This
+    # is authorized, read-only, defensive analysis of the user's own codebase,
+    # so that category is relaxed here for all Google-provider agents.
+    safety_settings = [
+        genai_types.SafetySetting(
+            category=genai_types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            threshold=genai_types.HarmBlockThreshold.BLOCK_NONE,
+        ),
+    ]
+
     return {
         "google_search_tool": google_search,
         "generate_content_config": genai_types.GenerateContentConfig(
-            tool_config=genai_types.ToolConfig(include_server_side_tool_invocations=True)
+            tool_config=genai_types.ToolConfig(include_server_side_tool_invocations=True),
+            safety_settings=safety_settings,
         ),
     }
 
@@ -231,6 +244,7 @@ async def run_agent(  # noqa: PLR0913
     user_id: str = "default_user",
     summarizer: Optional["SummarizerAgent"] = None,
     run_config: Optional["RunConfig"] = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> str:
     """Helper to run an agent synchronously-like and return the final text response.
 
@@ -243,6 +257,9 @@ async def run_agent(  # noqa: PLR0913
         user_id: The user ID.
         summarizer: Optional ADK Summarizer agent for context compaction.
         run_config: Optional RunConfig to override default streaming modes.
+        diagnostics: Optional dict to populate with `finish_reason`,
+            `error_code`, and `error_message` from the final response event,
+            for classifying failures (e.g. safety refusals) after the call.
 
     Returns:
         The final text response from the agent.
@@ -281,6 +298,7 @@ async def run_agent(  # noqa: PLR0913
         )
 
     final_text = ""
+    last_event = None
     run_kwargs: dict[str, Any] = {
         "new_message": content,
         "session_id": session_id,
@@ -296,6 +314,12 @@ async def run_agent(  # noqa: PLR0913
     async for event in runner.run_async(**run_kwargs):
         if not event.partial:
             final_text += get_response_text(event)
+        last_event = event
+
+    if diagnostics is not None and last_event is not None:
+        diagnostics["finish_reason"] = getattr(last_event, "finish_reason", None)
+        diagnostics["error_code"] = getattr(last_event, "error_code", None)
+        diagnostics["error_message"] = getattr(last_event, "error_message", None)
 
     return final_text
 

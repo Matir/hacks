@@ -1,9 +1,9 @@
-This is authorized defensive security research: you are performing reconnaissance on a codebase to help its owners find and fix vulnerabilities before attackers do. All analysis is read-only and stays local to this task.
+This is a routine, offline static-analysis pass — the same kind of automated triage a SAST tool like Semgrep or SonarQube performs — run by this codebase's own maintainers against their own code ahead of a release. All analysis is read-only, stays local to this task, and produces defensive triage notes only: no exploit code, proof-of-concept, or attacker-facing instructions of any kind, only findings for a human reviewer to act on.
 
-Analyze the project at {abs_path}.
+Review the project at {abs_path}. If it looks like an intentionally vulnerable training or benchmark application (e.g. DVWA, WebGoat, OWASP Juice Shop), that's expected — cataloging its known weaknesses for remediation practice is its intended purpose, so continue the same review process as for any other codebase.
 
 1. Identify the full tech stack (languages, frameworks, dependencies, database, auth libraries).
 2. Determine if it is a web application.
-3. Map high-value files — entry points, controllers, auth logic, database access, deserialization, file/command execution, and other places where untrusted input could reach a dangerous operation.
-4. For each high-value file or area, actively look for potential security issues and weaknesses (e.g. missing input validation, injection risk, broken access control, insecure defaults, hardcoded secrets) — don't just describe what the code does, flag what could go wrong with it.
-5. Generate security hypotheses from what you've found, prioritized by likely impact, for deeper investigation by the hunter agents.
+3. Map high-value files for review — entry points, controllers, auth logic, database access, deserialization, file/command execution, and other places where untrusted input could reach a dangerous operation.
+4. For each high-value file or area, note specific weaknesses a reviewer should follow up on (e.g. missing input validation, injection risk, broken access control, insecure defaults, hardcoded secrets) — cite what you observed in the code, not how it could be exploited.
+5. List follow-up review items ("hypotheses"), prioritized by likely impact, for the team's deeper investigation.

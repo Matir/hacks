@@ -18,6 +18,7 @@ from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 from google.genai import types
 
+from trashdig.agents.utils.json_utils import BLOCKED_REASONS
 from trashdig.agents.utils.types import EngineState
 from trashdig.services.rate_limiter import get_rate_limiter
 
@@ -27,23 +28,6 @@ if TYPE_CHECKING:
     from trashdig.agents.coordinator import Coordinator
 
 logger = logging.getLogger(__name__)
-
-# google.genai.types.FinishReason / BlockedReason values that indicate the
-# model refused or was blocked for safety/policy reasons, as opposed to
-# reasons like MAX_TOKENS, LANGUAGE, or MALFORMED_FUNCTION_CALL which also
-# populate LlmResponse.finish_reason / error_code but are not refusals.
-_REFUSAL_REASONS = frozenset({
-    "SAFETY",
-    "PROHIBITED_CONTENT",
-    "BLOCKLIST",
-    "SPII",
-    "RECITATION",
-    "IMAGE_SAFETY",
-    "IMAGE_PROHIBITED_CONTENT",
-    "IMAGE_RECITATION",
-    "JAILBREAK",
-    "MODEL_ARMOR",
-})
 
 
 def _extract_response(resp: LlmResponse) -> tuple[str, list[dict]]:
@@ -87,7 +71,7 @@ def _refusal_reason(resp: LlmResponse) -> str | None:
     before generating any candidate at all — so both must be checked.
     """
     for reason in (getattr(resp, "finish_reason", None), getattr(resp, "error_code", None)):
-        if reason is not None and reason in _REFUSAL_REASONS:
+        if reason is not None and reason in BLOCKED_REASONS:
             return getattr(reason, "value", reason)
     return None
 
