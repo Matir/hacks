@@ -34,7 +34,9 @@ def test_slash_anchoring_precision(tmp_path):
     # 1. /foo/bar inside src/.gitignore -> should anchor to src/ (matches src/foo/bar, not src/sub/foo/bar)
     # 2. foo/bar (middle slash, no leading slash) inside src/.gitignore -> ALSO anchors to src/
     # 3. baz (no slashes) inside src/.gitignore -> matches anywhere under src/
-    (tmp_path / "src" / ".gitignore").write_text("/leading/match.txt\nmiddle/match.txt\nfloating.log\n")
+    (tmp_path / "src" / ".gitignore").write_text(
+        "/leading/match.txt\nmiddle/match.txt\nfloating.log\n"
+    )
 
     (tmp_path / "src" / "leading").mkdir()
     (tmp_path / "src" / "leading" / "match.txt").write_text("a")

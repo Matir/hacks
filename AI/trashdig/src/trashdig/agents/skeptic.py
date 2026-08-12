@@ -18,6 +18,7 @@ from trashdig.tools import (
 
 class SkepticAgent(LlmAgent):
     """Skeptic Agent for TrashDig."""
+
     pass
 
 

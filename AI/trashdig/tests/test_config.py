@@ -14,6 +14,7 @@ def test_load_config_defaults(mock_user_config, tmp_path, monkeypatch):
     assert config.interface == "textual"
     assert len(config.agents) == 0
 
+
 @patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_from_file(mock_user_config, tmp_path):
     """Tests loading config from a valid TOML file."""
@@ -36,7 +37,8 @@ def test_load_config_from_file(mock_user_config, tmp_path):
     assert config.agents["stack_scout"].model == "custom-model"
     assert config.agents["stack_scout"].provider == "openrouter"
     assert config.agents["hunter"].model == "gemini-2.0-flash"
-    assert config.agents["hunter"].provider == "google" # Default
+    assert config.agents["hunter"].provider == "google"  # Default
+
 
 @patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_global_defaults(mock_user_config, tmp_path):
@@ -72,6 +74,7 @@ def test_load_config_global_defaults(mock_user_config, tmp_path):
     assert validator_cfg.model == "global-model"
     assert validator_cfg.provider == "global-provider"
 
+
 @patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_load_config_priority(mock_user_config, tmp_path, monkeypatch):
     """Tests that .trashdig.toml is preferred over trashdig.toml."""
@@ -96,6 +99,7 @@ def test_load_config_priority(mock_user_config, tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # resolve_workspace_path — path traversal protection
 # ---------------------------------------------------------------------------
+
 
 @patch("trashdig.config._find_user_config", autospec=True, return_value=None)
 def test_resolve_workspace_path_traversal_blocked(mock_user_config, tmp_path):

@@ -8,6 +8,7 @@ from trashdig.config import get_config
 @dataclass
 class Finding:
     """Represents a discovered security vulnerability."""
+
     title: str
     description: str
     severity: str
@@ -17,7 +18,7 @@ class Finding:
     exploitation_path: str
     remediation: str
     cwe_id: str | None = None
-    verification_status: str = "Unverified" # Unverified, Verified, False Positive
+    verification_status: str = "Unverified"  # Unverified, Verified, False Positive
     poc: str | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
@@ -54,7 +55,11 @@ class Finding:
             os.makedirs(output_dir, exist_ok=True)
 
         # Create a safe filename from the title
-        safe_title = "".join(c for c in self.title if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+        safe_title = (
+            "".join(c for c in self.title if c.isalnum() or c in (" ", "-", "_"))
+            .strip()
+            .replace(" ", "_")
+        )
         filename = f"{safe_title}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.md"
         file_path = os.path.join(output_dir, filename)
 
@@ -62,4 +67,3 @@ class Finding:
             f.write(self.to_markdown())
 
         return file_path
-

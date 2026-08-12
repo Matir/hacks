@@ -27,9 +27,11 @@ def test_get_ast_summary(mock_parser_class, mock_get_lang):
         result = get_ast_summary("test.py", "python")
         assert "Function definition: test_func" in result
 
+
 def test_get_ast_summary_unsupported_lang():
     result = get_ast_summary("test.py", "unsupported")
     assert "not supported" in result
+
 
 @patch("trashdig.tools.get_ast_summary._get_ts_language", autospec=True)
 @patch("trashdig.tools.get_ast_summary.get_language_metadata", autospec=True)
@@ -39,6 +41,7 @@ def test_get_ast_summary_error(mock_metadata, mock_ts_lang):
     with patch("builtins.open", side_effect=Exception("Disk error")):
         res = get_ast_summary("test.py", "python")
         assert "Error analyzing AST: Disk error" in res
+
 
 @patch("trashdig.tools.get_ast_summary._get_ts_language", autospec=True)
 @patch("trashdig.tools.get_ast_summary.get_language_metadata", autospec=True)
@@ -69,7 +72,9 @@ def test_get_ast_summary_js_arrow(mock_parser_make, mock_metadata, mock_ts_lang)
     val_node = MagicMock()
     val_node.type = "arrow_function"
 
-    decl.child_by_field_name.side_effect = lambda f: name_node if f == "name" else val_node if f == "value" else None
+    decl.child_by_field_name.side_effect = lambda f: (
+        name_node if f == "name" else val_node if f == "value" else None
+    )
     node.children = [decl]
     tree.root_node.children = [node]
 
@@ -77,15 +82,15 @@ def test_get_ast_summary_js_arrow(mock_parser_make, mock_metadata, mock_ts_lang)
         res = get_ast_summary("test.js", "javascript")
         assert "Arrow function: foo" in res
 
+
 def test_get_ast_summary_no_definitions():
     """Test get_ast_summary with a file containing no classes or functions."""
     with patch("builtins.open", MagicMock()):
         with patch("trashdig.metadata.languages.get_ts_language", return_value=MagicMock()):
-
             with patch("tree_sitter.Parser") as mock_parser_class:
                 mock_parser = mock_parser_class.return_value
                 mock_tree = mock_parser.parse.return_value
-                mock_tree.root_node.children = [] # No children
+                mock_tree.root_node.children = []  # No children
 
                 result = get_ast_summary("empty.py", "python")
                 assert result == "No top-level definitions found."

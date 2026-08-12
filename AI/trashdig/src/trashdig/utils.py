@@ -2,6 +2,7 @@ import shutil
 
 _BINARY_STUBS: dict[str, bool] = {}
 
+
 def is_binary_available(name: str) -> bool:
     """Checks if a binary is available on the system.
 
@@ -16,6 +17,7 @@ def is_binary_available(name: str) -> bool:
     if name in _BINARY_STUBS:
         return _BINARY_STUBS[name]
     return shutil.which(name) is not None
+
 
 def get_binary_path(name: str) -> str | None:
     """Gets the path to a binary.
@@ -32,6 +34,7 @@ def get_binary_path(name: str) -> str | None:
         return f"/stub/bin/{name}" if _BINARY_STUBS[name] else None
     return shutil.which(name)
 
+
 def set_binary_stub(name: str, available: bool) -> None:
     """Sets a stub for a binary availability check.
 
@@ -42,6 +45,7 @@ def set_binary_stub(name: str, available: bool) -> None:
         available: Whether the binary should be reported as available.
     """
     _BINARY_STUBS[name] = available
+
 
 def clear_binary_stubs() -> None:
     """Clears all binary stubs.

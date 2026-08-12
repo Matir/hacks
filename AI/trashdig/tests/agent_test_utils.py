@@ -29,17 +29,19 @@ import trashdig.tools
 # Callables exported from trashdig.tools that are infrastructure helpers rather
 # than agent-attachable tools.  iter_tool_callables skips these so that
 # ALL_TOOLS (in test_agent_tools.py) does not need to list them.
-TOOLS_PKG_NON_TOOLS: frozenset[str] = frozenset({
-    "HierarchicalGitIgnore",     # class for hierarchical gitignore evaluation
-    "artifact_tool",            # decorator applied to tool implementations
-    "build_mcp_toolsets",       # factory for McpToolset instances (not an agent tool)
-    "create_ask_user_tool",     # factory for the ask_user tool
-    "filter_by_gitignore",      # utility function to filter file paths by gitignore
-    "get_artifact_service",     # runtime singleton accessor
-    "init_artifact_manager",    # one-time initialisation helper
-    "sanitize_gitignore_lines", # line sanitization utility for gitignore parser
-    "walk_workspace",           # discovery-time workspace tree walker with gitignore pruning
-})
+TOOLS_PKG_NON_TOOLS: frozenset[str] = frozenset(
+    {
+        "HierarchicalGitIgnore",  # class for hierarchical gitignore evaluation
+        "artifact_tool",  # decorator applied to tool implementations
+        "build_mcp_toolsets",  # factory for McpToolset instances (not an agent tool)
+        "create_ask_user_tool",  # factory for the ask_user tool
+        "filter_by_gitignore",  # utility function to filter file paths by gitignore
+        "get_artifact_service",  # runtime singleton accessor
+        "init_artifact_manager",  # one-time initialisation helper
+        "sanitize_gitignore_lines",  # line sanitization utility for gitignore parser
+        "walk_workspace",  # discovery-time workspace tree walker with gitignore pruning
+    }
+)
 
 
 def iter_tool_callables() -> Iterator[tuple[str, str, Callable[..., object]]]:

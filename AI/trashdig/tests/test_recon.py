@@ -18,16 +18,19 @@ def mock_config():
     config.get_agent_config.return_value = MagicMock(model="test-model", provider="google")
     return config
 
+
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_stack_scout_run(mock_run, mock_config):
     agent = StackScoutAgent(name="stack_scout", model="test-model")
 
-    text_response = json.dumps({
-        "tech_stack": "Node.js/Express",
-        "is_web_app": True,
-        "mapping": {"src/main.py": {"summary": "entry point", "is_high_value": True}},
-        "hypotheses": []
-    })
+    text_response = json.dumps(
+        {
+            "tech_stack": "Node.js/Express",
+            "is_web_app": True,
+            "mapping": {"src/main.py": {"summary": "entry point", "is_high_value": True}},
+            "hypotheses": [],
+        }
+    )
 
     mock_run.return_value = text_response
 
@@ -39,13 +42,14 @@ async def test_stack_scout_run(mock_run, mock_config):
     assert data["is_web_app"] is True
     assert "src/main.py" in data["mapping"]
 
+
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_web_route_mapper_run(mock_run, mock_config):
     agent = WebRouteMapperAgent(name="web_route_mapper", model="test-model")
 
-    text_response = json.dumps({
-        "attack_surface": [{"route": "/api", "method": "GET", "handler": "main.py"}]
-    })
+    text_response = json.dumps(
+        {"attack_surface": [{"route": "/api", "method": "GET", "handler": "main.py"}]}
+    )
 
     mock_run.return_value = text_response
 
@@ -55,6 +59,7 @@ async def test_web_route_mapper_run(mock_run, mock_config):
     assert len(data["attack_surface"]) == 1
     assert data["attack_surface"][0]["route"] == "/api"
 
+
 @patch("trashdig.agents.recon.load_prompt", autospec=True)
 @patch("google.adk.agents.LlmAgent.__init__", autospec=True)
 def test_create_stack_scout_agent(mock_init, mock_load, mock_config):
@@ -62,6 +67,7 @@ def test_create_stack_scout_agent(mock_init, mock_load, mock_config):
     mock_init.return_value = None
     agent = create_stack_scout_agent(config=mock_config.get_agent_config("stack_scout"))
     assert agent is not None
+
 
 @patch("trashdig.agents.recon.load_prompt", autospec=True)
 @patch("google.adk.agents.LlmAgent.__init__", autospec=True)

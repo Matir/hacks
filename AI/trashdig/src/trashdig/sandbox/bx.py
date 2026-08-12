@@ -37,9 +37,7 @@ class BxSandbox(Sandbox):
         super().__init__(*args, **kwargs)
         bx_path = get_binary_path("bx")
         if not bx_path:
-            raise RuntimeError(
-                "bx not found in PATH. Install via: brew install holtwick/tap/bx"
-            )
+            raise RuntimeError("bx not found in PATH. Install via: brew install holtwick/tap/bx")
         self.bx_path: str = bx_path
 
     def run(

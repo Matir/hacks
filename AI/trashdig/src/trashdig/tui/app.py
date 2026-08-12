@@ -32,9 +32,7 @@ def _setup_file_logger(log_path: str) -> logging.Logger:
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
         handler = logging.FileHandler(log_path, encoding="utf-8")
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
         logger.addHandler(handler)
     return logger
 
@@ -52,7 +50,9 @@ class FileTree(Tree):
         super().__init__(label)
         self.data = data
 
-    def update_tree(self, root_path: str = ".", data: dict[str, dict[str, Any]] | None = None) -> None:
+    def update_tree(
+        self, root_path: str = ".", data: dict[str, dict[str, Any]] | None = None
+    ) -> None:
         """Updates the tree with file structure and optional metadata."""
         self.clear()
         self.data = data or {}
@@ -68,14 +68,10 @@ class FileTree(Tree):
                     parent_node = nodes[parent_path]
                     is_file = i == len(parts) - 1
                     label = parts[i]
-                    if current_path in self.data and self.data[current_path].get(
-                        "is_high_value"
-                    ):
+                    if current_path in self.data and self.data[current_path].get("is_high_value"):
                         label = f"⭐ {label}"
                     if is_file:
-                        nodes[current_path] = parent_node.add_leaf(
-                            label, data=current_path
-                        )
+                        nodes[current_path] = parent_node.add_leaf(label, data=current_path)
                     else:
                         nodes[current_path] = parent_node.add(label, data=current_path)
         self.root.expand()
@@ -135,9 +131,7 @@ class StatusPane(Vertical):
             active_agents: Number of running agents.
         """
         high_value = sum(
-            1
-            for d in scan_results.values()
-            if isinstance(d, dict) and d.get("is_high_value")
+            1 for d in scan_results.values() if isinstance(d, dict) and d.get("is_high_value")
         )
 
         severity_counts: dict[str, int] = {}
@@ -161,7 +155,7 @@ class StatusPane(Vertical):
         root_display = os.path.basename(workspace_root) or workspace_root
 
         def _fmt_tokens(n: int) -> str:
-            return f"{n:,}" if n < 1_000_000 else f"{n/1_000_000:.1f}M"  # noqa: PLR2004
+            return f"{n:,}" if n < 1_000_000 else f"{n / 1_000_000:.1f}M"  # noqa: PLR2004
 
         lines = [
             f"[bold]Phase:[/bold]    [{phase_color}]{phase}[/{phase_color}]",
@@ -182,6 +176,7 @@ class StatusPane(Vertical):
 
 class REPLPane(Vertical):
     """A REPL-style interface with command history and autocompletion."""
+
     if TYPE_CHECKING:
         app: TrashDigApp
 
@@ -195,8 +190,17 @@ class REPLPane(Vertical):
         self.history: list[str] = []
         self.history_index: int = -1
         self.commands = [
-            "help", "scan", "hunt", "star", "verify", "status", "exit",
-            "pause", "resume", "hint", "hypotheses",
+            "help",
+            "scan",
+            "hunt",
+            "star",
+            "verify",
+            "status",
+            "exit",
+            "pause",
+            "resume",
+            "hint",
+            "hypotheses",
         ]
 
     def compose(self) -> ComposeResult:
@@ -299,7 +303,9 @@ class REPLPane(Vertical):
 
     def _handle_pause_command(self, log: RichLog, app: TrashDigApp) -> None:
         app.coordinator.pause()
-        log.write("[bold yellow]System:[/bold yellow] Engine pausing... will stop at next safe point.")
+        log.write(
+            "[bold yellow]System:[/bold yellow] Engine pausing... will stop at next safe point."
+        )
         app.refresh_status()
 
     def _handle_resume_command(self, log: RichLog, app: TrashDigApp) -> None:
@@ -320,7 +326,9 @@ class REPLPane(Vertical):
     ) -> dict[str, Any] | None:
         matches = [h for h in hypotheses if str(h["task_id"]).startswith(prefix)]
         if len(matches) != 1:
-            log.write(f"[red]{'No' if not matches else 'Ambiguous'} match for id prefix '{prefix}'.[/red]")
+            log.write(
+                f"[red]{'No' if not matches else 'Ambiguous'} match for id prefix '{prefix}'.[/red]"
+            )
             return None
         return matches[0]
 
@@ -369,7 +377,9 @@ class REPLPane(Vertical):
         app.coordinator.db.update_hypothesis_confidence(match["task_id"], confidence)
         log.write(f"[green]Updated {match['task_id'][:8]} confidence to {confidence:.2f}.[/green]")
 
-    def _handle_hypotheses_command(self, cmd_parts: list[str], log: RichLog, app: TrashDigApp) -> None:
+    def _handle_hypotheses_command(
+        self, cmd_parts: list[str], log: RichLog, app: TrashDigApp
+    ) -> None:
         sub = cmd_parts[1].lower() if len(cmd_parts) > 1 else "list"
         hypotheses = app.coordinator.db.get_hypotheses(app.coordinator.project_path)
 
@@ -582,9 +592,7 @@ class TrashDigApp(App):
                 yield StatusPane()
             with Vertical():
                 yield Label("File Summary")
-                yield Static(
-                    "Select a file to see its summary.", id="summary", expand=True
-                )
+                yield Static("Select a file to see its summary.", id="summary", expand=True)
                 yield REPLPane(id="repl_pane")
         yield Footer()
 
@@ -600,7 +608,9 @@ class TrashDigApp(App):
             summary_data = self.coordinator.scan_results[path]
             summary_text = f"**Path:** {path}\n\n"
             summary_text += f"**Summary:** {summary_data.get('summary', 'N/A')}\n\n"
-            summary_text += f"**High Value:** {'Yes' if summary_data.get('is_high_value') else 'No'}"
+            summary_text += (
+                f"**High Value:** {'Yes' if summary_data.get('is_high_value') else 'No'}"
+            )
             self.query_one("#summary", Static).update(summary_text)
 
     async def run_full_scan_pipeline(self, path: str = ".") -> None:
@@ -622,8 +632,7 @@ class TrashDigApp(App):
             self.query_one(FileTree).update_tree(path, self.coordinator.scan_results)
         except Exception as e:
             self._file_log.error("Full scan exception: %s\n%s", e, traceback.format_exc())
-            self.log_message(
-"error", f"[bold red]Full scan failed:[/bold red] {e}")
+            self.log_message("error", f"[bold red]Full scan failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
             self.refresh_status()
@@ -639,13 +648,10 @@ class TrashDigApp(App):
         self.refresh_status()
         try:
             await self.coordinator.run_hunter(targets)
-            self._file_log.info(
-                "Hunt complete: %d findings", len(self.coordinator.findings)
-            )
+            self._file_log.info("Hunt complete: %d findings", len(self.coordinator.findings))
         except Exception as e:
             self._file_log.error("Hunt exception: %s\n%s", e, traceback.format_exc())
-            self.log_message(
-"error", f"[bold red]Hunt failed:[/bold red] {e}")
+            self.log_message("error", f"[bold red]Hunt failed:[/bold red] {e}")
         finally:
             self._phase = "Idle"
             self.refresh_status()
@@ -673,11 +679,8 @@ class TrashDigApp(App):
                 finding.verification_status,
             )
         except Exception as e:
-            self._file_log.error(
-                "Verification exception: %s\n%s", e, traceback.format_exc()
-            )
-            self.log_message(
-"error", f"[bold red]Verification failed:[/bold red] {e}")
+            self._file_log.error("Verification exception: %s\n%s", e, traceback.format_exc())
+            self.log_message("error", f"[bold red]Verification failed:[/bold red] {e}")
         finally:
             self._active_verifications -= 1
             if self._active_verifications <= 0:
@@ -690,17 +693,11 @@ class TrashDigApp(App):
 
     def action_prioritize(self) -> None:
         """Automatically stars all high-value files."""
-        high_value = [
-            p
-            for p, d in self.coordinator.scan_results.items()
-            if d.get("is_high_value")
-        ]
+        high_value = [p for p, d in self.coordinator.scan_results.items() if d.get("is_high_value")]
         for path in high_value:
             if path not in self.prioritized_targets:
                 self.prioritized_targets.append(path)
-        self._file_log.info(
-            "Auto-prioritized %d targets: %s", len(high_value), high_value
-        )
+        self._file_log.info("Auto-prioritized %d targets: %s", len(high_value), high_value)
         self.log_message(
             "info",
             f"[green]Auto-prioritized {len(high_value)} high-value targets.[/green]",
@@ -727,19 +724,27 @@ class TrashDigApp(App):
         """Toggles the engine paused state."""
         if self.coordinator.state == EngineState.PAUSED:
             self.coordinator.resume()
-            self.query_one("#repl_log", RichLog).write("[bold green]System:[/bold green] Engine resumed.")
+            self.query_one("#repl_log", RichLog).write(
+                "[bold green]System:[/bold green] Engine resumed."
+            )
         else:
             self.coordinator.pause()
-            self.query_one("#repl_log", RichLog).write("[bold yellow]System:[/bold yellow] Engine pausing... will stop at next safe point.")
+            self.query_one("#repl_log", RichLog).write(
+                "[bold yellow]System:[/bold yellow] Engine pausing... will stop at next safe point."
+            )
         self.refresh_status()
 
     async def action_hint(self) -> None:
         """Provides a manual hint to the engine."""
+
         def check_hint(hint: str | None) -> None:
             if hint:
                 # Append hint to context or print
-                self.query_one("#repl_log", RichLog).write(f"[bold cyan]User Hint:[/bold cyan] {hint}")
+                self.query_one("#repl_log", RichLog).write(
+                    f"[bold cyan]User Hint:[/bold cyan] {hint}"
+                )
                 self.coordinator.add_hint(hint)
+
         self.push_screen(AskModal("Enter a hint/override for the current analysis:"), check_hint)
 
     def action_view_findings(self) -> None:

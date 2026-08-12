@@ -32,6 +32,7 @@ class StackScoutAgent(LlmAgent):
     Identifies the tech stack using deterministic checks and LLM inference,
     and generates a project mapping with high-value targets.
     """
+
     pass
 
 
@@ -40,6 +41,7 @@ class WebRouteMapperAgent(LlmAgent):
 
     Maps reachable endpoints and their handlers to build an attack surface map.
     """
+
     pass
 
 
@@ -86,7 +88,11 @@ def create_stack_scout_agent(
     if extra_tools:
         tools.extend(extra_tools)
 
-    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+    kwargs = (
+        {"generate_content_config": extras["generate_content_config"]}
+        if extras["generate_content_config"]
+        else {}
+    )
 
     return StackScoutAgent(
         name="stack_scout",
@@ -96,6 +102,7 @@ def create_stack_scout_agent(
         tools=tools,
         **kwargs,
     )
+
 
 def create_web_route_mapper_agent(
     config: AgentConfig | None = None,
@@ -132,7 +139,11 @@ def create_web_route_mapper_agent(
     if extra_tools:
         tools.extend(extra_tools)
 
-    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+    kwargs = (
+        {"generate_content_config": extras["generate_content_config"]}
+        if extras["generate_content_config"]
+        else {}
+    )
 
     return WebRouteMapperAgent(
         name="web_route_mapper",
@@ -149,6 +160,7 @@ class CodebaseMapperAgent(LlmAgent):
 
     Analyzes individual files to identify purpose, security impact, and critical components.
     """
+
     pass
 
 
@@ -182,7 +194,11 @@ def create_codebase_mapper_agent(
     if extra_tools:
         tools.extend(extra_tools)
 
-    kwargs = {"generate_content_config": extras["generate_content_config"]} if extras["generate_content_config"] else {}
+    kwargs = (
+        {"generate_content_config": extras["generate_content_config"]}
+        if extras["generate_content_config"]
+        else {}
+    )
 
     return CodebaseMapperAgent(
         name="codebase_mapper",

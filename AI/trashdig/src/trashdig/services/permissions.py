@@ -18,7 +18,7 @@ class PermissionManager:
     def __init__(
         self,
         config: Config | None = None,
-        on_confirm: Callable[[str, dict[str, Any]], bool] | None = None
+        on_confirm: Callable[[str, dict[str, Any]], bool] | None = None,
     ):
         """Initializes the PermissionManager.
 
@@ -67,6 +67,7 @@ class PermissionManager:
         tool_name = tool.name or original_func.__name__
 
         if inspect.iscoroutinefunction(original_func):
+
             @wraps(original_func)
             async def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(original_func)
@@ -82,6 +83,7 @@ class PermissionManager:
                     return f"Permission denied for tool: {tool_name}"
                 return await original_func(*args, **kwargs)
         else:
+
             @wraps(original_func)
             def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(original_func)
@@ -97,9 +99,7 @@ class PermissionManager:
                     return f"Permission denied for tool: {tool_name}"
                 return original_func(*args, **kwargs)
 
-        return FunctionTool(
-            func=wrapped
-        )
+        return FunctionTool(func=wrapped)
 
     def wrap_tools(self, tools: list[FunctionTool]) -> list[FunctionTool]:
         """Wraps a list of tools.
@@ -124,6 +124,7 @@ class PermissionManager:
         tool_name = func.__name__
 
         if inspect.iscoroutinefunction(func):
+
             @wraps(func)
             async def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(func)
@@ -139,6 +140,7 @@ class PermissionManager:
                     return f"Permission denied for tool: {tool_name}"
                 return await func(*args, **kwargs)
         else:
+
             @wraps(func)
             def wrapped(*args: Any, **kwargs: Any) -> Any:
                 sig = inspect.signature(func)

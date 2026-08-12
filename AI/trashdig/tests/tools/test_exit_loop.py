@@ -12,6 +12,7 @@ def test_exit_loop():
     assert res == "Loop exit requested."
     assert mock_ctx.actions.escalate is True
 
+
 def test_exit_loop_no_actions():
     # Should not crash if actions attribute is missing
     res = exit_loop(object())

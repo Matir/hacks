@@ -7,9 +7,7 @@ from trashdig.config import AgentConfig
 @patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
 async def test_skeptic_run(mock_run):
     text_response = (
-        '```json\n'
-        '{"is_valid": true, "skeptic_notes": "Looks legit", "confidence": 0.8}\n'
-        '```'
+        '```json\n{"is_valid": true, "skeptic_notes": "Looks legit", "confidence": 0.8}\n```'
     )
 
     mock_run.return_value = text_response

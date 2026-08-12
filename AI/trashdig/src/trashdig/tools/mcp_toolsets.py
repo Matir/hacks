@@ -34,7 +34,6 @@ def _toolset_from_config(srv: McpServerConfig) -> McpToolset | None:
     tool_filter: list[str] | None = srv.tool_filter or None
     connection_params: StdioConnectionParams | SseConnectionParams | StreamableHTTPConnectionParams
 
-
     try:
         if srv.transport == "stdio":
             if not srv.command:

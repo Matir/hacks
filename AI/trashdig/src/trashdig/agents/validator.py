@@ -19,6 +19,7 @@ from trashdig.tools import (
 
 class ValidatorAgent(LlmAgent):
     """Validator Agent for TrashDig."""
+
     pass
 
 

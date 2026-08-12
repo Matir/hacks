@@ -35,7 +35,7 @@ def test_code_investigator_tool_composition():
         "get_ast_summary",
         "trace_taint_cross_file",
         "get_symbol_definition",
-        "get_project_structure"
+        "get_project_structure",
     }
 
     for tool in expected_subset:

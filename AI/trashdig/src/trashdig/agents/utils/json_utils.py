@@ -20,11 +20,20 @@ _REFUSAL_PATTERN = re.compile(
 # `trashdig.agents.utils.callbacks._refusal_reason`, which checks the same
 # values on the live LlmResponse as each model call completes — this is the
 # single source of truth for both.
-BLOCKED_REASONS = frozenset({
-    "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION",
-    "IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION",
-    "JAILBREAK", "MODEL_ARMOR",
-})
+BLOCKED_REASONS = frozenset(
+    {
+        "SAFETY",
+        "PROHIBITED_CONTENT",
+        "BLOCKLIST",
+        "SPII",
+        "RECITATION",
+        "IMAGE_SAFETY",
+        "IMAGE_PROHIBITED_CONTENT",
+        "IMAGE_RECITATION",
+        "JAILBREAK",
+        "MODEL_ARMOR",
+    }
+)
 
 
 def classify_llm_failure(text: str, diagnostics: dict[str, Any] | None = None) -> str:
@@ -117,6 +126,7 @@ def parse_json_response(text: str) -> dict[str, Any]:
         logger.debug("Failed to parse JSON using regex markers: %s", text)
 
     return {}
+
 
 def extract_json_list(text: str, key: str) -> list[Any]:
     """Parses JSON from text and returns a list associated with a key.

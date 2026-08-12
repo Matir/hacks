@@ -40,6 +40,7 @@ DEFAULT_NOISY_DIRS: set[str] = {
 @dataclass
 class ProviderConfig:
     """Configuration for an LLM provider."""
+
     name: str = "google"
     api_key: str | None = None
     base_url: str | None = None
@@ -48,6 +49,7 @@ class ProviderConfig:
 @dataclass
 class McpServerConfig:
     """Configuration for an external MCP server."""
+
     name: str
     transport: Literal["stdio", "sse", "http"] = "stdio"
     # stdio params
@@ -65,6 +67,7 @@ class McpServerConfig:
 @dataclass
 class AgentConfig:
     """Configuration for a specific TrashDig agent."""
+
     name: str = "stack_scout"
     model: str = "gemini-2.0-flash-exp"
     provider: str = "google"
@@ -76,6 +79,7 @@ class AgentConfig:
 @dataclass
 class Config:
     """Central configuration for TrashDig."""
+
     config_path: str = "trashdig.toml"
     data: dict[str, Any] = field(default_factory=dict)
 
@@ -94,7 +98,6 @@ class Config:
         except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
             # Fallback for tests or missing config
             self.data = {}
-
 
     @property
     def require_sandbox(self) -> bool:
@@ -179,16 +182,13 @@ class Config:
         # inside the system temp directory when the template explicitly uses
         # {tmpdir} (not as a side-effect of {workspace} being under /tmp).
         workspace = os.path.abspath(self.workspace_root)
-        in_workspace = (resolved.startswith(workspace + os.sep)
-                        or resolved == workspace)
+        in_workspace = resolved.startswith(workspace + os.sep) or resolved == workspace
         tmpdir = os.path.abspath(tempfile.gettempdir())
-        in_tmpdir = ("{tmpdir}" in path_template
-                     and (resolved.startswith(tmpdir + os.sep)
-                          or resolved == tmpdir))
+        in_tmpdir = "{tmpdir}" in path_template and (
+            resolved.startswith(tmpdir + os.sep) or resolved == tmpdir
+        )
         if not (in_workspace or in_tmpdir):
-            raise ValueError(
-                f"Resolved path {resolved!r} escapes workspace {workspace!r}"
-            )
+            raise ValueError(f"Resolved path {resolved!r} escapes workspace {workspace!r}")
 
         return resolved
 
@@ -247,17 +247,19 @@ class Config:
         """Returns configured MCP server integrations."""
         result = []
         for entry in self.data.get("mcp_servers", []):
-            result.append(McpServerConfig(
-                name=entry["name"],
-                transport=entry.get("transport", "stdio"),
-                command=entry.get("command"),
-                args=entry.get("args", []),
-                env=entry.get("env", {}),
-                url=entry.get("url"),
-                tool_filter=entry.get("tool_filter", []),
-                agents=entry.get("agents", []),
-                timeout=entry.get("timeout"),
-            ))
+            result.append(
+                McpServerConfig(
+                    name=entry["name"],
+                    transport=entry.get("transport", "stdio"),
+                    command=entry.get("command"),
+                    args=entry.get("args", []),
+                    env=entry.get("env", {}),
+                    url=entry.get("url"),
+                    tool_filter=entry.get("tool_filter", []),
+                    agents=entry.get("agents", []),
+                    timeout=entry.get("timeout"),
+                )
+            )
         return result
 
     def get_agent_config(self, agent_name: str) -> AgentConfig:
@@ -282,6 +284,7 @@ class Config:
 
 class ConfigProvider:
     """Class-level provider for the global Config instance."""
+
     instance: Config | None = None
     lock = threading.Lock()
 

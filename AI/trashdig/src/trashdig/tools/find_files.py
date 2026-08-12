@@ -33,9 +33,15 @@ def _collect_recursive(
                 continue
             full_path = os.path.join(root, filename)
             rel_from_target = os.path.relpath(full_path, target_dir)
-            check_name = rel_from_target if case_sensitive else rel_from_target.lower()
+
+            # If pattern contains a path separator, match against the full relative path,
+            # otherwise match against just the filename
+            match_target = rel_from_target if "/" in pattern.replace(os.sep, "/") else filename
+
+            check_name = match_target if case_sensitive else match_target.lower()
             if fnmatch.fnmatch(check_name, pattern):
                 matches.append(rel_from_target)
+
     return matches
 
 
@@ -70,12 +76,8 @@ def _collect_matching_paths(
 ) -> list[str]:
     resolver = HierarchicalGitIgnore(workspace_root=workspace_root)
     if recursive:
-        return _collect_recursive(
-            target_dir, workspace_root, pattern, case_sensitive, resolver
-        )
-    return _collect_flat(
-        target_dir, workspace_root, pattern, case_sensitive, resolver
-    )
+        return _collect_recursive(target_dir, workspace_root, pattern, case_sensitive, resolver)
+    return _collect_flat(target_dir, workspace_root, pattern, case_sensitive, resolver)
 
 
 @landlock_tool()
@@ -113,6 +115,3 @@ def find_files(
         return "\n".join(sorted(matches))
     except Exception as e:
         return f"Error searching in {directory}: {e}"
-
-
-

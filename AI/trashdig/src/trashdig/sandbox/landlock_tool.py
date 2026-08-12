@@ -41,8 +41,10 @@ from trashdig.config import Config, get_config, init_config
 
 logger = logging.getLogger(__name__)
 
+
 class SandboxProvider:
     """Class-level provider for global multiprocessing state."""
+
     # Module-level multiprocessing context.
     #
     # Initialised with ``forkserver`` as the default; replaced by

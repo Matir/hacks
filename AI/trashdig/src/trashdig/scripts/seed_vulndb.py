@@ -77,8 +77,11 @@ async def seed_vuln(  # noqa: PLR0913
         metadata_path = os.path.join(data_dir, "metadata.json")
         existing_metadata = []
         if os.path.exists(metadata_path):  # noqa: ASYNC240
-            with open(metadata_path, encoding="utf-8") as f, contextlib.suppress(  # noqa: ASYNC230
-                json.JSONDecodeError
+            with (
+                open(metadata_path, encoding="utf-8") as f,
+                contextlib.suppress(  # noqa: ASYNC230
+                    json.JSONDecodeError
+                ),
             ):
                 existing_metadata = json.load(f)
 
@@ -95,24 +98,16 @@ async def seed_vuln(  # noqa: PLR0913
 async def main() -> None:
     """Main entry point for the seeding script."""
     parser = argparse.ArgumentParser(description="Seed the VulnDB with CWE information.")
-    parser.add_argument(
-        "cwes", nargs="+", help="List of CWE IDs to seed (e.g. CWE-89 CWE-79)"
-    )
-    parser.add_argument(
-        "--concurrency", type=int, default=3, help="Max concurrent LLM calls"
-    )
+    parser.add_argument("cwes", nargs="+", help="List of CWE IDs to seed (e.g. CWE-89 CWE-79)")
+    parser.add_argument("--concurrency", type=int, default=3, help="Max concurrent LLM calls")
     args = parser.parse_args()
 
     config = get_config()
     print_model_info(config)
-    agent_config = config.get_agent_config(
-        "hunter"
-    )  # Use hunter config as default for LLM
+    agent_config = config.get_agent_config("hunter")  # Use hunter config as default for LLM
 
     # Base data dir for vulndb
-    vulndb_dir = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "data", "vulndb"
-    )
+    vulndb_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "vulndb")
     os.makedirs(vulndb_dir, exist_ok=True)
 
     session_db = os.path.join(config.data_dir, "seed_sessions.db")

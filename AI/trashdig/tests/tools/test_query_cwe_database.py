@@ -11,7 +11,7 @@ def test_query_cwe_database(mock_open, mock_json_load):
             "cwe_id": "CWE-79",
             "title": "XSS",
             "description": "Cross-site Scripting",
-            "examples": [{"language": "python", "vulnerable_code": "print(userInput)"}]
+            "examples": [{"language": "python", "vulnerable_code": "print(userInput)"}],
         }
     ]
 
@@ -19,6 +19,7 @@ def test_query_cwe_database(mock_open, mock_json_load):
     assert "CWE-79: XSS" in result
     assert "Cross-site Scripting" in result
     assert "Vulnerable Example (python):" in result
+
 
 def test_query_cwe_database_no_results():
     with patch("builtins.open", MagicMock()), patch("json.load", return_value=[]):

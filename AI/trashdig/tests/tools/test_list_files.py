@@ -8,6 +8,7 @@ def test_list_files_basic(temp_project):
     assert "README.md" in res
     assert "src" in res
 
+
 def test_list_files_recursive(temp_project):
     res = list_files(str(temp_project), recursive=True)
     assert "src/main.py" in res
@@ -19,4 +20,3 @@ def test_list_files_with_gitignore(temp_project):
     res = list_files(str(temp_project), recursive=True)
     assert "src/main.py" in res
     assert "web/app.js" not in res
-

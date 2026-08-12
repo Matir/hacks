@@ -25,18 +25,14 @@ def query_vulndb(query: str) -> str:
         results = []
         for entry in entries:
             header = f"## {entry.id}: {entry.title}\n"
-            header += (
-                f"**Category:** {entry.category} | **Severity:** {entry.severity}\n"
-            )
+            header += f"**Category:** {entry.category} | **Severity:** {entry.severity}\n"
             header += f"**Tags:** {', '.join(entry.tags)}\n\n"
 
             # Add active patterns if available
             if entry.active_patterns:
                 header += "### Active Patterns (Semgrep)\n"
                 for p in entry.active_patterns:
-                    header += (
-                        f"- **{p['name']}** ({', '.join(p.get('languages', []))})\n"
-                    )
+                    header += f"- **{p['name']}** ({', '.join(p.get('languages', []))})\n"
                     header += f"  ```yaml\n  {p['pattern']}\n  ```\n"
                 header += "\n"
 

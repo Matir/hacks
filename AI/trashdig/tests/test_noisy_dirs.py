@@ -56,4 +56,3 @@ def test_get_project_structure_respects_config(tmp_path):
         assert "custom_ignored/ignore.me" not in files
         # 'src/main.py' should be INCLUDED
         assert "src/main.py" in files
-

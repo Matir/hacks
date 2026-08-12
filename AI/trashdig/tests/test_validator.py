@@ -7,9 +7,9 @@ from trashdig.config import AgentConfig
 @patch("trashdig.agents.coordinator.run_agent", new_callable=AsyncMock)
 async def test_validator_run(mock_run):
     text_response = (
-        '```json\n'
+        "```json\n"
         '{"status": "Verified", "poc_code": "python poc.py", "reasoning": "Confirmed"}\n'
-        '```'
+        "```"
     )
 
     mock_run.return_value = text_response

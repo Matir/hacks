@@ -5,6 +5,7 @@ hooks to TrashDig's TUI logging, token accounting, cost tracking, and DB persist
 This replaces the manual on_event/on_stats/on_error/conversation_log_fn parameters
 that were previously threaded through every agent wrapper method.
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,10 +41,12 @@ def _extract_response(resp: LlmResponse) -> tuple[str, list[dict]]:
                 response_text = part.text
             fc = getattr(part, "function_call", None)
             if fc and getattr(fc, "name", None):
-                tool_calls.append({
-                    "name": fc.name,
-                    "args": dict(getattr(fc, "args", None) or {}),
-                })
+                tool_calls.append(
+                    {
+                        "name": fc.name,
+                        "args": dict(getattr(fc, "args", None) or {}),
+                    }
+                )
     return response_text, tool_calls
 
 
@@ -112,7 +115,9 @@ class TrashDigCallback:
         """
         if cls._instance is None:
             if coordinator is None:
-                raise ValueError("TrashDigCallback.get_instance() requires a coordinator on first call")
+                raise ValueError(
+                    "TrashDigCallback.get_instance() requires a coordinator on first call"
+                )
             cls._instance = cls(coordinator)
         elif coordinator is not None:
             # Allow updating the coordinator reference (useful for tests or resumption)
@@ -166,7 +171,9 @@ class TrashDigCallback:
         )
         logger.warning(
             "Model refusal in agent %s: reason=%s response=%r",
-            agent_name, refusal_reason, response_text,
+            agent_name,
+            refusal_reason,
+            response_text,
         )
         # Stop the agent that received the refusal. `escalate` is the same
         # ADK signal the exit_loop tool uses (tool_context.actions.escalate)
@@ -218,11 +225,19 @@ class TrashDigCallback:
         agent_name = getattr(tool_context, "agent_name", "unknown")
 
         def _format_arg(k: str, v: Any) -> str:
-            if k in ("file_path", "path", "directory", "target", "filename", "project_path", "db_path") and isinstance(v, str):
+            if k in (
+                "file_path",
+                "path",
+                "directory",
+                "target",
+                "filename",
+                "project_path",
+                "db_path",
+            ) and isinstance(v, str):
                 return repr(v)
             r = repr(v)
             max_len = 60
-            return r if len(r) <= max_len else r[:max_len - 3] + "..."
+            return r if len(r) <= max_len else r[: max_len - 3] + "..."
 
         args_str = ", ".join(f"{k}={_format_arg(k, v)}" for k, v in args.items())
 
@@ -267,7 +282,11 @@ class TrashDigCallback:
         self._c.log(f"  [bold red]✗ {tool.name} raised:[/bold red] {error}")
         logger.warning(
             "Tool raised — agent=%s tool=%s args=%r error=%s",
-            agent_name, tool.name, args, error, exc_info=error,
+            agent_name,
+            tool.name,
+            args,
+            error,
+            exc_info=error,
         )
         return None  # Don't swallow the error — let it propagate as before.
 
@@ -295,15 +314,21 @@ class TrashDigCallback:
             )
             logger.warning(
                 "Agent %s exceeded max_turns=%d (turn %d); returning stop response.",
-                agent_name, max_turns, current,
+                agent_name,
+                max_turns,
+                current,
             )
             return LlmResponse(
                 content=types.Content(
                     role="model",
-                    parts=[types.Part(text=(
-                        f"Turn limit of {max_turns} reached. "
-                        "Stopping and returning control to the coordinator."
-                    ))],
+                    parts=[
+                        types.Part(
+                            text=(
+                                f"Turn limit of {max_turns} reached. "
+                                "Stopping and returning control to the coordinator."
+                            )
+                        )
+                    ],
                 ),
                 finish_reason=types.FinishReason.STOP,
             )
@@ -316,10 +341,14 @@ class TrashDigCallback:
             llm_request.contents.append(
                 types.Content(
                     role="user",
-                    parts=[types.Part(text=(
-                        "[HUMAN STEERING HINT — high priority, adjust course now]\n"
-                        f"{hint_text}"
-                    ))],
+                    parts=[
+                        types.Part(
+                            text=(
+                                "[HUMAN STEERING HINT — high priority, adjust course now]\n"
+                                f"{hint_text}"
+                            )
+                        )
+                    ],
                 )
             )
 
@@ -390,7 +419,7 @@ class TrashDigCallback:
         # Update rate limiter if present
         limiter = get_rate_limiter()
         if limiter:
-            total_t = (getattr(usage, "total_token_count", None) or (in_t + out_t))
+            total_t = getattr(usage, "total_token_count", None) or (in_t + out_t)
             await limiter.update_usage(total_t)
 
         agent = self._c._agent_by_name(agent_name)
@@ -432,7 +461,11 @@ class TrashDigCallback:
         return None  # Never replace the model response
 
     async def on_model_error(
-        self, callback_context: CallbackContext, llm_request: LlmRequest, error: Exception, **kwargs: Any
+        self,
+        callback_context: CallbackContext,
+        llm_request: LlmRequest,
+        error: Exception,
+        **kwargs: Any,
     ) -> LlmResponse | None:
         """Increment the LLM error counter on model API failures."""
         agent_name = getattr(callback_context, "agent_name", "unknown")

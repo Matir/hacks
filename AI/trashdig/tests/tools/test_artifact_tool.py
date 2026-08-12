@@ -20,13 +20,16 @@ def temp_artifact_dir(tmp_path):
     if data_dir.exists():
         shutil.rmtree(data_dir)
 
+
 async def maybe_await(coro_or_val):
     if asyncio.iscoroutine(coro_or_val):
         return await coro_or_val
     return coro_or_val
 
+
 async def test_artifact_tool_no_truncation():
     """Test that artifact_tool does not truncate small output."""
+
     @artifact_tool(max_chars=100)
     def small_tool():
         return "small output"
@@ -34,6 +37,7 @@ async def test_artifact_tool_no_truncation():
     result = await maybe_await(small_tool())
     assert result == "small output"
     assert "[TRUNCATED]" not in result
+
 
 async def test_artifact_tool_truncation(temp_artifact_dir):
     """Test that artifact_tool truncates large output and saves a legacy artifact."""
@@ -60,6 +64,7 @@ async def test_artifact_tool_truncation(temp_artifact_dir):
     with open(artifact_path, encoding="utf-8") as f:
         assert f.read() == large_content
 
+
 async def test_artifact_tool_adk_api(temp_artifact_dir):
     """Test that artifact_tool uses ADK API when tool_context is provided."""
     large_content = "C" * 300
@@ -82,14 +87,17 @@ async def test_artifact_tool_adk_api(temp_artifact_dir):
     assert args[0].startswith("adk_tool_")
     assert args[1].text == large_content
 
+
 async def test_artifact_tool_non_string_result():
     """Test that artifact_tool handles non-string results gracefully."""
+
     @artifact_tool(max_chars=10)
     def non_string_tool():
         return 12345
 
     result = await maybe_await(non_string_tool())
     assert result == 12345
+
 
 def test_init_artifact_manager(tmp_path):
     """Test that init_artifact_manager correctly sets up the service."""
@@ -98,6 +106,7 @@ def test_init_artifact_manager(tmp_path):
 
     assert get_artifact_service() == service
     assert os.path.isdir(os.path.join(str(data_dir), "artifacts"))
+
 
 async def test_artifact_tool_stable_filename(temp_artifact_dir):
     """Test that the same content produces the same artifact filename (hash stability)."""
@@ -114,6 +123,7 @@ async def test_artifact_tool_stable_filename(temp_artifact_dir):
     path_b = re.search(r"artifact: (.*\.txt)", result_b).group(1)
 
     assert path_a == path_b
+
 
 async def test_artifact_tool_async(temp_artifact_dir):
     """Test that artifact_tool correctly handles async functions."""

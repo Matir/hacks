@@ -116,7 +116,9 @@ class ProjectDatabase:
         self.db_path = db_path
         self._memory_conn: sqlite3.Connection | None = None
         if db_path != ":memory:":
-            os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
+            os.makedirs(
+                os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True
+            )
         self._init_db()
 
     # ------------------------------------------------------------------
@@ -429,7 +431,13 @@ class ProjectDatabase:
                 (cache_key, func_name, args_json, result_text, timestamp)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (cache_key, func_name, json.dumps(args, sort_keys=True, default=str), result_text, _now()),
+                (
+                    cache_key,
+                    func_name,
+                    json.dumps(args, sort_keys=True, default=str),
+                    result_text,
+                    _now(),
+                ),
             )
 
     def get_cached_tool_output(
@@ -538,7 +546,6 @@ def get_database(db_path: str | None = None) -> ProjectDatabase:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
-
 
 
 def _args_hash(args: dict[str, Any]) -> str:

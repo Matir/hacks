@@ -58,26 +58,38 @@ def _describe_google_auth(provider_config: "ProviderConfig | None") -> list[str]
     else:
         adc_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if adc_file:
-            lines.append(f"  auth: Application Default Credentials (service account file: {adc_file})")
+            lines.append(
+                f"  auth: Application Default Credentials (service account file: {adc_file})"
+            )
         else:
             well_known = os.path.join(
                 os.environ.get("APPDATA", os.path.expanduser("~")),
-                ".config", "gcloud", "application_default_credentials.json",
+                ".config",
+                "gcloud",
+                "application_default_credentials.json",
             )
             if os.path.exists(well_known):
-                lines.append(f"  auth: Application Default Credentials (gcloud user credentials at {well_known})")
+                lines.append(
+                    f"  auth: Application Default Credentials (gcloud user credentials at {well_known})"
+                )
             elif os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT"):
                 project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT")
-                lines.append(f"  auth: Application Default Credentials (metadata server / Workload Identity, project={project})")
+                lines.append(
+                    f"  auth: Application Default Credentials (metadata server / Workload Identity, project={project})"
+                )
             else:
-                lines.append("  auth: Application Default Credentials (no explicit source detected; may use metadata server)")
+                lines.append(
+                    "  auth: Application Default Credentials (no explicit source detected; may use metadata server)"
+                )
     project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCLOUD_PROJECT")
     if project:
         lines.append(f"  project: {project}")
     return lines
 
 
-def _describe_generic_auth(provider_name: str, provider_config: "ProviderConfig | None") -> list[str]:
+def _describe_generic_auth(
+    provider_name: str, provider_config: "ProviderConfig | None"
+) -> list[str]:
     """Return lines describing generic provider authentication."""
     lines: list[str] = []
     if provider_config and provider_config.api_key:
@@ -89,13 +101,17 @@ def _describe_generic_auth(provider_name: str, provider_config: "ProviderConfig 
         else:
             lines.append("  auth: no API key found in config or environment")
 
-    base_url = (provider_config.base_url if provider_config else None) or os.environ.get("OPENAI_BASE_URL")
+    base_url = (provider_config.base_url if provider_config else None) or os.environ.get(
+        "OPENAI_BASE_URL"
+    )
     if base_url:
         lines.append(f"  base_url: {base_url}")
     return lines
 
 
-def describe_provider_auth(provider_name: str, provider_config: "ProviderConfig | None") -> list[str]:
+def describe_provider_auth(
+    provider_name: str, provider_config: "ProviderConfig | None"
+) -> list[str]:
     """Return human-readable lines describing how a provider is authenticated."""
     lines: list[str] = [f"Provider '{provider_name}':"]
 
@@ -131,6 +147,7 @@ def log_auth_info(config: "Config", logger: logging.Logger) -> None:
 def print_model_info(config: "Config") -> None:
     """Print model and authentication information to the console."""
     from rich.console import Console  # noqa: PLC0415
+
     console = Console()
 
     referenced: dict[str, set[str]] = {}
@@ -183,9 +200,9 @@ def get_project_structure(root_path: str | None = None) -> list[str]:
     """
     # Imported locally to avoid circular dependencies with trashdig.tools
     from trashdig.tools.gitignore import walk_workspace  # noqa: PLC0415
-    return sorted(
-        walk_workspace(workspace_root=root_path, include_dirs=False, ignore_noisy=True)
-    )
+
+    return sorted(walk_workspace(workspace_root=root_path, include_dirs=False, ignore_noisy=True))
+
 
 def read_file_content(file_path: str, max_chars: int = 2000) -> str:
     """Reads a portion of a file's content for analysis."""
@@ -196,7 +213,10 @@ def read_file_content(file_path: str, max_chars: int = 2000) -> str:
     except (UnicodeDecodeError, PermissionError, FileNotFoundError):
         return "[Error: Could not read file content]"
 
-def detect_frameworks(file_list: list[str], project_root: str | None = None) -> dict[str, list[str]]:
+
+def detect_frameworks(
+    file_list: list[str], project_root: str | None = None
+) -> dict[str, list[str]]:
     """Analyzes dependency files to identify known frameworks and libraries."""
     # TODO: much better heuristics!
     if project_root is None:
@@ -206,25 +226,64 @@ def detect_frameworks(file_list: list[str], project_root: str | None = None) -> 
         "web_frameworks": [],
         "databases": [],
         "auth_libraries": [],
-        "other": []
+        "other": [],
     }
-    dep_files = ["package.json", "requirements.txt", "pyproject.toml", "go.mod", "pom.xml", "Gemfile"]
+    dep_files = [
+        "package.json",
+        "requirements.txt",
+        "pyproject.toml",
+        "go.mod",
+        "pom.xml",
+        "Gemfile",
+    ]
     signatures = {
-        "web_frameworks":
-            ["fastapi", "flask", "django", "express", "spring-boot", "rails",
-             "gin", "echo", "nextjs", "react", "lua"],
-        "databases": ["sqlalchemy", "prisma", "mongoose", "typeorm", "gorm", "postgresql", "mysql", "mongodb", "redis", "sqlite"],
-        "auth_libraries": ["passport", "auth0", "next-auth", "firebase-auth", "clerk", "jwt", "oauthlib"]
+        "web_frameworks": [
+            "fastapi",
+            "flask",
+            "django",
+            "express",
+            "spring-boot",
+            "rails",
+            "gin",
+            "echo",
+            "nextjs",
+            "react",
+            "lua",
+        ],
+        "databases": [
+            "sqlalchemy",
+            "prisma",
+            "mongoose",
+            "typeorm",
+            "gorm",
+            "postgresql",
+            "mysql",
+            "mongodb",
+            "redis",
+            "sqlite",
+        ],
+        "auth_libraries": [
+            "passport",
+            "auth0",
+            "next-auth",
+            "firebase-auth",
+            "clerk",
+            "jwt",
+            "oauthlib",
+        ],
     }
 
     for dep_file in dep_files:
         if dep_file in file_list:
-            content = read_file_content(os.path.join(project_root, dep_file), max_chars=10000).lower()
+            content = read_file_content(
+                os.path.join(project_root, dep_file), max_chars=10000
+            ).lower()
             for category, names in signatures.items():
                 for name in names:
                     if name in content and name not in stack[category]:
                         stack[category].append(name)
     return stack
+
 
 def get_response_text(resp: Any) -> str:
     """Extracts all text parts from an ADK LlmResponse or Event."""
@@ -234,6 +293,7 @@ def get_response_text(resp: Any) -> str:
             if hasattr(part, "text") and part.text:
                 text += part.text
     return text
+
 
 async def run_agent(  # noqa: PLR0913
     agent: "BaseAgent",
@@ -292,9 +352,9 @@ async def run_agent(  # noqa: PLR0913
         from google.adk.agents.run_config import RunConfig, StreamingMode  # noqa: PLC0415
 
         from trashdig.config import get_config  # noqa: PLC0415
+
         run_config = RunConfig(
-            streaming_mode=StreamingMode.SSE,
-            max_llm_calls=get_config().max_llm_calls
+            streaming_mode=StreamingMode.SSE, max_llm_calls=get_config().max_llm_calls
         )
 
     final_text = ""
@@ -322,6 +382,7 @@ async def run_agent(  # noqa: PLR0913
         diagnostics["error_message"] = getattr(last_event, "error_message", None)
 
     return final_text
+
 
 async def maybe_summarize(  # noqa: PLR0913
     app_name: str,
@@ -379,7 +440,9 @@ async def maybe_summarize(  # noqa: PLR0913
         )
 
         # Replace session with the summary
-        await session_service.delete_session(app_name=app_name, user_id=user_id, session_id=session_id)
+        await session_service.delete_session(
+            app_name=app_name, user_id=user_id, session_id=session_id
+        )
         new_session = await session_service.create_session(
             app_name=app_name, user_id=user_id, session_id=session_id
         )
@@ -387,14 +450,19 @@ async def maybe_summarize(  # noqa: PLR0913
         # Add the summary as a system-like context message
         summary_content = genai_types.Content(
             role="user",
-            parts=[genai_types.Part(text=(
-                "Summary of previous research history:\n\n"
-                f"{summary}\n\n"
-                "Please continue the investigation based on this summary."
-            ))]
+            parts=[
+                genai_types.Part(
+                    text=(
+                        "Summary of previous research history:\n\n"
+                        f"{summary}\n\n"
+                        "Please continue the investigation based on this summary."
+                    )
+                )
+            ],
         )
         # Import Event here to avoid global circular issues
         from google.adk.events.event import Event  # noqa: PLC0415
+
         summary_event = Event(
             author="summarizer",
             content=summary_content,

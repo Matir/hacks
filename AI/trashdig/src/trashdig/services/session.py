@@ -5,6 +5,7 @@ from google.adk.sessions.sqlite_session_service import SqliteSessionService
 
 class SessionProvider:
     """Class-level provider for the global SessionService instance."""
+
     instance: SqliteSessionService | None = None
 
 
@@ -28,7 +29,5 @@ def get_session_service() -> SqliteSessionService:
         RuntimeError: If the service has not been initialised.
     """
     if SessionProvider.instance is None:
-        raise RuntimeError(
-            "SessionService not initialised. Call init_session_service() first."
-        )
+        raise RuntimeError("SessionService not initialised. Call init_session_service() first.")
     return SessionProvider.instance

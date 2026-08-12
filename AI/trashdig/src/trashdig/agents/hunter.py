@@ -27,6 +27,7 @@ from trashdig.tools import (
 
 class HunterAgent(LlmAgent):
     """Hunter Agent for TrashDig."""
+
     pass
 
 

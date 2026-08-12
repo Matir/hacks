@@ -13,9 +13,12 @@ def mock_workspace(tmp_path):
     c.workspace_root = str(tmp_path)
     c.resolve_workspace_path.side_effect = os.path.abspath
 
-    with patch("trashdig.config.get_config", return_value=c), \
-         patch("trashdig.tools.get_scope_info.get_config", return_value=c):
+    with (
+        patch("trashdig.config.get_config", return_value=c),
+        patch("trashdig.tools.get_scope_info.get_config", return_value=c),
+    ):
         yield c
+
 
 def test_get_scope_info_python_real(tmp_path):
     code = """
@@ -49,6 +52,7 @@ def outer_func(param1):
     assert "Local Variables: inner_var" in result
     assert "Outer Variables: param1, local_var" in result
 
+
 def test_get_scope_info_js_real(tmp_path):
     code = """
 const globalVar = 1;
@@ -72,6 +76,7 @@ function outer(p1) {
     assert "Local Variables: v2" in result
     assert "Outer Variables: p1, v1" in result
 
+
 def test_get_scope_info_c_real(tmp_path):
     code = """
 void func(int p1) {
@@ -91,6 +96,7 @@ void func(int p1) {
     assert "Scope: anonymous (compound statement)" in result
     assert "Local Variables: v2" in result
     assert "Outer Variables: p1, v1" in result
+
 
 def test_get_scope_info_java_real(tmp_path):
     code = """
@@ -114,6 +120,7 @@ class Test {
     assert "Local Variables: v2" in result
     assert "Outer Variables: p1, v1" in result
 
+
 def test_get_scope_info_ruby_real(tmp_path):
     code = """
 def method(p1)
@@ -134,6 +141,7 @@ end
     assert "Parameters: p2" in result
     assert "Local Variables: v2" in result
     assert "Outer Variables: p1, v1" in result
+
 
 def test_get_scope_info_no_scope(tmp_path):
     f = tmp_path / "sample.py"

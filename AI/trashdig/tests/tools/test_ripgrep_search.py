@@ -6,8 +6,9 @@ from trashdig.tools.ripgrep_search import ripgrep_search
 
 
 def _sandboxed_result(returncode, stdout="", stderr=""):
-    return MagicMock(spec=subprocess.CompletedProcess,
-                     returncode=returncode, stdout=stdout, stderr=stderr)
+    return MagicMock(
+        spec=subprocess.CompletedProcess, returncode=returncode, stdout=stdout, stderr=stderr
+    )
 
 
 @patch("subprocess.run")
@@ -22,18 +23,21 @@ def test_ripgrep_search(mock_run):
     assert "pattern" in args
     assert resolve_workspace_path("path") in args
 
+
 @patch("subprocess.run")
 def test_ripgrep_search_flags(mock_run):
     mock_run.return_value = MagicMock(stdout="data", stderr="", returncode=0)
 
-    result = ripgrep_search("pattern", path="path", lines_before=2, lines_after=3, number_lines=True)
+    result = ripgrep_search(
+        "pattern", path="path", lines_before=2, lines_after=3, number_lines=True
+    )
     assert result == "data"
     args = mock_run.call_args[0][0]
 
     assert "-B" in args
-    assert "2" in args[args.index("-B")+1:]
+    assert "2" in args[args.index("-B") + 1 :]
     assert "-A" in args
-    assert "3" in args[args.index("-A")+1:]
+    assert "3" in args[args.index("-A") + 1 :]
     assert "-n" in args
 
 

@@ -57,7 +57,9 @@ class FindingDetailScreen(Screen):
 
         with VerticalScroll(id="detail_container"):
             yield Static(f"# {self.finding.title}", classes="detail_header")
-            yield Static(f"**Severity:** {self.finding.severity} | **Status:** {self.finding.verification_status or 'Unverified'}")
+            yield Static(
+                f"**Severity:** {self.finding.severity} | **Status:** {self.finding.verification_status or 'Unverified'}"
+            )
             yield Static(f"**File:** {self.finding.file_path}")
 
             if self.finding.cwe_id:

@@ -29,6 +29,7 @@ def mock_cfg():
         mock.return_value = c
         yield mock
 
+
 @pytest.fixture
 def temp_project(tmp_path, mock_cfg):
     # Create a dummy project structure

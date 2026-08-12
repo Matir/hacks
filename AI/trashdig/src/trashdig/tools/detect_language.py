@@ -31,6 +31,7 @@ EXTENSION_MAP = {
     ".md": "markdown",
 }
 
+
 def detect_language(path: str) -> str:
     """Detects the programming language for a single file or a set of files in a directory.
 
@@ -49,9 +50,9 @@ def detect_language(path: str) -> str:
         total_files = 0
         for root, _, files in os.walk(path):
             # Skip hidden directories and common noisy ones
-            if any(part.startswith('.') for part in root.split(os.sep)):
+            if any(part.startswith(".") for part in root.split(os.sep)):
                 continue
-            if 'node_modules' in root or 'venv' in root or '__pycache__' in root:
+            if "node_modules" in root or "venv" in root or "__pycache__" in root:
                 continue
 
             for filename in files:

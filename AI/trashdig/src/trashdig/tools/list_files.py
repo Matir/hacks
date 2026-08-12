@@ -15,9 +15,7 @@ def _format_entry(full_path: str, rel_display: str, is_dir: bool) -> str:
     return f"{type_char} {size:>10} {mtime} {rel_display}"
 
 
-def _list_recursive(
-    target_dir: str, workspace_root: str, resolver: HierarchicalGitIgnore
-) -> str:
+def _list_recursive(target_dir: str, workspace_root: str, resolver: HierarchicalGitIgnore) -> str:
     output: list[str] = []
     for root, dirs, filenames in os.walk(target_dir):
         rel_root = os.path.relpath(root, workspace_root).replace(os.sep, "/")
@@ -43,9 +41,7 @@ def _list_recursive(
     return "\n".join(output)
 
 
-def _list_flat(
-    target_dir: str, workspace_root: str, resolver: HierarchicalGitIgnore
-) -> str:
+def _list_flat(target_dir: str, workspace_root: str, resolver: HierarchicalGitIgnore) -> str:
     output: list[str] = []
     rel_target = os.path.relpath(target_dir, workspace_root).replace(os.sep, "/")
     if rel_target == ".":
@@ -86,6 +82,3 @@ def list_files(directory: str | None = None, recursive: bool = False) -> str:
         return _list_flat(target_dir, workspace_root, resolver)
     except Exception as e:
         return f"Error listing directory {directory}: {e}"
-
-
-

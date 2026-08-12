@@ -14,10 +14,7 @@ def mock_db():
 
 
 def test_save_findings(mock_db):
-    findings = [
-        {"title": "SQLi", "severity": "High", "file_path": "a.py"},
-        {"title": "XSS"}
-    ]
+    findings = [{"title": "SQLi", "severity": "High", "file_path": "a.py"}, {"title": "XSS"}]
     res = save_findings(json.dumps(findings), "/tmp/proj")
     assert "Saved 2 findings" in res
     assert mock_db.save_finding.call_count == 2

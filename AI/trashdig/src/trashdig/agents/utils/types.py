@@ -6,21 +6,26 @@ from typing import Any
 
 class TaskType(Enum):
     """Enumeration of task types for agents."""
-    SCAN = auto()           # StackScout mapping
-    HUNT = auto()           # Hunter deep-dive
-    VERIFY = auto()         # Validator PoC
-    RESOLVE_SYMBOL = auto() # Follow definition
-    TAINT_TRACE = auto()    # Follow variable
+
+    SCAN = auto()  # StackScout mapping
+    HUNT = auto()  # Hunter deep-dive
+    VERIFY = auto()  # Validator PoC
+    RESOLVE_SYMBOL = auto()  # Follow definition
+    TAINT_TRACE = auto()  # Follow variable
+
 
 class TaskStatus(Enum):
     """Enumeration of possible task states."""
+
     PENDING = auto()
     RUNNING = auto()
     COMPLETED = auto()
     FAILED = auto()
 
+
 class EngineState(Enum):
     """Enumeration of global engine states."""
+
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     WAITING_FOR_TOOLS = "WAITING_FOR_TOOLS"
@@ -28,6 +33,7 @@ class EngineState(Enum):
     STEERING = "STEERING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+
 
 @dataclass
 class Task:
@@ -42,6 +48,7 @@ class Task:
         parent_id: Optional ID of the task that spawned this one.
         result: The result data generated after completion.
     """
+
     type: TaskType
     target: str
     context: dict[str, Any] = field(default_factory=dict)
@@ -49,6 +56,7 @@ class Task:
     status: TaskStatus = TaskStatus.PENDING
     parent_id: str | None = None
     result: Any = None
+
 
 @dataclass
 class Hypothesis(Task):
@@ -58,5 +66,6 @@ class Hypothesis(Task):
         description: A text description of the potential vulnerability to hunt for.
         confidence: The agent's confidence level in this hypothesis (0.0 to 1.0).
     """
+
     description: str = ""
-    confidence: float = 0.0 # 0.0 to 1.0
+    confidence: float = 0.0  # 0.0 to 1.0

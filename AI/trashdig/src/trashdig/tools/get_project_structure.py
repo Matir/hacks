@@ -22,4 +22,3 @@ def get_project_structure(path: str | None = None) -> str:
     files = _get_struct(path)
     files = filter_by_gitignore(files, workspace_root=path)
     return "\n".join(files)
-

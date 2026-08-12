@@ -13,9 +13,12 @@ def mock_workspace(tmp_path):
     c.workspace_root = str(tmp_path)
     c.resolve_workspace_path.side_effect = os.path.abspath
 
-    with patch("trashdig.config.get_config", return_value=c), \
-         patch("trashdig.tools.trace_variable_semantic.get_config", return_value=c):
+    with (
+        patch("trashdig.config.get_config", return_value=c),
+        patch("trashdig.tools.trace_variable_semantic.get_config", return_value=c),
+    ):
         yield c
+
 
 def test_trace_variable_semantic_python_real(tmp_path):
     code = """
@@ -31,8 +34,9 @@ os.system(x)
 
     assert "Line 2: ASSIGNMENT/DEFINITION" in result
     assert "Line 3: USAGE" in result
-    assert "Line 4: SINK ARGUMENT" in result # print(x) -> argument_list
-    assert "Line 5: SINK ARGUMENT" in result # os.system(x) -> argument_list
+    assert "Line 4: SINK ARGUMENT" in result  # print(x) -> argument_list
+    assert "Line 5: SINK ARGUMENT" in result  # os.system(x) -> argument_list
+
 
 def test_trace_variable_semantic_rust_real(tmp_path):
     code = """
@@ -46,6 +50,7 @@ Command::new("sh").spawn(x);
 
     assert "Line 2: ASSIGNMENT/DEFINITION" in result
     assert "Line 3: SINK ARGUMENT" in result
+
 
 def test_trace_variable_semantic_php_real(tmp_path):
     code = """
@@ -65,11 +70,13 @@ system($x);
     assert "Line 3: ASSIGNMENT/DEFINITION" in result
     assert "Line 4: SINK ARGUMENT" in result
 
+
 def test_trace_variable_semantic_not_found(tmp_path):
     f = tmp_path / "sample.py"
     f.write_text("a = 1")
     result = trace_variable_semantic("x", str(f), "python")
     assert "Variable 'x' not found" in result
+
 
 def test_trace_variable_semantic_unsupported():
     result = trace_variable_semantic("x", "test.py", "unsupported")

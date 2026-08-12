@@ -38,9 +38,11 @@ def test_get_scope_info(mock_parser_class, mock_get_lang):
         assert "Scope: target_func" in result
         assert "Parameters: param1" in result
 
+
 def test_get_scope_info_unsupported_lang():
     res = get_scope_info("test.py", 10, "unsupported")
     assert "not supported" in res
+
 
 @patch("trashdig.tools.get_scope_info._get_ts_language", autospec=True)
 @patch("trashdig.tools.get_scope_info.get_language_metadata", autospec=True)
@@ -51,6 +53,7 @@ def test_get_scope_info_error(mock_metadata, mock_ts_lang):
     with patch("builtins.open", side_effect=Exception("Disk error")):
         res = get_scope_info("test.py", 10, "python")
         assert "Error analyzing scope: Disk error" in res
+
 
 @patch("trashdig.tools.get_scope_info._get_ts_language", autospec=True)
 @patch("trashdig.tools.get_scope_info.get_language_metadata", autospec=True)
@@ -95,6 +98,7 @@ def test_get_scope_info_complex_params(mock_parser_make, mock_metadata, mock_ts_
     with patch("builtins.open", MagicMock()):
         res = get_scope_info("test.py", 5, "python")
         assert "Parameters: a, b" in res
+
 
 @patch("trashdig.tools.get_scope_info._get_ts_language", autospec=True)
 @patch("trashdig.tools.get_scope_info.get_language_metadata", autospec=True)

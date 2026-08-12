@@ -45,6 +45,7 @@ def mock_coordinator():
     coord._agent_by_name.return_value = agent
     return coord
 
+
 async def test_callback_on_before_model(mock_coordinator):
     mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
@@ -152,9 +153,7 @@ async def test_callback_on_after_model(mock_coordinator):
     await cb.on_after_model(ctx, resp)
 
     # Check cost tracker update
-    mock_coordinator._cost_tracker.record_usage.assert_called_once_with(
-        "gemini-2.0-flash", 100, 50
-    )
+    mock_coordinator._cost_tracker.record_usage.assert_called_once_with("gemini-2.0-flash", 100, 50)
 
     # Check TUI signaling
     mock_coordinator._on_stats.assert_called_once_with(
@@ -391,6 +390,7 @@ async def test_callback_on_model_error(mock_coordinator):
     # Check error signaling
     mock_coordinator._on_llm_error.assert_called_once()
 
+
 def test_callback_on_before_tool(mock_coordinator):
     mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
@@ -435,7 +435,9 @@ def test_callback_on_after_tool_flags_string_error_convention(mock_coordinator):
     tool_context = MagicMock()
     tool_context.agent_name = "hunter"
 
-    cb.on_after_tool(tool, {"file_path": "missing.py"}, tool_context, "Error reading file missing.py: not found")
+    cb.on_after_tool(
+        tool, {"file_path": "missing.py"}, tool_context, "Error reading file missing.py: not found"
+    )
 
     mock_coordinator.log.assert_called_once()
     logged = mock_coordinator.log.call_args[0][0]
@@ -471,7 +473,9 @@ def test_callback_on_tool_error_logs_and_does_not_swallow(mock_coordinator):
     tool_context = MagicMock()
     tool_context.agent_name = "hunter"
 
-    result = cb.on_tool_error(tool, {"command": "ls"}, tool_context, RuntimeError("docker daemon unreachable"))
+    result = cb.on_tool_error(
+        tool, {"command": "ls"}, tool_context, RuntimeError("docker daemon unreachable")
+    )
 
     assert result is None
     mock_coordinator.log.assert_called_once()
@@ -497,6 +501,7 @@ def test_callback_attach_to(mock_coordinator):
     assert agent.before_agent_callback == cb.on_before_agent
     assert agent.after_agent_callback == cb.on_after_agent
 
+
 def test_callback_agent_lifecycle(mock_coordinator):
     mock_coordinator._active_agents = 0
     cb = TrashDigCallback.get_instance(mock_coordinator)
@@ -512,6 +517,7 @@ def test_callback_agent_lifecycle(mock_coordinator):
 # ---------------------------------------------------------------------------
 # Turn limit tests
 # ---------------------------------------------------------------------------
+
 
 async def test_turn_limit_not_enforced_when_unset(mock_coordinator):
     """No turn limit configured → every call proceeds normally."""
@@ -553,6 +559,7 @@ async def test_turn_limit_allows_up_to_limit(mock_coordinator):
 
 async def test_turn_limit_per_agent_independent(mock_coordinator):
     """Turn counters are tracked independently per agent name."""
+
     def _cfg_for(agent_name):
         return _make_agent_config(max_turns=2)
 
@@ -592,13 +599,13 @@ async def test_reset_turn_counts_clears_state(mock_coordinator):
     req = MagicMock()
     req.contents = []
 
-    assert await cb.on_before_model(ctx, req) is None   # turn 1 — allowed
-    blocked = await cb.on_before_model(ctx, req)        # turn 2 — blocked
+    assert await cb.on_before_model(ctx, req) is None  # turn 1 — allowed
+    blocked = await cb.on_before_model(ctx, req)  # turn 2 — blocked
     assert isinstance(blocked, LlmResponse)
 
     cb.reset_turn_counts()
 
-    assert await cb.on_before_model(ctx, req) is None   # turn 1 again — allowed
+    assert await cb.on_before_model(ctx, req) is None  # turn 1 again — allowed
 
 
 async def test_turn_limit_independent_across_concurrent_invocations(mock_coordinator):

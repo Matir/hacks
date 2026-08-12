@@ -19,9 +19,10 @@ async def web_fetch(url: str) -> str:
         The text content of the page (cleaned of HTML tags).
     """
     try:
-        async with aiohttp.ClientSession() as session, session.get(
-            url, timeout=aiohttp.ClientTimeout(total=10)
-        ) as response:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response,
+        ):
             if response.status != HTTP_OK:
                 return f"Error: Failed to fetch page, status code {response.status}"
 

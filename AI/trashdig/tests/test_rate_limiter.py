@@ -10,7 +10,7 @@ async def test_rpm_limit():
     # Limit to 600 RPM = 10 requests per second.
     # Refill rate is 10 tokens per second.
     limiter = RateLimiter(rpm_limit=600)
-    limiter._rpm_tokens = 1.0 # Start with only 1 token
+    limiter._rpm_tokens = 1.0  # Start with only 1 token
 
     # First request should be immediate, use the 1.0 token
     await limiter.wait_for_request()
@@ -21,6 +21,7 @@ async def test_rpm_limit():
     end = time.monotonic()
 
     assert end - start >= 0.05
+
 
 async def test_tpm_limit():
     # Limit to 6000 TPM = 100 tokens per second.
@@ -39,6 +40,7 @@ async def test_tpm_limit():
 
     assert end - start >= 0.9
 
+
 async def test_no_limit():
     limiter = RateLimiter(rpm_limit=None, tpm_limit=None)
 
@@ -50,10 +52,11 @@ async def test_no_limit():
     # Should be very fast
     assert end - start < 0.1
 
+
 async def test_concurrent_requests():
     # 600 RPM = 10 req/sec.
     limiter = RateLimiter(rpm_limit=600)
-    limiter._rpm_tokens = 1.0 # Only 1 token to start
+    limiter._rpm_tokens = 1.0  # Only 1 token to start
 
     async def make_request():
         await limiter.wait_for_request()
@@ -69,15 +72,16 @@ async def test_concurrent_requests():
 
     assert end - start >= 0.15
 
+
 async def test_low_rpm_limit():
     # 1 RPM = 1 token per 60 seconds.
     limiter = RateLimiter(rpm_limit=1)
-    limiter._rpm_tokens = 0.0 # No tokens left
+    limiter._rpm_tokens = 0.0  # No tokens left
 
     # Should wait for a while. Let's just check if it waits at least 0.2s
     # (since we can't wait 60s in a test).
     # Actually we can mock time or just use a slightly higher limit.
-    limiter = RateLimiter(rpm_limit=6) # 1 token per 10 seconds.
+    limiter = RateLimiter(rpm_limit=6)  # 1 token per 10 seconds.
     limiter._rpm_tokens = 0.0
 
     # We'll use a task and cancel it if it takes too long,
@@ -86,14 +90,15 @@ async def test_low_rpm_limit():
         async with asyncio.timeout(0.2):
             await limiter.wait_for_request()
     except TimeoutError:
-        pass # Expected to timeout
+        pass  # Expected to timeout
     else:
         pytest.fail("Should have timed out waiting for RPM token")
+
 
 async def test_tpm_negative_tokens():
     # 6000 TPM = 100 tokens per second.
     limiter = RateLimiter(tpm_limit=6000)
-    limiter._tpm_tokens = -50.0 # Already 50 tokens in debt
+    limiter._tpm_tokens = -50.0  # Already 50 tokens in debt
 
     start = time.monotonic()
     # Should wait 0.5s to reach 0 tokens.

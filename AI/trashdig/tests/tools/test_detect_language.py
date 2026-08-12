@@ -6,6 +6,7 @@ def test_detect_language_file(temp_project):
     assert detect_language(str(temp_project / "web" / "app.js")) == "javascript"
     assert detect_language(str(temp_project / "README.md")) == "markdown"
 
+
 def test_detect_language_directory(temp_project):
     res = detect_language(str(temp_project))
     assert "python: 60.0% (3 files)" in res

@@ -142,33 +142,35 @@ _PROVIDER_STUB = {"google_search_tool": None, "generate_content_config": None}
 # (e.g. ADK's load_artifacts_tool) are intentionally ignored.
 # ---------------------------------------------------------------------------
 
-ALL_TOOLS: frozenset[str] = frozenset({
-    "ask_user",
-    "bash_tool",
-    "container_bash_tool",
-    "detect_frameworks",
-    "detect_language",
-    "exit_loop",
-    "find_files",
-    "find_references",
-    "get_ast_summary",
-    "get_next_hypothesis",
-    "get_project_structure",
-    "get_scope_info",
-    "get_symbol_definition",
-    "list_files",
-    "query_cwe_database",
-    "query_vulndb",
-    "read_file",
-    "ripgrep_search",
-    "save_findings",
-    "save_hypotheses",
-    "semgrep_scan",
-    "trace_taint_cross_file",
-    "trace_variable_semantic",
-    "update_hypothesis_status",
-    "web_fetch",
-})
+ALL_TOOLS: frozenset[str] = frozenset(
+    {
+        "ask_user",
+        "bash_tool",
+        "container_bash_tool",
+        "detect_frameworks",
+        "detect_language",
+        "exit_loop",
+        "find_files",
+        "find_references",
+        "get_ast_summary",
+        "get_next_hypothesis",
+        "get_project_structure",
+        "get_scope_info",
+        "get_symbol_definition",
+        "list_files",
+        "query_cwe_database",
+        "query_vulndb",
+        "read_file",
+        "ripgrep_search",
+        "save_findings",
+        "save_hypotheses",
+        "semgrep_scan",
+        "trace_taint_cross_file",
+        "trace_variable_semantic",
+        "update_hypothesis_status",
+        "web_fetch",
+    }
+)
 
 
 def _get_tool_name(tool: object) -> str | None:
@@ -258,6 +260,7 @@ def _capture_tools(module_path: str, create_fn: Callable, **kwargs: object) -> l
 # compatible with the protocol. The mixin itself is never instantiated directly.
 # ---------------------------------------------------------------------------
 
+
 class _TestCaseProto(Protocol):
     """The unittest.TestCase methods that AgentToolsMixin relies on."""
 
@@ -327,19 +330,18 @@ class AgentToolsMixin:
             with self.subTest(tool=name):
                 if _is_trashdig_tool(tool_obj) and name not in ALL_TOOLS:
                     self.fail(
-                        f"{name!r} is from the trashdig package but is not "
-                        f"registered in ALL_TOOLS"
+                        f"{name!r} is from the trashdig package but is not registered in ALL_TOOLS"
                     )
                 if name in ALL_TOOLS and name not in expected:
                     self.fail(
-                        f"{name!r} is attached to this agent but is not "
-                        f"listed in EXPECTED_TOOLS"
+                        f"{name!r} is attached to this agent but is not listed in EXPECTED_TOOLS"
                     )
 
 
 # ---------------------------------------------------------------------------
 # Per-agent test classes
 # ---------------------------------------------------------------------------
+
 
 class TestCodeInvestigatorTools(AgentToolsMixin, unittest.TestCase):
     """CodeInvestigator should have its technical investigation toolset."""
@@ -408,7 +410,6 @@ class TestCodebaseMapperTools(AgentToolsMixin, unittest.TestCase):
     ]
 
 
-
 class TestHunterTools(AgentToolsMixin, unittest.TestCase):
     """Hunter should have every tool listed in README under H column."""
 
@@ -456,7 +457,6 @@ class TestSkepticTools(AgentToolsMixin, unittest.TestCase):
         "read_file",
         "ripgrep_search",
         "web_fetch",
-
     ]
 
 
@@ -488,6 +488,7 @@ class TestSummarizerTools(AgentToolsMixin, unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Meta-tests: registry and coverage completeness
 # ---------------------------------------------------------------------------
+
 
 class TestAllToolsRegistered(unittest.TestCase):
     """Verify ALL_TOOLS stays in sync with the trashdig.tools package.
@@ -541,7 +542,7 @@ class TestAllAgentsHaveToolTests(unittest.TestCase):
     @staticmethod
     def _factory_to_test_class_name(factory_name: str) -> str:
         """Converts a create_*_agent name to the expected Test*Tools class name."""
-        middle = factory_name[len("create_"):-len("_agent")]
+        middle = factory_name[len("create_") : -len("_agent")]
         return "Test" + "".join(w.title() for w in middle.split("_")) + "Tools"
 
     def test_all_agent_factories_have_tool_tests(self) -> None:
@@ -554,15 +555,13 @@ class TestAllAgentsHaveToolTests(unittest.TestCase):
                 test_cls = getattr(this_module, expected_cls_name, None)
                 self.assertIsNotNone(
                     test_cls,
-                    f"No test class {expected_cls_name!r} found for {attr!r} "
-                    f"in {full_name}",
+                    f"No test class {expected_cls_name!r} found for {attr!r} in {full_name}",
                 )
                 self.assertTrue(
-                    isinstance(test_cls, type)
-                    and issubclass(test_cls, AgentToolsMixin),
-                    f"{expected_cls_name!r} exists but does not inherit from "
-                    f"AgentToolsMixin",
+                    isinstance(test_cls, type) and issubclass(test_cls, AgentToolsMixin),
+                    f"{expected_cls_name!r} exists but does not inherit from AgentToolsMixin",
                 )
+
 
 class TestCriticTools(AgentToolsMixin, unittest.TestCase):
     """Critic should have tools listed in README under C column."""

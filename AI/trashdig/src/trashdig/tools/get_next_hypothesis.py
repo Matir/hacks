@@ -22,7 +22,7 @@ def get_next_hypothesis(project_path: str, db_path: str | None = None) -> str:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM hypotheses WHERE project_path = ? AND status = 'pending' ORDER BY confidence DESC LIMIT 1",
-                (project_path,)
+                (project_path,),
             ).fetchone()
 
         if row:

@@ -27,7 +27,9 @@ class FindingsScreen(Screen):
         """Composes the findings browser layout."""
         yield Header()
         with Vertical():
-            yield Input(placeholder="Search findings (title, file, description...)", id="search_findings")
+            yield Input(
+                placeholder="Search findings (title, file, description...)", id="search_findings"
+            )
             yield DataTable(id="findings_table")
         yield Footer()
 
@@ -64,7 +66,7 @@ class FindingsScreen(Screen):
                 f"[bold]{f.severity}[/bold]",
                 f.file_path,
                 f.verification_status or "Unverified",
-                key=str(i-1) # Store index for selection
+                key=str(i - 1),  # Store index for selection
             )
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -85,7 +87,7 @@ class FindingsScreen(Screen):
             # but we can use the row index if we didn't filter, or store finding in row data.
             # DataTable.get_row returns the list of values.
             # Better approach: find the finding by the key we set.
-            idx = int(table.cursor_row) # This works if we re-sync table and list
+            idx = int(table.cursor_row)  # This works if we re-sync table and list
 
             app = cast("TrashDigApp", self.app)
             # Since we filter, we need to map back to the original list.

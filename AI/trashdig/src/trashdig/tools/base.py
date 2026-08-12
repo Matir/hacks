@@ -68,9 +68,7 @@ def _run_sandboxed(
             sandbox.env if hasattr(sandbox, "env") else {},
         )
     except RuntimeError as e:
-        return subprocess.CompletedProcess(
-            args=command, returncode=1, stdout="", stderr=str(e)
-        )
+        return subprocess.CompletedProcess(args=command, returncode=1, stdout="", stderr=str(e))
 
     try:
         return sandbox.run(command, timeout=timeout)
@@ -79,26 +77,24 @@ def _run_sandboxed(
             args=command,
             returncode=127,
             stdout="",
-            stderr=f"Error: Command '{command[0]}' not found in PATH."
+            stderr=f"Error: Command '{command[0]}' not found in PATH.",
         )
     except subprocess.TimeoutExpired as e:
         return subprocess.CompletedProcess(
             args=command,
             returncode=124,  # Standard timeout exit code
             stdout=e.stdout.decode() if e.stdout else "",
-            stderr=e.stderr.decode() if e.stderr else "Command timed out"
+            stderr=e.stderr.decode() if e.stderr else "Command timed out",
         )
     except Exception as e:
         return subprocess.CompletedProcess(
-            args=command,
-            returncode=1,
-            stdout="",
-            stderr=f"Error running sandboxed command: {e}"
+            args=command, returncode=1, stdout="", stderr=f"Error running sandboxed command: {e}"
         )
 
 
 class _ArtifactProvider:
     """Class-level provider for the global artifact service."""
+
     instance: BaseArtifactService | None = None
 
 
@@ -191,9 +187,7 @@ def artifact_tool(max_chars: int = 5000) -> Callable:
                     result = s
 
                 if ctx and hasattr(ctx, "save_artifact"):
-                    return await _process_tool_result_async(
-                        func.__name__, result, max_chars, ctx
-                    )
+                    return await _process_tool_result_async(func.__name__, result, max_chars, ctx)
                 return _process_tool_result_sync(func.__name__, result, max_chars)
 
             return async_wrapper
@@ -212,6 +206,3 @@ def artifact_tool(max_chars: int = 5000) -> Callable:
             return sync_wrapper
 
     return decorator
-
-
-

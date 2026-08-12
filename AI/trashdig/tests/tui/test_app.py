@@ -2,7 +2,7 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-from textual.widgets import RichLog, Static
+from textual.widgets import Input, RichLog, Static
 
 from trashdig.config import Config
 from trashdig.tui.app import REPLPane, TrashDigApp
@@ -18,6 +18,7 @@ def mock_config(tmp_path):
         c.resolve_data_path.side_effect = lambda f: str(tmp_path / f)
         mock.return_value = c
         yield c
+
 
 @pytest.fixture
 def mock_coordinator():
@@ -35,12 +36,14 @@ def mock_coordinator():
         mock_inst.session_id = "test-session"
         yield mock_inst
 
+
 async def test_app_initialization(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.query_one("#status_body", Static)
         assert app.query_one(RichLog)
+
 
 async def test_app_help_command(mock_config, mock_coordinator):
     app = TrashDigApp()
@@ -54,6 +57,7 @@ async def test_app_help_command(mock_config, mock_coordinator):
         await pilot.pause()
         assert repl
 
+
 async def test_app_quit_binding(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:
@@ -61,12 +65,14 @@ async def test_app_quit_binding(mock_config, mock_coordinator):
         await pilot.press("q")
         assert mock_coordinator.db.close_scan_session.called
 
+
 async def test_app_refresh_status(mock_config, mock_coordinator):
     app = TrashDigApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         app.refresh_status()
         assert app.query_one("#status_body", Static)
+
 
 async def test_app_pause_command(mock_config, mock_coordinator):
     app = TrashDigApp()
@@ -205,3 +211,89 @@ async def test_concurrent_verification_stays_busy_until_all_finish(mock_config, 
         release_first.set()
         await slow_task
         assert app._phase == "Idle"
+
+
+async def test_app_repl_input_submitted(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+
+        log = repl.query_one(RichLog)
+
+        inp = repl.query_one(Input)
+        inp.value = "help"
+        await inp.action_submit()
+        await pilot.pause()
+        assert any("Available commands" in line.text for line in log.lines[-5:])
+
+
+async def test_app_commands_verify(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = repl.query_one(RichLog)
+
+        mock_run = MagicMock()
+        with patch.object(app, "run_verification", new=mock_run):
+            # Test verify with no args (submits all)
+            mock_coordinator.findings = [MagicMock()]
+            app.run_worker = MagicMock()
+            await repl.process_command("verify", log)
+            mock_run.assert_called_once()
+
+            # Test verify with idx 1
+            mock_run.reset_mock()
+            await repl.process_command("verify 1", log)
+            mock_run.assert_called_once()
+
+            # Test verify with invalid idx
+            mock_run.reset_mock()
+            await repl.process_command("verify 999", log)
+            mock_run.assert_not_called()
+
+            # Test empty findings
+            mock_coordinator.findings = []
+            await repl.process_command("verify", log)
+            mock_run.assert_not_called()
+
+
+async def test_app_commands_star(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    app._file_log = MagicMock()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = repl.query_one(RichLog)
+        app.refresh_status = MagicMock()
+
+        await repl.process_command("star path1", log)
+        assert "path1" in app.prioritized_targets
+
+        await repl.process_command("star path1", log)
+        # Verify it doesn't double add
+        assert app.prioritized_targets.count("path1") == 1
+
+
+async def test_app_commands_scan(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        repl = app.query_one(REPLPane)
+        log = repl.query_one(RichLog)
+        mock_run = MagicMock()
+        with patch.object(app, "run_full_scan_pipeline", new=mock_run):
+            app.run_worker = MagicMock()
+
+            await repl.process_command("scan something/", log)
+            mock_run.assert_called_once()
+
+
+async def test_app_log_message_extra(mock_config, mock_coordinator):
+    app = TrashDigApp()
+    app._file_log = MagicMock()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.log_message("info", "Hello from Test")
+        app._file_log.info.assert_called_with("Hello from Test")

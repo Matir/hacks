@@ -8,7 +8,12 @@ from .base import artifact_tool
 
 @artifact_tool(max_chars=4000)
 @landlock_tool()
-def read_file(file_path: str, first_line: int | None = None, last_line: int | None = None, tool_context: Any = None) -> str:
+def read_file(
+    file_path: str,
+    first_line: int | None = None,
+    last_line: int | None = None,
+    tool_context: Any = None,
+) -> str:
     """Reads the content of a file, optionally restricted to a range of lines.
 
     Args:

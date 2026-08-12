@@ -16,11 +16,13 @@ def mock_pricing():
         mock_url.return_value = mock_response
         yield mock_url
 
+
 def test_cost_tracker_initial_cost(mock_pricing):
     tracker = CostTracker()
     assert tracker.get_total_cost() == 0.0
     assert tracker.total_input_tokens == 0
     assert tracker.total_output_tokens == 0
+
 
 def test_cost_tracker_record_usage_flash(mock_pricing):
     tracker = CostTracker()
@@ -32,6 +34,7 @@ def test_cost_tracker_record_usage_flash(mock_pricing):
     assert tracker.total_input_tokens == 1_000_000
     assert tracker.total_output_tokens == 1_000_000
 
+
 def test_cost_tracker_record_usage_pro(mock_pricing):
     tracker = CostTracker()
     # gemini-2.0-pro-exp: $1.25/1M input, $5.00/1M output
@@ -40,13 +43,15 @@ def test_cost_tracker_record_usage_pro(mock_pricing):
     assert tracker.total_input_tokens == 1_000_000
     assert tracker.total_output_tokens == 1_000_000
 
+
 def test_cost_tracker_record_usage_multiple(mock_pricing):
     tracker = CostTracker()
-    tracker.record_usage("gemini-2.0-flash", 1_000_000, 0) # $0.15
-    tracker.record_usage("gemini-2.0-pro-exp", 0, 1_000_000) # $5.00
+    tracker.record_usage("gemini-2.0-flash", 1_000_000, 0)  # $0.15
+    tracker.record_usage("gemini-2.0-pro-exp", 0, 1_000_000)  # $5.00
     assert tracker.get_total_cost() == pytest.approx(5.15)
     assert tracker.total_input_tokens == 1_000_000
     assert tracker.total_output_tokens == 1_000_000
+
 
 def test_cost_tracker_unknown_model(mock_pricing):
     tracker = CostTracker()
@@ -56,6 +61,7 @@ def test_cost_tracker_unknown_model(mock_pricing):
     assert tracker.total_input_tokens == 1_000_000
     assert tracker.total_output_tokens == 1_000_000
 
+
 def test_cost_tracker_prefix_match(mock_pricing):
     # gemini-2.0-flash-001 should match gemini-2.0-flash in prefix logic
     tracker = CostTracker()
@@ -63,15 +69,18 @@ def test_cost_tracker_prefix_match(mock_pricing):
     tracker.record_usage("gemini-2.0-flash-001", 1_000_000, 1_000_000)
     assert tracker.get_total_cost() == pytest.approx(0.75)
 
+
 def test_cost_tracker_prefix_match_prefers_longest():
     """Regression test: an unlisted variant must match the longest (most
     specific) rate-table prefix, not whichever key the dict happens to
     iterate to first.
     """
-    tracker = CostTracker(rates={
-        "gemini-2.0-flash": {"input": 0.15, "output": 0.60},
-        "gemini-2.0-flash-lite": {"input": 0.01, "output": 0.02},
-    })
+    tracker = CostTracker(
+        rates={
+            "gemini-2.0-flash": {"input": 0.15, "output": 0.60},
+            "gemini-2.0-flash-lite": {"input": 0.01, "output": 0.02},
+        }
+    )
     # "gemini-2.0-flash-lite-001" is a prefix match for both keys; it must be
     # priced using the more specific "-lite" rate, not the shorter one.
     tracker.record_usage("gemini-2.0-flash-lite-001", 1_000_000, 1_000_000)
@@ -93,9 +102,7 @@ def test_cost_tracker_default_rates_prefix_match_prefers_longest():
 
 
 def test_cost_tracker_custom_rates(mock_pricing):
-    custom_rates = {
-        "custom-model": {"input": 1.0, "output": 2.0}
-    }
+    custom_rates = {"custom-model": {"input": 1.0, "output": 2.0}}
     tracker = CostTracker(rates=custom_rates)
     tracker.record_usage("custom-model", 1_000_000, 1_000_000)
     assert tracker.get_total_cost() == pytest.approx(3.0)

@@ -77,7 +77,9 @@ class CostTracker:
         # Fallback to hardcoded defaults
         logger.warning("Using hardcoded default pricing.")
 
-    def _get_cost_from_info(self, info: dict[str, Any], input_tokens: int, output_tokens: int) -> float:
+    def _get_cost_from_info(
+        self, info: dict[str, Any], input_tokens: int, output_tokens: int
+    ) -> float:
         """Calculates cost from a rate info dictionary.
 
         Handles both LiteLLM format and legacy DEFAULT_RATES format.

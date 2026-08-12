@@ -132,11 +132,13 @@ class TestToolTimeoutError:
 class TestInitSandboxMpContext:
     def test_updates_context(self):
         from trashdig.sandbox.landlock_tool import SandboxProvider  # noqa: PLC0415
+
         init_sandbox_mp_context("spawn")
         assert SandboxProvider.mp_context.get_start_method() == "spawn"
 
     def test_updates_sys_path_snapshot(self):
         from trashdig.sandbox.landlock_tool import SandboxProvider  # noqa: PLC0415
+
         init_sandbox_mp_context("spawn")
         assert SandboxProvider.sys_path_snapshot == list(sys.path)
 

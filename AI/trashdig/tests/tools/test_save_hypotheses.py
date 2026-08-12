@@ -17,7 +17,7 @@ def mock_db():
 def test_save_hypotheses(mock_db):
     hypos = [
         {"target": "a.py", "description": "desc1", "confidence": 0.9},
-        {"target": "b.py", "description": "desc2"}
+        {"target": "b.py", "description": "desc2"},
     ]
     res = save_hypotheses(json.dumps(hypos), "/tmp/proj")
     assert "Saved 2 hypotheses" in res

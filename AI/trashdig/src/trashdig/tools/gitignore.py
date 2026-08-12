@@ -135,7 +135,9 @@ class HierarchicalGitIgnore:
             else:
                 rel_from_git = os.path.relpath(rel_path, git_dir).replace(os.sep, "/")
 
-            check_target = f"{rel_from_git}/" if is_dir and not rel_from_git.endswith("/") else rel_from_git
+            check_target = (
+                f"{rel_from_git}/" if is_dir and not rel_from_git.endswith("/") else rel_from_git
+            )
             res = spec.check_file(check_target)
             if res.include is True:
                 status = True

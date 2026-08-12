@@ -182,6 +182,7 @@ def main() -> None:  # noqa: PLR0915
         console.print("[bold blue]TrashDig:[/bold blue] running in batch mode...")
 
         from trashdig.agents.utils.helpers import print_model_info  # noqa: PLC0415
+
         print_model_info(config)
 
         coordinator = Coordinator(

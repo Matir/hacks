@@ -7,22 +7,28 @@ from trashdig.config import AgentConfig
 
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
 async def test_hunter_run(mock_run):
-    text_response = json.dumps({
-        "findings": [{
-            "title": "SQL Injection",
-            "description": "desc",
-            "severity": "High",
-            "vulnerable_code": "code",
-            "impact": "impact",
-            "exploitation_path": "path",
-            "remediation": "rem",
-        }],
-        "hypotheses": [{
-            "target": "other.py",
-            "description": "need to trace x",
-            "confidence": 0.8,
-        }],
-    })
+    text_response = json.dumps(
+        {
+            "findings": [
+                {
+                    "title": "SQL Injection",
+                    "description": "desc",
+                    "severity": "High",
+                    "vulnerable_code": "code",
+                    "impact": "impact",
+                    "exploitation_path": "path",
+                    "remediation": "rem",
+                }
+            ],
+            "hypotheses": [
+                {
+                    "target": "other.py",
+                    "description": "need to trace x",
+                    "confidence": 0.8,
+                }
+            ],
+        }
+    )
 
     mock_run.return_value = text_response
 

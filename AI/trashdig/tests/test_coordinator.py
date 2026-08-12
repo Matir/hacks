@@ -24,9 +24,11 @@ def mock_config(tmp_path):
     config.db_path = str(tmp_path / "test.db")
     return config
 
+
 def create_mock_agent(name):
     # LlmAgent is a Pydantic model, initialize it properly
     return LlmAgent(name=name, model="gemini-2.0-flash", instruction="test", tools=[])
+
 
 @patch("trashdig.agents.coordinator.create_code_investigator_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
@@ -35,7 +37,16 @@ def create_mock_agent(name):
 @patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
-def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_create_investigator, mock_config):
+def test_coordinator_init(
+    mock_load,
+    mock_create_val,
+    mock_create_skep,
+    mock_create_hunt,
+    mock_create_web,
+    mock_create_stack,
+    mock_create_investigator,
+    mock_config,
+):
     mock_create_investigator.return_value = create_mock_agent("code_investigator")
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -55,6 +66,7 @@ def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_cre
 
     assert isinstance(coord.session_id, str)
 
+
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
@@ -62,7 +74,16 @@ def test_coordinator_init(mock_load, mock_create_val, mock_create_skep, mock_cre
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
-async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+async def test_coordinator_run_recon(
+    mock_run_agent,
+    mock_load,
+    mock_create_val,
+    mock_create_skep,
+    mock_create_hunt,
+    mock_create_web,
+    mock_create_stack,
+    mock_config,
+):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
     mock_create_hunt.return_value = create_mock_agent("hunter")
@@ -70,10 +91,12 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
     mock_create_val.return_value = create_mock_agent("validator")
 
     # Mock run_agent to return a JSON string
-    mock_run_agent.return_value = json.dumps({
-        "mapping": {"file.py": {"summary": "test"}},
-        "hypotheses": [{"target": "file.py", "description": "test"}]
-    })
+    mock_run_agent.return_value = json.dumps(
+        {
+            "mapping": {"file.py": {"summary": "test"}},
+            "hypotheses": [{"target": "file.py", "description": "test"}],
+        }
+    )
 
     coord = Coordinator(mock_config)
     # Simulate an agent tool call saving results
@@ -86,6 +109,7 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
     assert "mapping" in res["file.py"]
     assert mock_run_agent.called
 
+
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True)
@@ -93,10 +117,21 @@ async def test_coordinator_run_recon(mock_run_agent, mock_load, mock_create_val,
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
-@patch("trashdig.agents.coordinator.get_project_structure", autospec=True, return_value=["a.py", "b.py"])
+@patch(
+    "trashdig.agents.coordinator.get_project_structure",
+    autospec=True,
+    return_value=["a.py", "b.py"],
+)
 async def test_coordinator_run_recon_parse_failure_fallback(
-    mock_get_proj, mock_run_agent, mock_load, mock_create_val, mock_create_skep,
-    mock_create_hunt, mock_create_web, mock_create_stack, mock_config
+    mock_get_proj,
+    mock_run_agent,
+    mock_load,
+    mock_create_val,
+    mock_create_skep,
+    mock_create_hunt,
+    mock_create_web,
+    mock_create_stack,
+    mock_config,
 ):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
@@ -135,29 +170,46 @@ async def test_coordinator_run_recon_parse_failure_fallback(
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
-async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+async def test_coordinator_run_hunter(
+    mock_run_agent,
+    mock_load,
+    mock_create_val,
+    mock_create_skep,
+    mock_create_hunt,
+    mock_create_web,
+    mock_create_stack,
+    mock_config,
+):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
     mock_create_hunt.return_value = create_mock_agent("hunter")
     mock_create_skep.return_value = create_mock_agent("skeptic")
     mock_create_val.return_value = create_mock_agent("validator")
 
-    mock_run_agent.return_value = json.dumps({
-        "findings": [{"title": "SQLi", "severity": "High", "description": "desc"}],
-        "hypotheses": []
-    })
+    mock_run_agent.return_value = json.dumps(
+        {
+            "findings": [{"title": "SQLi", "severity": "High", "description": "desc"}],
+            "hypotheses": [],
+        }
+    )
 
     coord = Coordinator(mock_config)
     finding = Finding(
-        title="SQLi", description="desc", severity="High",
-        vulnerable_code="code", file_path="test.py",
-        impact="impact", exploitation_path="path", remediation="rem"
+        title="SQLi",
+        description="desc",
+        severity="High",
+        vulnerable_code="code",
+        file_path="test.py",
+        impact="impact",
+        exploitation_path="path",
+        remediation="rem",
     )
     coord.findings = [finding]
 
     findings = await coord.run_hunter(["test.py"])
     assert len(findings) == 1
     assert findings[0].title == "SQLi"
+
 
 @patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True)
 @patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True)
@@ -166,7 +218,16 @@ async def test_coordinator_run_hunter(mock_run_agent, mock_load, mock_create_val
 @patch("trashdig.agents.coordinator.create_validator_agent", autospec=True)
 @patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt")
 @patch("trashdig.agents.coordinator.run_agent", autospec=True)
-async def test_coordinator_verify_finding(mock_run_agent, mock_load, mock_create_val, mock_create_skep, mock_create_hunt, mock_create_web, mock_create_stack, mock_config):
+async def test_coordinator_verify_finding(
+    mock_run_agent,
+    mock_load,
+    mock_create_val,
+    mock_create_skep,
+    mock_create_hunt,
+    mock_create_web,
+    mock_create_stack,
+    mock_config,
+):
     mock_create_stack.return_value = create_mock_agent("stack_scout")
     mock_create_web.return_value = create_mock_agent("web_route_mapper")
     mock_create_hunt.return_value = create_mock_agent("hunter")
@@ -176,15 +237,20 @@ async def test_coordinator_verify_finding(mock_run_agent, mock_load, mock_create
     # First call for skeptic (is_valid=True), second for validator
     mock_run_agent.side_effect = [
         json.dumps({"is_valid": True}),
-        json.dumps({"status": "Verified", "poc_code": "poc code"})
+        json.dumps({"status": "Verified", "poc_code": "poc code"}),
     ]
 
     coord = Coordinator(mock_config)
 
     finding = Finding(
-        title="SQLi", description="desc", severity="High",
-        vulnerable_code="code", file_path="test.py",
-        impact="impact", exploitation_path="path", remediation="rem"
+        title="SQLi",
+        description="desc",
+        severity="High",
+        vulnerable_code="code",
+        file_path="test.py",
+        impact="impact",
+        exploitation_path="path",
+        remediation="rem",
     )
     finding.verification_status = "Verified"
     finding.poc = "poc code"
@@ -193,17 +259,39 @@ async def test_coordinator_verify_finding(mock_run_agent, mock_load, mock_create
     assert res["status"] == "Verified"
     assert res["poc_code"] == "poc code"
 
+
 def test_coordinator_state_tools(mock_config, tmp_path):
     db_path = str(tmp_path / "test_trashdig.db")
     db = get_database(db_path)
-    with patch("trashdig.agents.coordinator.create_stack_scout_agent", autospec=True, return_value=create_mock_agent("s")), \
-         patch("trashdig.agents.coordinator.create_web_route_mapper_agent", autospec=True, return_value=create_mock_agent("w")), \
-         patch("trashdig.agents.coordinator.create_hunter_agent", autospec=True, return_value=create_mock_agent("h")), \
-         patch("trashdig.agents.coordinator.create_skeptic_agent", autospec=True, return_value=create_mock_agent("sk")), \
-         patch("trashdig.agents.coordinator.create_validator_agent", autospec=True, return_value=create_mock_agent("v")), \
-         patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt"), \
-         patch("trashdig.agents.coordinator.get_database", autospec=True, return_value=db):
-
+    with (
+        patch(
+            "trashdig.agents.coordinator.create_stack_scout_agent",
+            autospec=True,
+            return_value=create_mock_agent("s"),
+        ),
+        patch(
+            "trashdig.agents.coordinator.create_web_route_mapper_agent",
+            autospec=True,
+            return_value=create_mock_agent("w"),
+        ),
+        patch(
+            "trashdig.agents.coordinator.create_hunter_agent",
+            autospec=True,
+            return_value=create_mock_agent("h"),
+        ),
+        patch(
+            "trashdig.agents.coordinator.create_skeptic_agent",
+            autospec=True,
+            return_value=create_mock_agent("sk"),
+        ),
+        patch(
+            "trashdig.agents.coordinator.create_validator_agent",
+            autospec=True,
+            return_value=create_mock_agent("v"),
+        ),
+        patch("trashdig.agents.utils.load_prompt", autospec=True, return_value="test prompt"),
+        patch("trashdig.agents.coordinator.get_database", autospec=True, return_value=db),
+    ):
         mock_config.db_path = db_path
         coord = Coordinator(mock_config)
 
@@ -215,9 +303,14 @@ def test_coordinator_state_tools(mock_config, tmp_path):
 
         # Test _save_finding
         finding_data = {
-            "title": "XSS", "description": "desc", "severity": "High",
-            "vulnerable_code": "code", "file_path": "a.py",
-            "impact": "i", "exploitation_path": "p", "remediation": "r"
+            "title": "XSS",
+            "description": "desc",
+            "severity": "High",
+            "vulnerable_code": "code",
+            "file_path": "a.py",
+            "impact": "i",
+            "exploitation_path": "p",
+            "remediation": "r",
         }
         msg = coord._save_finding(finding_data)
         assert "saved" in msg

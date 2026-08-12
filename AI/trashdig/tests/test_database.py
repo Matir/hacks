@@ -14,6 +14,7 @@ from trashdig.services.database import _args_hash, get_database
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_db(tmp_path: str) -> Any:
     return get_database(db_path=os.path.join(tmp_path, ".trashdig", "trashdig.db"))
 
@@ -47,6 +48,7 @@ def _make_hypothesis(target: str = "app/db.py", desc: str = "Trace user_id") -> 
 # _args_hash
 # ---------------------------------------------------------------------------
 
+
 def test_args_hash_deterministic():
     args = {"pattern": "SELECT", "path": "."}
     assert _args_hash(args) == _args_hash(args)
@@ -66,6 +68,7 @@ def test_args_hash_differs_for_different_args():
 # Initialisation
 # ---------------------------------------------------------------------------
 
+
 def test_db_creates_directory_and_file():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = os.path.join(tmp, "nested", "dir", "trashdig.db")
@@ -76,6 +79,7 @@ def test_db_creates_directory_and_file():
 # ---------------------------------------------------------------------------
 # Project profiles
 # ---------------------------------------------------------------------------
+
 
 def test_save_and_get_project_profile():
     with tempfile.TemporaryDirectory() as tmp:
@@ -111,6 +115,7 @@ def test_save_project_profile_upsert():
 # ---------------------------------------------------------------------------
 # Findings
 # ---------------------------------------------------------------------------
+
 
 def test_save_and_get_finding():
     with tempfile.TemporaryDirectory() as tmp:
@@ -164,6 +169,7 @@ def test_findings_scoped_by_project():
 # ---------------------------------------------------------------------------
 # Hypotheses
 # ---------------------------------------------------------------------------
+
 
 def test_save_and_get_hypothesis():
     with tempfile.TemporaryDirectory() as tmp:
@@ -262,6 +268,7 @@ def test_update_hypothesis_confidence_returns_false_for_unknown_task_id():
 # Symbol map
 # ---------------------------------------------------------------------------
 
+
 def test_save_and_get_symbol():
     with tempfile.TemporaryDirectory() as tmp:
         db = _make_db(tmp)
@@ -302,6 +309,7 @@ def test_save_symbol_multiple_locations():
 # ---------------------------------------------------------------------------
 # Tool output cache
 # ---------------------------------------------------------------------------
+
 
 def test_cache_and_retrieve_tool_output():
     with tempfile.TemporaryDirectory() as tmp:
@@ -345,6 +353,7 @@ def test_cache_scoped_by_project():
 # Conversations
 # ---------------------------------------------------------------------------
 
+
 def test_log_conversation():
     with tempfile.TemporaryDirectory() as tmp:
         db = _make_db(tmp)
@@ -359,7 +368,9 @@ def test_log_conversation():
         )
 
         with db._connect() as conn:
-            row = conn.execute("SELECT * FROM conversations WHERE agent_name = 'test_agent'").fetchone()
+            row = conn.execute(
+                "SELECT * FROM conversations WHERE agent_name = 'test_agent'"
+            ).fetchone()
             assert row is not None
             assert row["project_path"] == "/proj"
             assert row["prompt"] == "test prompt"

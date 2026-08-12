@@ -3,20 +3,22 @@ from abc import ABC, abstractmethod
 
 # Well-known credential/agent-socket variable names to strip outright, beyond
 # what the substring patterns below already catch.
-ENV_DENYLIST_EXACT: frozenset[str] = frozenset({
-    "SSH_AUTH_SOCK",
-    "SSH_AGENT_PID",
-    "GPG_AGENT_INFO",
-    "GPG_TTY",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-    "AWS_PROFILE",
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "KUBECONFIG",
-    "DOCKER_AUTH_CONFIG",
-    "NETRC",
-})
+ENV_DENYLIST_EXACT: frozenset[str] = frozenset(
+    {
+        "SSH_AUTH_SOCK",
+        "SSH_AGENT_PID",
+        "GPG_AGENT_INFO",
+        "GPG_TTY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "KUBECONFIG",
+        "DOCKER_AUTH_CONFIG",
+        "NETRC",
+    }
+)
 
 # Case-insensitive substrings that mark a variable as credential-shaped.
 # Catches provider-specific vars (GEMINI_API_KEY, ANTHROPIC_API_KEY,

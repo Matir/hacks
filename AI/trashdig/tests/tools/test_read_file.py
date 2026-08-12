@@ -10,9 +10,11 @@ def test_read_file(tmp_path, mock_cfg):
     assert read_file(str(f), last_line=2) == "hello world\nline2\n"
     assert read_file(str(f), first_line=2, last_line=2) == "line2\n"
 
+
 def test_read_file_error(mock_cfg):
     res = read_file("/nonexistent/file")
     assert "Error reading file" in res
+
 
 def test_read_file_outside_workspace(tmp_path, mock_cfg):
     mock_cfg.return_value.data["workspace_root"] = str(tmp_path / "workspace")

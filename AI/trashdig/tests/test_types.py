@@ -9,12 +9,13 @@ def test_task_creation():
     assert isinstance(task.task_id, str)
     assert task.context == {}
 
+
 def test_hypothesis_creation():
     hypo = Hypothesis(
         type=TaskType.HUNT,
         target="src/api.py",
         description="SQL Injection in login",
-        confidence=0.8
+        confidence=0.8,
     )
     assert hypo.type == TaskType.HUNT
     assert hypo.target == "src/api.py"

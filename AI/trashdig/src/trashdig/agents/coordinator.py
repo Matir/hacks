@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 def _sanitize_session_id(value: str) -> str:
-    """Strips path separators so a value is safe to embed in a session_id.
+    r"""Strips path separators so a value is safe to embed in a session_id.
 
     ADK's FileArtifactService rejects any session_id containing "/" or "\\",
     but callers build session ids from file paths and finding titles that
@@ -118,6 +118,7 @@ class Coordinator(LlmAgent):
 
         ask_tool = None
         if on_ask:
+
             async def _locked_ask(question: str) -> str:
                 async with self._ask_lock:
                     return await on_ask(question)
@@ -186,10 +187,18 @@ class Coordinator(LlmAgent):
             model=config.get_agent_config("hunter").model,
             instruction=load_prompt("hunter_orchestrator.md"),
             tools=[
-                FunctionTool(functools.partial(get_next_hypothesis, project_path=project_path, db_path=db_path)),
+                FunctionTool(
+                    functools.partial(
+                        get_next_hypothesis, project_path=project_path, db_path=db_path
+                    )
+                ),
                 FunctionTool(functools.partial(update_hypothesis_status, db_path=db_path)),
-                FunctionTool(functools.partial(save_findings, project_path=project_path, db_path=db_path)),
-                FunctionTool(functools.partial(save_hypotheses, project_path=project_path, db_path=db_path)),
+                FunctionTool(
+                    functools.partial(save_findings, project_path=project_path, db_path=db_path)
+                ),
+                FunctionTool(
+                    functools.partial(save_hypotheses, project_path=project_path, db_path=db_path)
+                ),
                 FunctionTool(exit_loop),
             ],
             sub_agents=[hunter],
@@ -207,7 +216,15 @@ class Coordinator(LlmAgent):
             model=coordinator_cfg.model,
             instruction=load_prompt("coordinator.md"),
             description="Orchestrates the multi-phase vulnerability scanning pipeline.",
-            sub_agents=[stack_scout, web_route_mapper, codebase_mapper, hunter_loop, skeptic, validator, critic],
+            sub_agents=[
+                stack_scout,
+                web_route_mapper,
+                codebase_mapper,
+                hunter_loop,
+                skeptic,
+                validator,
+                critic,
+            ],
         )
 
         # --- PrivateAttr initialisation ---
@@ -449,7 +466,9 @@ class Coordinator(LlmAgent):
         self._pending_hints.clear()
         return hints
 
-    def _on_stats(self, in_tokens: int, out_tokens: int, new_msg: bool = False, model_name: str = "unknown") -> None:
+    def _on_stats(
+        self, in_tokens: int, out_tokens: int, new_msg: bool = False, model_name: str = "unknown"
+    ) -> None:
         """Called by callbacks to update TUI stats."""
         if self.on_stats_event:
             self.on_stats_event()
@@ -470,8 +489,13 @@ class Coordinator(LlmAgent):
         output_tokens: int,
     ) -> None:
         self._db.log_conversation(
-            self._project_path, agent_name, prompt, response,
-            tool_calls, input_tokens, output_tokens,
+            self._project_path,
+            agent_name,
+            prompt,
+            response,
+            tool_calls,
+            input_tokens,
+            output_tokens,
         )
 
     def log(self, message: str) -> None:
@@ -525,7 +549,8 @@ class Coordinator(LlmAgent):
         high_value_segments = []
         for segment in self._logical_segments:
             files = [
-                f for f in segment.get("files", [])
+                f
+                for f in segment.get("files", [])
                 if self._scan_results.get(f, {}).get("is_high_value")
             ]
             if files:
@@ -544,7 +569,9 @@ class Coordinator(LlmAgent):
                 async with sem:
                     files = segment.get("files", [])
                     name = segment.get("name", "Unknown Segment")
-                    self.log(f"[bold]Coordinator:[/bold] parallel hunt starting on [cyan]{name}[/cyan] ({len(files)} files)")
+                    self.log(
+                        f"[bold]Coordinator:[/bold] parallel hunt starting on [cyan]{name}[/cyan] ({len(files)} files)"
+                    )
                     return await self.run_hunter(files, path)
 
             await asyncio.gather(*[_limited_hunt(seg) for seg in high_value_segments])
@@ -555,7 +582,9 @@ class Coordinator(LlmAgent):
             )
 
         # Phase 3: Hypothesis-driven hunting loop using ADK LoopAgent (Deep Dive)
-        self.log("[bold]Coordinator:[/bold] starting autonomous hunting loop for deep-dive hypotheses...")
+        self.log(
+            "[bold]Coordinator:[/bold] starting autonomous hunting loop for deep-dive hypotheses..."
+        )
 
         app = App(
             name="hunter_loop",
@@ -587,9 +616,7 @@ class Coordinator(LlmAgent):
         for finding in list(self._findings):
             await self.verify_finding(finding)
 
-    async def _hunt_batch(
-        self, targets: list[str], path: str = "."
-    ) -> tuple:
+    async def _hunt_batch(self, targets: list[str], path: str = ".") -> tuple:
         """Kept for backward compatibility."""
         new_findings: list[Finding] = []
         all_hypotheses: list[dict[str, Any]] = []
@@ -605,7 +632,7 @@ class Coordinator(LlmAgent):
                 session_id=f"{self._scan_session_id}:hunt:{_sanitize_session_id(target)}",
                 session_service=self._session_service,
                 artifact_service=self._artifact_service,
-                summarizer=self._summarizer
+                summarizer=self._summarizer,
             )
             try:
                 data = parse_json_response(text)
@@ -623,7 +650,7 @@ class Coordinator(LlmAgent):
                         exploitation_path=raw.get("exploitation_path", "Not documented"),
                         remediation=raw.get("remediation", "No remediation provided"),
                         cwe_id=raw.get("cwe_id"),
-                        poc=raw.get("poc")
+                        poc=raw.get("poc"),
                     )
                     self._findings.append(finding)
                     new_findings.append(finding)
@@ -695,7 +722,9 @@ class Coordinator(LlmAgent):
         if not data:
             self._on_llm_error()
             self._log_json_parse_failure(
-                "StackScout", text, stack_scout_diagnostics,
+                "StackScout",
+                text,
+                stack_scout_diagnostics,
                 suffix=" Inserting fallback segment covering the entire workspace.",
             )
 
@@ -706,12 +735,35 @@ class Coordinator(LlmAgent):
         # New Codebase Mapper logic
         workspace_files = get_project_structure(abs_path)
         source_exts = {
-            ".c", ".cpp", ".cc", ".h", ".hpp", ".cs", ".go", ".java", ".js", ".jsx", ".ts",
-            ".tsx", ".py", ".rb", ".php", ".rs", ".swift", ".kt", ".kts", ".sh", ".bash",
-            ".pl", ".html", ".sql"
+            ".c",
+            ".cpp",
+            ".cc",
+            ".h",
+            ".hpp",
+            ".cs",
+            ".go",
+            ".java",
+            ".js",
+            ".jsx",
+            ".ts",
+            ".tsx",
+            ".py",
+            ".rb",
+            ".php",
+            ".rs",
+            ".swift",
+            ".kt",
+            ".kts",
+            ".sh",
+            ".bash",
+            ".pl",
+            ".html",
+            ".sql",
         }
         source_files = [f for f in workspace_files if os.path.splitext(f)[1].lower() in source_exts]
-        self.log(f"[bold]Coordinator:[/bold] running CodebaseMapper on {len(source_files)} source files...")
+        self.log(
+            f"[bold]Coordinator:[/bold] running CodebaseMapper on {len(source_files)} source files..."
+        )
 
         new_mapping = {}
         sem = asyncio.Semaphore(10)
@@ -736,14 +788,18 @@ class Coordinator(LlmAgent):
                     parsed = parse_json_response(m_text)
                     if not parsed:
                         self._log_json_parse_failure(
-                            f"CodebaseMapper[{file_path}]", m_text, mapper_diagnostics,
+                            f"CodebaseMapper[{file_path}]",
+                            m_text,
+                            mapper_diagnostics,
                         )
                         return
                     parsed.setdefault("is_high_value", False)
                     parsed.setdefault("summary", parsed.get("purpose", ""))
                     new_mapping[file_path] = parsed
                 except Exception as e:
-                    self.log(f"[bold red]Error:[/bold red] CodebaseMapper failed on {file_path}: {e}")
+                    self.log(
+                        f"[bold red]Error:[/bold red] CodebaseMapper failed on {file_path}: {e}"
+                    )
 
         await asyncio.gather(*[_map_file(f) for f in source_files])
         mapping = new_mapping
@@ -798,9 +854,7 @@ class Coordinator(LlmAgent):
                 confidence=hypo.get("confidence", 0.5),
             )
             self._db.save_hypothesis(self._project_path, hypo_task)
-            self.log(
-                f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}"
-            )
+            self.log(f"Hypothesis: [dim]{hypo_task.target}[/dim] — {hypo_task.description}")
 
         self.log(
             f"Finished: [bold green]RECON[/bold green] ([dim]{path}[/dim]) — "
@@ -821,7 +875,9 @@ class Coordinator(LlmAgent):
         new_findings: list[Finding] = []
         for i, target in enumerate(targets, 1):
             await self.check_pause()
-            self.log(f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])")
+            self.log(
+                f"[bold]Hunter:[/bold] analysing [cyan]{target}[/cyan] ([dim]{i}/{len(targets)}[/dim])"
+            )
             content = read_file_content(os.path.join(path, target))
 
             prompt = load_prompt("hunter_single.md").format(target=target, content=content)
@@ -832,7 +888,7 @@ class Coordinator(LlmAgent):
                 session_id=f"{self._scan_session_id}:hunt:{_sanitize_session_id(target)}",
                 session_service=self._session_service,
                 artifact_service=self._artifact_service,
-                summarizer=self._summarizer
+                summarizer=self._summarizer,
             )
             try:
                 data = parse_json_response(text)
@@ -866,12 +922,14 @@ class Coordinator(LlmAgent):
                         target=hypo.get("target", ""),
                         description=hypo.get("description", ""),
                         confidence=hypo.get("confidence", 0.5),
-                        parent_id=f"hunt:{target}"
+                        parent_id=f"hunt:{target}",
                     )
                     self._db.save_hypothesis(self._project_path, hypo_task)
 
             except Exception as e:
-                self.log(f"[bold red]Error:[/bold red] Failed to parse Hunter output for {target}: {e}")
+                self.log(
+                    f"[bold red]Error:[/bold red] Failed to parse Hunter output for {target}: {e}"
+                )
 
         return new_findings
 
@@ -886,7 +944,7 @@ class Coordinator(LlmAgent):
             description=finding.description,
             vulnerable_code=finding.vulnerable_code,
             file_path=finding.file_path,
-            file_content=read_file_content(os.path.join(self._project_path, finding.file_path))
+            file_content=read_file_content(os.path.join(self._project_path, finding.file_path)),
         )
 
         s_text = await run_agent(
@@ -895,7 +953,7 @@ class Coordinator(LlmAgent):
             session_id=f"{self._scan_session_id}:verify:skeptic:{_sanitize_session_id(finding.title)}",
             session_service=self._session_service,
             artifact_service=self._artifact_service,
-            summarizer=self._summarizer
+            summarizer=self._summarizer,
         )
 
         try:
@@ -914,7 +972,7 @@ class Coordinator(LlmAgent):
                 description=finding.description,
                 vulnerable_code=finding.vulnerable_code,
                 file_path=finding.file_path,
-                tech_stack=self._tech_stack
+                tech_stack=self._tech_stack,
             )
 
             v_text = await run_agent(
@@ -923,7 +981,7 @@ class Coordinator(LlmAgent):
                 session_id=f"{self._scan_session_id}:verify:validator:{_sanitize_session_id(finding.title)}",
                 session_service=self._session_service,
                 artifact_service=self._artifact_service,
-                summarizer=self._summarizer
+                summarizer=self._summarizer,
             )
 
             try:

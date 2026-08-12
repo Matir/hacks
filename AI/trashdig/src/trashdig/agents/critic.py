@@ -18,6 +18,7 @@ from trashdig.tools import (
 
 class CriticAgent(LlmAgent):
     """Critic Agent for TrashDig."""
+
     pass
 
 

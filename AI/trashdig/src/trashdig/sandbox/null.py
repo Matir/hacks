@@ -5,6 +5,7 @@ from .base import Sandbox
 
 logger = logging.getLogger(__name__)
 
+
 class NullSandbox(Sandbox):
     """Fallback implementation that performs no sandboxing."""
 
@@ -24,10 +25,7 @@ class NullSandbox(Sandbox):
         Returns:
             A subprocess.CompletedProcess object.
         """
-        logger.warning(
-            "!!! RUNNING COMMAND UNSANDBOXED !!! Command: %s",
-            " ".join(command)
-        )
+        logger.warning("!!! RUNNING COMMAND UNSANDBOXED !!! Command: %s", " ".join(command))
         # self.env is already the complete environment (merged with the parent
         # process's and denylist-filtered by get_sandbox()) -- use it as-is
         # rather than re-merging raw os.environ, which would let filtered-out
@@ -39,5 +37,5 @@ class NullSandbox(Sandbox):
             timeout=timeout,
             cwd=cwd or self.workspace_dir,
             env=dict(self.env),
-            check=False
+            check=False,
         )

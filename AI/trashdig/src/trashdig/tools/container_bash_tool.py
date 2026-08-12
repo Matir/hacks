@@ -8,17 +8,19 @@ from .bash_tool import bash_tool
 
 # Base image names (before the colon) that are permitted. Extend via
 # container_image_allowlist in trashdig.toml.
-_DEFAULT_IMAGE_ALLOWLIST: frozenset[str] = frozenset({
-    "python",
-    "node",
-    "golang",
-    "ruby",
-    "openjdk",
-    "eclipse-temurin",
-    "ubuntu",
-    "debian",
-    "alpine",
-})
+_DEFAULT_IMAGE_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "python",
+        "node",
+        "golang",
+        "ruby",
+        "openjdk",
+        "eclipse-temurin",
+        "ubuntu",
+        "debian",
+        "alpine",
+    }
+)
 
 
 def _image_allowed(image: str) -> bool:
@@ -45,7 +47,9 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
         The output of the command or an error message.
     """
     if not _image_allowed(image):
-        allowed = sorted(_DEFAULT_IMAGE_ALLOWLIST | set(get_config().data.get("container_image_allowlist", [])))
+        allowed = sorted(
+            _DEFAULT_IMAGE_ALLOWLIST | set(get_config().data.get("container_image_allowlist", []))
+        )
         return f"Error: Docker image {image!r} is not in the allowlist. Allowed bases: {allowed}"
 
     # Check if Docker is available
@@ -57,28 +61,33 @@ def container_bash_tool(command: str, image: str = "python:3.11-slim", timeout: 
                 "Docker not found. Strict containerization is required by configuration. "
                 "Install Docker or set 'security.require_sandbox = false' in trashdig.toml to proceed."
             )
-        return "[Warning: Docker not found. Falling back to host bash_tool]\n\n" + bash_tool(command, timeout)
+        return "[Warning: Docker not found. Falling back to host bash_tool]\n\n" + bash_tool(
+            command, timeout
+        )
 
     # Use a temporary container to run the command
     # We mount the current project directory read-only for context if needed,
     # but the command runs in a scratch space.
     project_root = get_config().workspace_root
     cmd = [
-        "docker", "run", "--rm",
-        "--network", "none", # Isolate network by default
-        "-v", f"{project_root}:/app:ro",
-        "-w", "/tmp",  # noqa: S108
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",  # Isolate network by default
+        "-v",
+        f"{project_root}:/app:ro",
+        "-w",
+        "/tmp",  # noqa: S108
         image,
-        "bash", "-c", command
+        "bash",
+        "-c",
+        command,
     ]
 
     try:
         result = subprocess.run(  # noqa: S603
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False
+            cmd, capture_output=True, text=True, timeout=timeout, check=False
         )
         output: list[str] = []
         if result.stdout:

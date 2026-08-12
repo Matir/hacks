@@ -15,7 +15,7 @@ def test_finding_to_markdown():
         exploitation_path="Test path",
         remediation="Test remediation",
         cwe_id="CWE-79",
-        poc="print('poc')"
+        poc="print('poc')",
     )
 
     md = finding.to_markdown()
@@ -30,6 +30,7 @@ def test_finding_to_markdown():
     assert "## Impact" in md
     assert "Test impact" in md
 
+
 def test_finding_save():
     finding = Finding(
         title="Test Save",
@@ -39,7 +40,7 @@ def test_finding_save():
         file_path="test.py",
         impact="impact",
         exploitation_path="path",
-        remediation="remediation"
+        remediation="remediation",
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -50,6 +51,7 @@ def test_finding_save():
             content = f.read()
             assert "# Test Save" in content
 
+
 def test_finding_save_creates_dir():
     finding = Finding(
         title="Test Dir Create",
@@ -59,7 +61,7 @@ def test_finding_save_creates_dir():
         file_path="test.py",
         impact="impact",
         exploitation_path="path",
-        remediation="remediation"
+        remediation="remediation",
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:

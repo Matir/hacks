@@ -10,6 +10,7 @@ from trashdig.main import main
 @patch("sys.stdout.isatty", autospec=True, return_value=True)
 def test_main_default_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
     from trashdig.config import Config  # noqa: PLC0415
+
     mock_config = Config()
     mock_config.data["require_sandbox"] = False
     mock_config.data["workspace_root"] = os.path.abspath(".")
@@ -34,6 +35,7 @@ def test_main_default_root(mock_isatty, mock_load_config, mock_app_class, tmp_pa
 @patch("sys.stdout.isatty", autospec=True, return_value=True)
 def test_main_explicit_root(mock_isatty, mock_load_config, mock_app_class, tmp_path):
     from trashdig.config import Config  # noqa: PLC0415
+
     mock_config = Config()
     mock_config.data["require_sandbox"] = False
     mock_config.data["workspace_root"] = str(tmp_path)
@@ -65,7 +67,7 @@ def test_main_dump_config(mock_app_class, mock_load_config, capsys):
             pass
 
     out, _ = capsys.readouterr()
-    assert 'rpm_limit = 10' in out
+    assert "rpm_limit = 10" in out
     mock_app_class.assert_not_called()
 
 
@@ -73,8 +75,11 @@ def test_main_dump_config(mock_app_class, mock_load_config, capsys):
 @patch("trashdig.main.init_artifact_manager", autospec=True)
 @patch("trashdig.main.Coordinator", autospec=True)
 @patch("asyncio.run", autospec=True)
-def test_main_batch_mode(mock_asyncio_run, mock_coordinator_class, mock_init_art, mock_load_config, tmp_path):
+def test_main_batch_mode(
+    mock_asyncio_run, mock_coordinator_class, mock_init_art, mock_load_config, tmp_path
+):
     from trashdig.config import Config  # noqa: PLC0415
+
     mock_config = Config()
     mock_config.data["require_sandbox"] = False
     mock_config.data["rpm_limit"] = 10

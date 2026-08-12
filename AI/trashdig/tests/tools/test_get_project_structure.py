@@ -15,4 +15,3 @@ def test_get_project_structure_with_gitignore(temp_project):
     res = get_project_structure(str(temp_project))
     assert "src/main.py" in res
     assert "web/app.js" not in res
-

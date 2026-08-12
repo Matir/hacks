@@ -4,8 +4,15 @@ from ..findings import Finding
 from ..services.database import get_database
 
 _VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low", "info", "n/a"})
-_STRING_FIELDS = ("title", "description", "file_path", "impact", "exploitation_path",
-                  "remediation", "vulnerable_code")
+_STRING_FIELDS = (
+    "title",
+    "description",
+    "file_path",
+    "impact",
+    "exploitation_path",
+    "remediation",
+    "vulnerable_code",
+)
 
 
 def _validate_finding(raw: object, index: int) -> str | None:

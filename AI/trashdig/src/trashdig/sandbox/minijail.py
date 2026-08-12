@@ -9,16 +9,30 @@ from .base import Sandbox
 
 logger = logging.getLogger(__name__)
 
+
 class MinijailSandbox(Sandbox):
     """Linux implementation using minijail0 for process isolation."""
 
     DEFAULT_ALLOWLIST = [
-        "/bin", "/usr", "/lib", "/lib64", "/sbin",
-        "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d",
-        "/etc/resolv.conf", "/etc/nsswitch.conf", "/etc/passwd",
-        "/etc/group", "/etc/hosts", "/etc/localtime",
-        "/etc/ssl/certs", "/etc/ca-certificates", "/usr/share/ca-certificates",
-        "/usr/share/terminfo", "/usr/lib/locale",
+        "/bin",
+        "/usr",
+        "/lib",
+        "/lib64",
+        "/sbin",
+        "/etc/ld.so.cache",
+        "/etc/ld.so.conf",
+        "/etc/ld.so.conf.d",
+        "/etc/resolv.conf",
+        "/etc/nsswitch.conf",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/hosts",
+        "/etc/localtime",
+        "/etc/ssl/certs",
+        "/etc/ca-certificates",
+        "/usr/share/ca-certificates",
+        "/usr/share/terminfo",
+        "/usr/lib/locale",
     ]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -59,10 +73,7 @@ class MinijailSandbox(Sandbox):
         # -U: Enter a new user namespace (allows -v, -p as non-root).
         if self.minijail_path is None:
             raise RuntimeError("minijail0 path not resolved.")
-        args: list[str] = [
-            self.minijail_path,
-            "-v", "-d", "-p", "-r", "-t", "-U"
-        ]
+        args: list[str] = [self.minijail_path, "-v", "-d", "-p", "-r", "-t", "-U"]
 
         # Disable network if requested (-e: Enter a new network namespace)
         if not self.network:
@@ -101,5 +112,5 @@ class MinijailSandbox(Sandbox):
             timeout=timeout,
             cwd=cwd or self.workspace_dir,
             env=self.env,
-            check=False
+            check=False,
         )

@@ -37,15 +37,13 @@ class RateLimiter:
         if self.rpm_limit:
             # Refill RPM: rpm_limit / 60.0 tokens per second
             self._rpm_tokens = min(
-                float(self.rpm_limit),
-                self._rpm_tokens + elapsed * (self.rpm_limit / 60.0)
+                float(self.rpm_limit), self._rpm_tokens + elapsed * (self.rpm_limit / 60.0)
             )
 
         if self.tpm_limit:
             # Refill TPM: tpm_limit / 60.0 tokens per second
             self._tpm_tokens = min(
-                float(self.tpm_limit),
-                self._tpm_tokens + elapsed * (self.tpm_limit / 60.0)
+                float(self.tpm_limit), self._tpm_tokens + elapsed * (self.tpm_limit / 60.0)
             )
 
     async def wait_for_request(self) -> None:
@@ -93,8 +91,10 @@ class RateLimiter:
             self._refill()
             self._tpm_tokens -= float(tokens)
 
+
 class RateLimiterProvider:
     """Class-level provider for the global RateLimiter instance."""
+
     instance: RateLimiter | None = None
 
 

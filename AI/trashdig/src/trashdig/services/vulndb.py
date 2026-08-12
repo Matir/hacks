@@ -44,9 +44,7 @@ class VulnDBService:
         self.entries: dict[str, VulnEntry] = {}
 
         # 1. Load built-in data
-        builtin_dir = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "data", "vulndb"
-        )
+        builtin_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "vulndb")
         self._load_from_dir(builtin_dir)
 
         # 2. Load extra dirs (overrides built-in)

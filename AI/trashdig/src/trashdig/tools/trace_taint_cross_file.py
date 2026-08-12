@@ -137,7 +137,11 @@ def _resolve_import(  # noqa: C901
                         alias_node = child.child_by_field_name("alias")
                         if alias_node and alias_node.text.decode("utf-8") == symbol_name:
                             return f"{module_name}.{name_node.text.decode('utf-8')}"
-                        if not alias_node and name_node and name_node.text.decode("utf-8") == symbol_name:
+                        if (
+                            not alias_node
+                            and name_node
+                            and name_node.text.decode("utf-8") == symbol_name
+                        ):
                             return f"{module_name}.{symbol_name}"
                     elif child.type == "dotted_name" and child.text.decode("utf-8") == symbol_name:
                         return f"{module_name}.{symbol_name}"
@@ -158,9 +162,31 @@ def _resolve_import(  # noqa: C901
     return walk(tree.root_node)
 
 
-def _module_to_file_path(module_name: str, project_root: str) -> str | None:
+def _module_to_file_path(
+    module_name: str, project_root: str, current_file: str | None = None
+) -> str | None:
     """Converts a python module name (a.b.c) to a likely file path."""
-    rel_path = module_name.replace(".", os.sep)
+    if module_name.startswith("."):
+        if not current_file:
+            return None
+        dots = len(module_name) - len(module_name.lstrip("."))
+        base_name = module_name.lstrip(".")
+        try:
+            rel_current_file = os.path.relpath(current_file, project_root)
+        except ValueError:
+            rel_current_file = current_file
+        current_dir = os.path.dirname(rel_current_file)
+        for _ in range(dots - 1):
+            current_dir = os.path.dirname(current_dir)
+        rel_path = (
+            os.path.join(current_dir, base_name.replace(".", os.sep)) if base_name else current_dir
+        )
+    else:
+        rel_path = module_name.replace(".", os.sep)
+
+    # Secure concatenation
+    rel_path = rel_path.lstrip(os.sep)
+
     # Try .py and /__init__.py
     options = [rel_path + ".py", os.path.join(rel_path, "__init__.py")]
     for opt in options:
@@ -204,7 +230,11 @@ def _find_calls_passing_variable(
 
             arg_list = next((c for c in node.children if c.type in metadata.argument_types), None)
             if callee and arg_list:
-                actual_args = [c for c in arg_list.children if c.type not in ("(", ")", ",", "[", "]", "{", "}")]
+                actual_args = [
+                    c
+                    for c in arg_list.children
+                    if c.type not in ("(", ")", ",", "[", "]", "{", "}")
+                ]
                 for idx, arg in enumerate(actual_args):
                     if _node_contains_identifier(arg, variable_name):
                         results.append((callee, idx, node.start_point[0] + 1, callee_node))
@@ -413,12 +443,13 @@ def _find_assignment(  # noqa: C901
     return walk(tree.root_node)
 
 
-def _resolve_callee_files(
+def _resolve_callee_files(  # noqa: PLR0913
     callee: str,
     callee_node: Any,
     file_content: bytes,
     project_root: str,
     metadata: Any,
+    current_file: str | None = None,
 ) -> tuple[list[str], str | None]:
     """Resolve which files likely define a callee."""
     path = _get_full_callee_path(callee_node, metadata)
@@ -432,7 +463,7 @@ def _resolve_callee_files(
                 imported_module = _resolve_import(assigned_from, file_content, metadata.name)
 
         if imported_module:
-            m_path = _module_to_file_path(imported_module, project_root)
+            m_path = _module_to_file_path(imported_module, project_root, current_file)
             if m_path:
                 return [m_path], obj_name
             return [], imported_module  # Library module
@@ -440,7 +471,7 @@ def _resolve_callee_files(
     # Check if function itself is imported
     imported_module = _resolve_import(callee, file_content, metadata.name)
     if imported_module:
-        m_path = _module_to_file_path(imported_module, project_root)
+        m_path = _module_to_file_path(imported_module, project_root, current_file)
         if m_path:
             return [m_path], None
 
@@ -458,6 +489,7 @@ def _process_tainted_calls(  # noqa: PLR0913
     max_depth: int,
     visited: set[tuple[str, str]],
     file_content: bytes,
+    current_file: str | None = None,
 ) -> bool:
     """Process calls where a tainted variable is passed as an argument."""
     found_sink = False
@@ -477,26 +509,43 @@ def _process_tainted_calls(  # noqa: PLR0913
         )
 
         callee_files, obj_context = _resolve_callee_files(
-            callee, callee_node, file_content, project_root, metadata
+            callee, callee_node, file_content, project_root, metadata, current_file
         )
 
         if is_method_sink_candidate and not callee_files:
-            msg = f"on library object '{obj_context}'" if obj_context else "— potential library sink"
-            report_lines.append(f"{indent}  *** SINK (Method) *** Line {line_no}: '{var}' passed to '{callee}()' {msg}")
+            msg = (
+                f"on library object '{obj_context}'" if obj_context else "— potential library sink"
+            )
+            report_lines.append(
+                f"{indent}  *** SINK (Method) *** Line {line_no}: '{var}' passed to '{callee}()' {msg}"
+            )
             found_sink = True
             continue
 
         if not callee_files:
-            report_lines.append(f"{indent}    [definition of '{callee}' not found in project — may be external]")
+            report_lines.append(
+                f"{indent}    [definition of '{callee}' not found in project — may be external]"
+            )
             continue
 
         if len(callee_files) > 1:
-            report_lines.append(f"{indent}    [Warning: multiple matches for '{callee}'. Following first in {callee_files[0]}]")
+            report_lines.append(
+                f"{indent}    [Warning: multiple matches for '{callee}'. Following first in {callee_files[0]}]"
+            )
 
         abs_file = os.path.join(project_root, callee_files[0])
         param_name = _resolve_param_name(callee, arg_idx, abs_file, metadata)
         if param_name:
-            _trace_recursive(param_name, callee_files[0], depth + 1, max_depth, visited, report_lines, project_root, metadata)
+            _trace_recursive(
+                param_name,
+                callee_files[0],
+                depth + 1,
+                max_depth,
+                visited,
+                report_lines,
+                project_root,
+                metadata,
+            )
         else:
             report_lines.append(f"{indent}    [could not resolve param {arg_idx} in {callee}]")
 
@@ -536,7 +585,17 @@ def _trace_recursive(  # noqa: PLR0913
 
     calls = _find_calls_passing_variable(var, content, metadata.name)
     found_sink = _process_tainted_calls(
-        calls, var, report_lines, indent, project_root, metadata, depth, max_depth, visited, content
+        calls,
+        var,
+        report_lines,
+        indent,
+        project_root,
+        metadata,
+        depth,
+        max_depth,
+        visited,
+        content,
+        file_path,
     )
 
     # Follow local assignments
@@ -612,6 +671,7 @@ def trace_taint_cross_file(
     )
     return "\n".join(report_lines)
 
+
 def _find_tainted_assignments(  # noqa: C901
     variable_name: str,
     content: bytes,
@@ -658,7 +718,12 @@ def _find_tainted_assignments(  # noqa: C901
                                 (name_node.text.decode("utf-8"), node.start_point[0] + 1)
                             )
 
-            elif left and right and _node_contains_identifier(right, variable_name) and left.type in metadata.identifier_types:
+            elif (
+                left
+                and right
+                and _node_contains_identifier(right, variable_name)
+                and left.type in metadata.identifier_types
+            ):
                 results.append((left.text.decode("utf-8"), node.start_point[0] + 1))
         for child in node.children:
             walk(child)

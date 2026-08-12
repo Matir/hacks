@@ -29,6 +29,7 @@ def test_get_project_structure():
         assert os.path.join("subdir", "file2.txt") in structure
         assert "file1.txt" not in structure
 
+
 def test_read_file_content():
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
         tmp.write("Hello, World!")
@@ -43,8 +44,10 @@ def test_read_file_content():
     finally:
         os.remove(tmp_path)
 
+
 def test_read_file_content_error():
     assert read_file_content("non_existent_file.txt") == "[Error: Could not read file content]"
+
 
 def test_detect_frameworks():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -59,6 +62,7 @@ def test_detect_frameworks():
         assert "fastapi" in stack["web_frameworks"]
         assert "sqlalchemy" in stack["databases"]
         assert "flask" not in stack["web_frameworks"]
+
 
 def test_detect_frameworks_no_files():
     stack = detect_frameworks([])

@@ -33,6 +33,7 @@ def mock_cfg():
 # Helpers – _node_contains_identifier, _extract_callee_name
 # ---------------------------------------------------------------------------
 
+
 def _parse_python(src: bytes):
     parser = _make_parser("python")
     return parser.parse(src)
@@ -68,9 +69,10 @@ def test_extract_callee_name_attribute():
 # _find_calls_passing_variable
 # ---------------------------------------------------------------------------
 
+
 def test_find_calls_passing_variable_simple():
     src = b"result = fetch(user_id)\n"
-    calls = _find_calls_passing_variable("user_id", src,"python")
+    calls = _find_calls_passing_variable("user_id", src, "python")
     assert len(calls) == 1
     callee, idx, line, _node = calls[0]
 
@@ -81,13 +83,13 @@ def test_find_calls_passing_variable_simple():
 
 def test_find_calls_passing_variable_second_arg():
     src = b"run(cmd, user_id, timeout=5)\n"
-    calls = _find_calls_passing_variable("user_id", src,"python")
+    calls = _find_calls_passing_variable("user_id", src, "python")
     assert any(c[0] == "run" and c[1] == 1 for c in calls)
 
 
 def test_find_calls_passing_variable_sink():
     src = b"os.system(user_input)\n"
-    calls = _find_calls_passing_variable("user_input", src,"python")
+    calls = _find_calls_passing_variable("user_input", src, "python")
     assert len(calls) == 1
     callee, idx, line, _node = calls[0]
 
@@ -97,13 +99,13 @@ def test_find_calls_passing_variable_sink():
 
 def test_find_calls_passing_variable_no_match():
     src = b"print('hello')\n"
-    calls = _find_calls_passing_variable("user_id", src,"python")
+    calls = _find_calls_passing_variable("user_id", src, "python")
     assert calls == []
 
 
 def test_find_calls_passing_variable_multiple():
     src = b"a(x)\nb(x)\nc(y)\n"
-    calls = _find_calls_passing_variable("x", src,"python")
+    calls = _find_calls_passing_variable("x", src, "python")
     callees = [c[0] for c in calls]
     assert "a" in callees
     assert "b" in callees
@@ -114,21 +116,23 @@ def test_find_calls_passing_variable_multiple():
 # _find_returns_variable
 # ---------------------------------------------------------------------------
 
+
 def test_find_returns_variable_found():
     src = b"def f(x):\n    return x\n"
-    lines = _find_returns_variable("x", src,"python")
+    lines = _find_returns_variable("x", src, "python")
     assert 2 in lines
 
 
 def test_find_returns_variable_not_found():
     src = b"def f(x):\n    return 42\n"
-    lines = _find_returns_variable("x", src,"python")
+    lines = _find_returns_variable("x", src, "python")
     assert lines == []
 
 
 # ---------------------------------------------------------------------------
 # _find_function_files
 # ---------------------------------------------------------------------------
+
 
 def test_find_function_files_found(mock_cfg):
     with tempfile.TemporaryDirectory() as tmp:
@@ -137,19 +141,20 @@ def test_find_function_files_found(mock_cfg):
         with open(target, "w") as f:
             f.write("def fetch_user(user_id):\n    pass\n")
 
-        result = _find_function_files("fetch_user", tmp,PYTHON_METADATA)
+        result = _find_function_files("fetch_user", tmp, PYTHON_METADATA)
         assert "db.py" in result
 
 
 def test_find_function_files_not_found():
     with tempfile.TemporaryDirectory() as tmp:
-        result = _find_function_files("nonexistent_func", tmp,PYTHON_METADATA)
+        result = _find_function_files("nonexistent_func", tmp, PYTHON_METADATA)
         assert result == []
 
 
 # ---------------------------------------------------------------------------
 # _resolve_param_name
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_param_name():
     with tempfile.TemporaryDirectory() as tmp:
@@ -158,7 +163,7 @@ def test_resolve_param_name():
             f.write(b"def fetch_user(conn, user_id):\n    pass\n")
 
         # user_id is at index 1 (excluding self — but no self here so it's raw index 1)
-        name = _resolve_param_name("fetch_user", 1, src_file,PYTHON_METADATA)
+        name = _resolve_param_name("fetch_user", 1, src_file, PYTHON_METADATA)
         assert name == "user_id"
 
 
@@ -168,7 +173,7 @@ def test_resolve_param_name_first():
         with open(src_file, "wb") as f:
             f.write(b"def process(data, timeout=30):\n    pass\n")
 
-        name = _resolve_param_name("process", 0, src_file,PYTHON_METADATA)
+        name = _resolve_param_name("process", 0, src_file, PYTHON_METADATA)
         assert name == "data"
 
 
@@ -178,7 +183,7 @@ def test_resolve_param_name_out_of_range():
         with open(src_file, "wb") as f:
             f.write(b"def f(x):\n    pass\n")
 
-        assert _resolve_param_name("f", 5, src_file,PYTHON_METADATA) is None
+        assert _resolve_param_name("f", 5, src_file, PYTHON_METADATA) is None
 
 
 def test_resolve_param_name_skips_self():
@@ -187,7 +192,7 @@ def test_resolve_param_name_skips_self():
         with open(src_file, "wb") as f:
             f.write(b"class DB:\n    def execute(self, query):\n        pass\n")
 
-        name = _resolve_param_name("execute", 0, src_file,PYTHON_METADATA)
+        name = _resolve_param_name("execute", 0, src_file, PYTHON_METADATA)
         assert name == "query"
 
 
@@ -195,17 +200,14 @@ def test_resolve_param_name_skips_self():
 # trace_taint_cross_file – integration scenarios
 # ---------------------------------------------------------------------------
 
+
 def test_taint_reaches_sink_directly(mock_cfg):
     """Variable passed directly to a known sink in the same file."""
     with tempfile.TemporaryDirectory() as tmp:
         mock_cfg.return_value.data["workspace_root"] = tmp
         src_file = os.path.join(tmp, "app.py")
         with open(src_file, "wb") as f:
-            f.write(
-                b"import os\n"
-                b"def handle(user_input):\n"
-                b"    os.system(user_input)\n"
-            )
+            f.write(b"import os\ndef handle(user_input):\n    os.system(user_input)\n")
 
         result = trace_taint_cross_file(
             variable="user_input",
@@ -225,16 +227,11 @@ def test_taint_crosses_one_file_to_sink(mock_cfg):
         # Entry file: calls db_query(user_id)
         with open(os.path.join(tmp, "routes.py"), "wb") as f:
             f.write(
-                b"from db import db_query\n"
-                b"def get_user(user_id):\n"
-                b"    return db_query(user_id)\n"
+                b"from db import db_query\ndef get_user(user_id):\n    return db_query(user_id)\n"
             )
         # Callee file: passes its param directly to execute (a sink)
         with open(os.path.join(tmp, "db.py"), "wb") as f:
-            f.write(
-                b"def db_query(uid):\n"
-                b"    cursor.execute(uid)\n"
-            )
+            f.write(b"def db_query(uid):\n    cursor.execute(uid)\n")
 
         result = trace_taint_cross_file(
             variable="user_id",
@@ -252,11 +249,7 @@ def test_taint_safe_path(mock_cfg):
     with tempfile.TemporaryDirectory() as tmp:
         mock_cfg.return_value.data["workspace_root"] = tmp
         with open(os.path.join(tmp, "app.py"), "wb") as f:
-            f.write(
-                b"def handle(user_input):\n"
-                b"    result = len(user_input)\n"
-                b"    return result\n"
-            )
+            f.write(b"def handle(user_input):\n    result = len(user_input)\n    return result\n")
 
         result = trace_taint_cross_file(
             variable="user_input",

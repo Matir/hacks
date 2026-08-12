@@ -23,11 +23,17 @@ def query_cwe_database(query: str) -> str:
         results: list[str] = []
         q = query.lower()
         for item in cwe_data:
-            if (q in item["cwe_id"].lower() or q in item["title"].lower() or q in item["description"].lower()):
+            if (
+                q in item["cwe_id"].lower()
+                or q in item["title"].lower()
+                or q in item["description"].lower()
+            ):
                 results.append(f"### {item['cwe_id']}: {item['title']}\n{item['description']}\n")
                 if "examples" in item:
                     for ex in item["examples"]:
-                        results.append(f"**Vulnerable Example ({ex['language']}):**\n```\n{ex['vulnerable_code']}\n```\n")
+                        results.append(
+                            f"**Vulnerable Example ({ex['language']}):**\n```\n{ex['vulnerable_code']}\n```\n"
+                        )
         return "\n".join(results) if results else f"No results found for query: {query}"
     except Exception as e:
         return f"Error querying CWE database: {str(e)}"

@@ -13,9 +13,12 @@ def mock_workspace(tmp_path):
     c.workspace_root = str(tmp_path)
     c.resolve_workspace_path.side_effect = os.path.abspath
 
-    with patch("trashdig.config.get_config", return_value=c), \
-         patch("trashdig.tools.get_ast_summary._config_module.get_config", return_value=c):
+    with (
+        patch("trashdig.config.get_config", return_value=c),
+        patch("trashdig.tools.get_ast_summary._config_module.get_config", return_value=c),
+    ):
         yield c
+
 
 def test_get_ast_summary_python_real(tmp_path):
     code = """
@@ -38,6 +41,7 @@ class Greeter:
     assert "Class definition: Greeter" in result
     assert "Function definition: __init__" in result
     assert "Function definition: greet" in result
+
 
 def test_get_ast_summary_js_real(tmp_path):
     code = """
@@ -64,6 +68,7 @@ class Calculator {
     assert "Class declaration: Calculator" in result
     # Method definition for class methods
     assert "Method definition: subtract" in result
+
 
 def test_get_ast_summary_go_real(tmp_path):
     code = """
@@ -92,6 +97,7 @@ type User struct {
     assert "Function declaration: main" in result
     assert "Method declaration: Add" in result
 
+
 def test_get_ast_summary_csharp_real(tmp_path):
     code = """
 using System;
@@ -113,6 +119,7 @@ namespace Test {
     assert "Class declaration: Program" in result
     assert "Method declaration: Main" in result
 
+
 def test_get_ast_summary_c_real(tmp_path):
     code = """
 void hello(char *name) {
@@ -131,6 +138,7 @@ struct User {
     assert "Function definition: hello" in result
     assert "Struct specifier: User" in result
 
+
 def test_get_ast_summary_cpp_real(tmp_path):
     code = """
 class Greeter {
@@ -148,6 +156,7 @@ public:
     assert "Class specifier: Greeter" in result
     assert "Function definition: greet" in result
 
+
 def test_get_ast_summary_java_real(tmp_path):
     code = """
 public class Greeter {
@@ -164,6 +173,7 @@ public class Greeter {
     assert "Class declaration: Greeter" in result
     assert "Method declaration: greet" in result
 
+
 def test_get_ast_summary_ruby_real(tmp_path):
     code = """
 class Greeter
@@ -179,6 +189,7 @@ end
 
     assert "Class: Greeter" in result
     assert "Method: greet" in result
+
 
 def test_get_ast_summary_rust_real(tmp_path):
     code = """
@@ -197,6 +208,7 @@ struct User {
 
     assert "Function item: greet" in result
     assert "Struct item: User" in result
+
 
 def test_get_ast_summary_php_real(tmp_path):
     code = """
@@ -221,9 +233,11 @@ class Greeter {
     assert "Method declaration: hello" in result
     assert "Class declaration: Greeter" in result
 
+
 def test_get_ast_summary_unsupported_lang():
     result = get_ast_summary("test.py", "unsupported")
     assert "not supported" in result
+
 
 def test_get_ast_summary_no_definitions(tmp_path):
     f = tmp_path / "empty.py"
@@ -231,6 +245,7 @@ def test_get_ast_summary_no_definitions(tmp_path):
 
     result = get_ast_summary(str(f), "python")
     assert result == "No top-level definitions found."
+
 
 def test_get_ast_summary_error():
     # Test with a file that doesn't exist
