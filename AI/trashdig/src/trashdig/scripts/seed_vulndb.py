@@ -78,7 +78,7 @@ async def seed_vuln(  # noqa: PLR0913
         existing_metadata = []
         if os.path.exists(metadata_path):  # noqa: ASYNC240
             with (
-                open(metadata_path, encoding="utf-8") as f,
+                open(metadata_path, encoding="utf-8") as f,  # noqa: ASYNC230
                 contextlib.suppress(  # noqa: ASYNC230
                     json.JSONDecodeError
                 ),
